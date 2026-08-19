@@ -1,4 +1,8 @@
-﻿![Tiet Logo](assets/tiet-logo.svg){ .tiet-logo }
+# FoodLink AI
+
+AI-Assisted Community Food Redistribution Platform
+
+ ![Tiet Logo](assets/tiet-logo.svg){ .tiet-logo }
 
 **UCS503: Software Engineering (Project)**  
 **TIET Patiala**
