@@ -3,11 +3,11 @@
 ## Objective
 
 Set up the UCS503P project repository and establish the initial
-documentation and deployment workflow for the FoodLink AI project.
+documentation and deployment workflow for the FoodBridge AI project.
 
 ## Work Completed
 
-- Finalized the FoodLink AI project idea.
+- Finalized the FoodBridge AI project idea.
 - Forked the UCS503P master repository.
 - Configured GitHub Pages.
 - Verified the documentation CI/CD workflow.
