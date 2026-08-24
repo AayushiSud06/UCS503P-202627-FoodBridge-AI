@@ -3,11 +3,11 @@
 ## Objective
 
 Set up the UCS503P project repository and establish the initial
-documentation and deployment workflow for the FoodBridge AI project.
+documentation and deployment workflow for the FoodLink project.
 
 ## Work Completed
 
-- Finalized the FoodBridge AI project idea.
+- Finalized the FoodLink project idea.
 - Forked the UCS503P master repository.
 - Configured GitHub Pages.
 - Verified the documentation CI/CD workflow.
@@ -31,3 +31,35 @@ after which the GitHub Pages deployment was successfully configured.
 - Define system architecture.
 - Prepare the project proposal.
 - Establish team development workflow.
+
+## Objective
+To contribute to the Volunteer/Admin modules and explore the CSR aspect
+of FoodLink.
+
+## Work Done
+- Designed the Volunteer pickup and delivery workflow.
+- Planned the Admin impact dashboard.
+- Identified metrics such as meals redistributed, successful pickups,
+  volunteers, and recipient organizations.
+- Explored how CSR funding could support food transportation and logistics.
+
+## Ideation
+We proposed a model where corporate CSR partners support the logistics
+required for food redistribution, while FoodLink acts as the technology and
+coordination layer.
+
+## Problems Faced
+Implementing payments and financial management would significantly increase
+the project scope.
+
+## Solution
+For the initial prototype, CSR will be represented through impact
+monitoring and mock logistics funding rather than actual transactions.
+
+## Outcome
+The CSR concept was integrated with the logistics and impact-monitoring
+features.
+
+## Next Steps
+Implement the Admin dashboard, CSR impact statistics, and connect volunteer
+delivery data with overall impact.
