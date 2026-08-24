@@ -31,3 +31,33 @@ after which the GitHub Pages deployment was successfully configured.
 - Define system architecture.
 - Prepare the project proposal.
 - Establish team development workflow.
+
+## Objective
+To design the donor and recipient workflows for FoodLink AI.
+
+## Work Done
+- Designed the Donor dashboard and Create Donation interface.
+- Defined the information required for a food donation:
+  food type, quantity, location, pickup deadline, and storage details.
+- Designed the Recipient dashboard for viewing available donations.
+- Planned the donation flow:
+  Create → Match → Accept.
+
+## Ideation
+We discussed displaying all donations to recipients versus intelligently
+ranking suitable donations. We decided to introduce multi-factor matching
+based on distance, quantity, capacity, and availability.
+
+## Problems Faced
+A major challenge was deciding how much information to collect from donors
+without making the donation process complicated.
+
+## Solution
+We selected only the attributes required for the basic workflow and future
+matching system.
+
+## Outcome
+The initial Donor and Recipient workflow and UI structure were finalized.
+
+## Next Steps
+Implement the interactive donation creation and acceptance workflow.
