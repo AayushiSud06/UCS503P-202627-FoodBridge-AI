@@ -38,24 +38,39 @@
 
 % -----------------------------------------------------
 
-\title{Grievance-Resolution System for a Tier-2/3 City}
+
+\title{FoodLink: A Coordination Platform for Surplus
+  Food Redistribution}
 
 \BvrSetLabInstructor{Dr. Raghav B. Venkataramaiyer}
 
 \BvrSubtitle{%
   Project Proposal for UCS503P  \\
   Submitted to: \BvrLabInstructorValue \\ \bfseries
-  Thapar Institute of Engineering and Technology% 
+  Thapar Institute of Engineering and Technology%
 }
 
+% ---------------------------------------------------
+% TODO(team): replace every <fill: ...> placeholder
+% below with the correct full name, roll number and
+% institute email before submission.
+% ---------------------------------------------------
 \author{
-  Vidya Vaidyanathan, CSED%
-  \thanks{Roll No: \texttt{1024030xxx}, %
-    Email: \texttt{vvaidhanathan\_be24\@thapar.edu}}
-  \and 
-  Bhanurekha Ganesan, CSED%
-  \thanks{Roll No: \texttt{1024030xxx}, %
-    Email: \texttt{bganesan\_be24\@thapar.edu}}
+  Aayushi Sud, CSED%
+  \thanks{Roll No: \texttt{1024030906}, %
+    Email: \texttt{asud\_be24@thapar.edu}}
+  \and
+  Rishi Garg, CSED%
+  \thanks{Roll No: \texttt{1024030909}, %
+    Email: \texttt{rgarg8\_be24@thapar.edu}}
+  \and
+  Yugam Heer, CSED%
+  \thanks{Roll No: \texttt{1024030956}, %
+    Email: \texttt{yheer\_be24@thapar.edu}}
+  \and
+  Himanshi Singla, CSED%
+  \thanks{Roll No: \texttt{1024031166}, %
+    Email: \texttt{hsingla1\_be24@thapar.edu}}
 }
 
 \date{\today}
@@ -65,81 +80,89 @@
 
 \section{Higher-order goal%
   \BvrHint{\ldots secondary framing}}
-This project aims to improve sustainable urban
-governance by reducing the time and effort required to
-resolve citizen issues. While the topic is broader than
-any single municipality, the immediate engineering
-objective is to translate \emph{efficient public
-  service delivery} into a measurable, deployable
-software solution.
+This project aims to reduce avoidable food waste and
+improve local food security by shortening the time and
+effort required to move edible surplus food from where
+it is produced to organisations that can serve it.
+While hunger and food waste are far broader than any
+single campus or city, the immediate engineering
+objective is to translate \emph{timely surplus
+  redistribution} into a measurable, deployable software
+solution.
 
 \section{Time-to-value %
 \BvrHint{\ldots primary heuristic}}
 \begin{itemize}[leftmargin=0.7cm]
-    \item We will deliver meaningful increments quickly by prototyping the core user workflow and validating it with users within a short iteration window.
+    \item We will deliver meaningful increments quickly by prototyping the core donation-to-delivery workflow and validating it with real donors and recipient organisations within a short iteration window.
     \item We will prioritize fast feedback over perfection by using weekly iterations (and targeting CI-backed automation early) to reduce release friction.
     \item Success is defined by what can be delivered and measured in the first iteration, then improved based on user feedback.
 \end{itemize}
 
 \section{Problem Statement}
-Citizens in a tier-2/3 Indian city face delays and uncertainty when reporting local issues (e.g., streetlight outages, water leakage, garbage accumulation, road potholes). Common pain points include:
+Institutional kitchens in a tier-2/3 Indian city --- college messes, hostel canteens, bakeries, banquet halls --- regularly finish a service with edible food left over, while nearby shelters, community kitchens and NGOs are simultaneously short of meals. The two sides rarely connect in time. Common pain points include:
 \begin{itemize}[leftmargin=0.7cm]
-    \item \textbf{Fragmentation:} complaints are often made via multiple channels (calls, social media, paper forms), causing lost context.
-    \item \textbf{Low transparency:} citizens cannot easily see the status of their complaint (e.g., ``received'', ``assigned'', ``in progress'', ``resolved'').
-    \item \textbf{Slow coordination:} departments/field teams lack a unified, trackable workflow with clear ownership.
-    \item \textbf{Poor data quality:} duplicate or incomplete reports force rework and extend resolution time.
+    \item \textbf{A hard perishability deadline:} cooked surplus is safe to serve for only a few hours. Coordination conducted over phone calls and ad-hoc messaging routinely outlasts that window, after which the food must be discarded.
+    \item \textbf{Fragmentation:} a donor contacts whichever organisation it happens to know. There is no shared pool, so availability is invisible to everyone else.
+    \item \textbf{Low transparency:} a donor seldom learns whether the food was actually collected and served; a recipient cannot see what is available right now.
+    \item \textbf{Last-mile coordination cost:} unlike information, food must be physically moved. Volunteer availability is informal and untracked, so a willing donor and a willing recipient can still fail to complete a handover.
+    \item \textbf{Insufficient information for a safe decision:} a recipient needs to know what the food is, when it was prepared, how it has been stored, and by when it must be collected --- details that are lost in informal channels.
 \end{itemize}
 
-\textbf{Why this matters now (contextual relevance):} In an urban setting with limited staff bandwidth, even small process improvements can noticeably reduce resolution delays and repeated submissions.
+\textbf{Why this matters now (contextual relevance):} On and around a campus, the binding constraint is coordination rather than supply. Surplus already exists and recipient organisations already exist; a modest reduction in coordination delay converts food that would have been discarded into served meals.
 
 \section{Proposed Solution %
 \BvrHint{\ldots Software Proposition}}
 \subsection{Overview}
-Build a \textbf{web-based} ``Grievance-to-Resolution'' system with the following components:
+Build a \textbf{web-based} ``Surplus-to-Served'' platform serving four roles --- donor, recipient organisation, volunteer and administrator --- with the following components:
 \begin{itemize}[leftmargin=0.7cm]
-    \item \textbf{Citizen submission portal:} users submit an issue with photo (optional), category, and locality/ward.
-    \item \textbf{Automated triage:} basic duplicate detection and completeness checks.
-    \item \textbf{Department workflow:} assign issues to relevant department/team and update statuses.
-    \item \textbf{Status transparency:} citizens track status and receive notifications when resolved.
-    \item \textbf{Admin/ops dashboard:} performance summaries (resolution time, backlog).
+    \item \textbf{Donor posting portal:} a donor posts surplus with food type, quantity, preparation time, storage condition, pickup location and a pickup deadline (photo optional).
+    \item \textbf{Assisted matching:} the system ranks eligible recipient organisations against the posting on transparent criteria and surfaces the strongest candidates, together with the reasons for the ranking.
+    \item \textbf{Volunteer dispatch:} an accepted donation becomes a pickup task that a volunteer can claim, with pickup and drop-off details.
+    \item \textbf{Status transparency:} one tracked lifecycle per donation, visible to every party involved, with notifications on each transition.
+    \item \textbf{Admin/ops dashboard:} performance summaries (meals redistributed, time to claim, donations lost to deadline expiry, current backlog).
 \end{itemize}
 
 \subsection{Core workflow}
 \begin{enumerate}[leftmargin=0.7cm]
-    \item Citizen creates a complaint and receives a complaint ID immediately.
-    \item System validates completeness and suggests possible duplicates (lightweight similarity on text/category and approximate location).
-    \item Department staff update status (Received $\rightarrow$ Assigned $\rightarrow$ In Progress $\rightarrow$ Resolved).
-    \item Citizen views status updates and resolution notes.
+    \item A donor posts surplus food and immediately receives a donation ID; the pickup deadline is recorded at this point.
+    \item The system ranks eligible recipient organisations and notifies the strongest candidates; the posting also enters a pool visible to all verified recipients.
+    \item A recipient organisation reviews the posting and accepts it. The system never assigns food to a recipient without that explicit acceptance.
+    \item The accepted donation becomes a pickup task; a volunteer claims it (or the recipient elects to collect the food itself).
+    \item The volunteer updates status through the handover: Picked Up $\rightarrow$ Delivered.
+    \item The recipient confirms receipt, closing the donation as Completed. A donation that is not claimed before its deadline is closed as Expired and recorded as a measured loss.
 \end{enumerate}
 
 \subsection{Operational constraints for an educational, tier-2/3 setting}
 \begin{itemize}[leftmargin=0.7cm]
-    \item Keep the solution usable on low-to-mid range devices via responsive web design.
+    \item Keep the solution usable on low-to-mid range devices via responsive web design. Donors post from a working kitchen and volunteers act while travelling, so the interface must be mobile-first rather than merely mobile-tolerant.
     \item Avoid dependence on advanced research algorithms; focus on workflow, automation, and system correctness.
     \item Design for deployability using common web hosting and managed databases.
+    \item Treat the platform as a coordination tool, not a food-safety authority: it records and displays the information a recipient needs in order to decide, and the recipient inspects the food at handover.
 \end{itemize}
 
 \section{Solution Approach %
 \BvrHint{\ldots Engineering focus}}
 This is an engineering course project, so we focus on scalable administrative and workflow aspects rather than novel algorithm research.
 
-\subsection{Duplicate/quality assistance %
+\subsection{Match assistance %
 \BvrHint{\ldots non-research}}
-Duplicate detection will be heuristic-based:
+Recipient ranking will be heuristic-based and fully explainable:
 \begin{itemize}[leftmargin=0.7cm]
-    \item Normalize text (category + short description keywords).
-    \item Use a simple similarity measure (e.g., token overlap / TF-IDF cosine with threshold) without claiming state-of-the-art.
-    \item Show top candidate duplicates to staff for decision; never fully auto-delete or auto-reject.
+    \item Score each eligible recipient on a small set of normalised criteria --- travel distance, requested quantity against donated quantity, storage compatibility, time remaining before the pickup deadline, and historical completion reliability.
+    \item Combine them using fixed, published weights (a transparent weighted-sum model) to produce a $0$--$100$ suitability score, without claiming state-of-the-art performance.
+    \item Show the top candidates and the per-criterion reasons to the recipient and to the administrator; the recipient always makes the final decision and the system never auto-assigns or auto-rejects a donation.
+    \item Keep the scoring behind a stable interface so that the heuristic can later be replaced by a learned ranker without changes to the surrounding workflow.
 \end{itemize}
 
 \subsection{Web architecture %
 \BvrHint{\ldots web-based solution}}
 A typical 3-tier web architecture:
 \begin{itemize}[leftmargin=0.7cm]
-    \item \textbf{Frontend:} responsive UI for citizens and staff (status pages, submission form, dashboard).
-    \item \textbf{Backend API:} authentication, complaint submission, status transitions, assignment logic.
-    \item \textbf{Database:} store users, complaints, status history, attachments metadata.
+    \item \textbf{Frontend:} responsive role-specific UI for donors, recipients, volunteers and administrators (posting form, available-donations pool, pickup tasks, status timeline, dashboard).
+    \item \textbf{Backend API:} authentication, donation posting, recipient ranking, status transitions, volunteer assignment, deadline expiry.
+    \item \textbf{Database:} store users, organisations, donations, status history, volunteer tasks and attachment metadata.
 \end{itemize}
+All status transitions and their timestamps are recorded server-side, since the evaluation metrics in Section~\ref{sec:eval} are derived from them.
 
 \subsection{CI/CD and fast delivery enabler}
 CI/CD will be used to:
@@ -151,28 +174,32 @@ CI/CD will be used to:
 
 \section{Evaluation Criterion %
 \BvrHint{\ldots measurable and attributable}}
-We define success using measurable metrics tied to the core workflow.
+\label{sec:eval}
+We define success using measurable metrics tied to the core workflow. Because surplus food expires, our metrics are framed around speed and completion rather than volume alone.
 
 \subsection{Primary evaluation metric}
-\textbf{Time-to-acknowledgement (TTA):} time between complaint submission and ``Received/Assigned'' status creation in the system.
+\textbf{Time-to-claim (TTC):} time between a donation being posted and a recipient organisation accepting it.
 \begin{itemize}[leftmargin=0.7cm]
-    \item Target: median TTA $\le$ 2 hours during pilot window.
-    \item Attribution: measured from database timestamps (submission vs. first status update by staff).
+    \item Target: median TTC $\le$ 45 minutes during the pilot window.
+    \item Attribution: measured from database timestamps (posting creation vs. the acceptance transition), with no manual entry.
+    \item Rationale: TTC is the delay the platform is designed to remove, and it is the delay that decides whether the remaining steps can finish before the food expires.
 \end{itemize}
 
 \subsection{Secondary evaluation metrics}
 \begin{itemize}[leftmargin=0.7cm]
-    \item \textbf{Resolution time reduction:} reduce time-to-resolved compared to baseline process (even if baseline is collected via survey).
-    \item \textbf{Duplicate rate:} percentage of complaints flagged as duplicates and resolved without rework.
-    \item \textbf{User clarity:} citizen-reported clarity of status using a simple 1--5 feedback question.
-    \item \textbf{Reliability:} availability of staging/production for login and submission during business hours (e.g., $\ge$ 99\% uptime in pilot).
+    \item \textbf{Rescue rate:} percentage of posted donations that reach Completed before their stated pickup deadline. Target $\ge$ 80\% during the pilot.
+    \item \textbf{Expiry loss rate:} percentage of postings closed unclaimed at deadline --- the direct counter-metric to rescue rate.
+    \item \textbf{Handover time:} time from acceptance to delivery, isolating last-mile volunteer performance from matching performance.
+    \item \textbf{User clarity:} donor- and recipient-reported clarity of donation status using a simple 1--5 feedback question.
+    \item \textbf{Reliability:} availability of staging/production for login and posting during service hours (e.g., $\ge$ 99\% uptime in pilot).
 \end{itemize}
 
 \subsection{Pilot validation plan %
 \BvrHint{\ldots high-level}}
 \begin{itemize}[leftmargin=0.7cm]
-    \item Recruit 10--20 pilot users (citizens) and 3--5 staff roles (department simulation if real staff unavailable).
-    \item Compare metrics before/after within the iteration window by logging baseline estimates via short interviews or existing process observations.
+    \item Recruit 2--3 campus donors (mess or canteen operators), 3--5 recipient organisations, and 8--12 student volunteers (roles simulated within the team where a real counterpart is unavailable).
+    \item Establish the baseline for TTC and rescue rate through short interviews on the current phone/messaging practice, since the existing process leaves no records to mine.
+    \item Compare metrics before/after within the iteration window using the timestamps logged by the system.
 \end{itemize}
 
 \section{Scalability %
@@ -180,13 +207,14 @@ We define success using measurable metrics tied to the core workflow.
 The proposition should scale in both theoretical and practical senses.
 
 \begin{enumerate}[leftmargin=0.7cm]
-    \item \textbf{Scalable (theoretically):} The system should support growth in number of complaints and concurrent dashboard usage by:
+    \item \textbf{Scalable (theoretically):} The system should support growth in number of donations, participating organisations and concurrent dashboard usage by:
     \begin{itemize}[leftmargin=0.7cm]
         \item decoupling components (frontend/backend),
-        \item enabling pagination and indexing for common queries,
-        \item using stateless API design.
+        \item enabling pagination and indexing for common queries (open donations by locality and deadline),
+        \item using stateless API design,
+        \item bounding the ranking computation to recipients within a serviceable radius rather than the full set.
     \end{itemize}
-    
+
     \item \textbf{Operationally deployable (practically):} The system should run on common web hosting:
     \begin{itemize}[leftmargin=0.7cm]
         \item managed database,
@@ -200,8 +228,10 @@ A mature set of ``engines'' (tooling/services) is available to implement this as
 \begin{itemize}[leftmargin=0.7cm]
     \item Web framework for REST APIs and templated/reactive pages.
     \item Managed relational or document database.
-    \item Authentication approach (token-based or session-based).
-    \item Object storage for optional attachments (or local storage for pilot).
+    \item Authentication approach (token-based or session-based) with role-based access for the four user types.
+    \item Object storage for optional food photographs (or local storage for pilot).
+    \item Geocoding and straight-line distance computation over stored coordinates; no routing research is required for the pilot.
+    \item Scheduled job execution for deadline expiry and reminders.
     \item Test framework for unit/integration tests.
     \item CI runner and staging deployment target.
 \end{itemize}
@@ -212,31 +242,38 @@ We will use these mature components to focus on workflow design, correctness, an
 \subsection{Initial deliverable %
 \BvrHint{\ldots first iteration}}
 \begin{itemize}[leftmargin=0.7cm]
-    \item Citizen submission form + complaint ID generation
-    \item Staff workflow: update status and assignment
-    \item Citizen status page: view timeline/history
-    \item Basic logging and timestamps for TTA measurement
+    \item Donor posting form + donation ID generation, with pickup deadline captured at posting
+    \item Recipient workflow: view the open-donation pool and accept a donation
+    \item Volunteer workflow: claim a pickup task and update status through delivery
+    \item Shared status page: view the donation timeline/history across all roles
+    \item Basic logging and server-side timestamps for TTC and rescue-rate measurement
     \item CI: build + backend unit tests + linting
     \item CD to staging with a single command or pipeline job
 \end{itemize}
 
 \subsection{Subsequent deliverables}
 \begin{itemize}[leftmargin=0.7cm]
-    \item Lightweight duplicate suggestions with staff review
-    \item Notification layer (email/SMS optional in later iteration; can start with in-app notifications)
+    \item Ranked recipient suggestions with per-criterion explanations shown to the recipient
+    \item Standing requirement postings by recipient organisations, so demand is visible before surplus appears
+    \item Notification layer (email/SMS optional in a later iteration; can start with in-app notifications)
+    \item Automatic deadline expiry with loss accounting
     \item Admin dashboard for metrics and backlog
+    \item Optional food photographs on postings
     \item Improved search/filtering and indexed queries for scale readiness
 \end{itemize}
 
 \section{Risks and mitigations}
 \begin{itemize}[leftmargin=0.7cm]
-    \item \textbf{Data privacy / consent:} minimize collected data; keep attachments optional; store only what is needed.
-    \item \textbf{Staff adoption:} provide an easy UI for status updates; keep workflow steps minimal; include shortcuts.
+    \item \textbf{Food safety and liability:} the platform coordinates handovers and does not certify food. We record preparation time, storage condition and deadline, display them before acceptance, and leave inspection to the recipient at handover. The system makes no health or safety guarantee.
+    \item \textbf{Perishability outrunning coordination:} enforce the pickup deadline server-side, surface remaining time prominently, and close expired postings automatically so that losses are measured rather than hidden.
+    \item \textbf{Volunteer unavailability breaking the last mile:} allow recipient self-pickup as a first-class fallback so that a match is not wasted when no volunteer claims the task.
+    \item \textbf{Donor and staff adoption:} keep the posting form short enough to complete during cleanup; keep status updates to single-tap actions.
     \item \textbf{Evaluation measurement ambiguity:} instrument timestamps and define clear status transitions before development begins.
+    \item \textbf{Data privacy / consent:} minimize collected data; reveal contact phone numbers only after a match is accepted; keep photographs optional; store only what is needed.
     \item \textbf{Operational issues in pilot:} use staging early; ensure CI/CD produces repeatable deployments.
 \end{itemize}
 
 \section{Summary}
-This project proposes a deployable web platform to reduce grievance handling delays in a tier-2/3 city context. It meets the course criteria by emphasizing time-to-value through rapid iterations, implementing CI/CD to support frequent safe releases, and using measurable evaluation criteria (especially time-to-acknowledgement). It remains focused on engineering workflow and scalability readiness rather than research-driven novelty.
+This project proposes a deployable web platform that connects institutional food surplus with recipient organisations before that surplus expires, in a tier-2/3 city and campus context. It meets the course criteria by emphasizing time-to-value through rapid iterations, implementing CI/CD to support frequent safe releases, and using measurable evaluation criteria (especially time-to-claim and rescue rate). It remains focused on engineering workflow and scalability readiness rather than research-driven novelty: recipient ranking is a transparent, explainable heuristic with a human decision at every match.
 
 \end{document}
