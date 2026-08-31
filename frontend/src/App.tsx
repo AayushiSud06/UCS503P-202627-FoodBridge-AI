@@ -38,6 +38,7 @@ import AdminDonations from './pages/admin/AdminDonations';
 import AdminOrganizations from './pages/admin/AdminOrganizations';
 import AdminVolunteers from './pages/admin/AdminVolunteers';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
+import MobileApp from './mobile/MobileApp';
 
 export default function App() {
   return (
@@ -86,7 +87,12 @@ export default function App() {
             <Route path="volunteers" element={<AdminVolunteers />} />
             <Route path="analytics" element={<AdminAnalytics />} />
           </Route>
+	
+ 	 {/* Mobile web */}
+          <Route path="/m/*" element={<MobileApp />} />
 
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
