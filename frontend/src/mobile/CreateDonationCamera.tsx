@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Camera, Check, Loader, MapPin, Pencil } from 'lucide-react';
+import { ArrowRight, Camera, Check, Loader, MapPin, Pencil, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Donation } from '../types';
+import { MSection, MDetail, MMeter } from './parts';
 
 type Step = 'shoot' | 'read' | 'confirm' | 'done';
-
-const TITLES: Record<Step, string> = {
-  shoot: 'Photograph the food',
-  read: 'Reading the photo',
-  confirm: 'Confirm what we read',
-  done: 'Matched',
-};
 
 const READINGS = [
   'Dish class · Vegetarian, mixed thali',
@@ -74,180 +68,223 @@ export default function CreateDonationCamera() {
 
   return (
     <>
-      <header className="m-head" style={{ alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            type="button"
-            onClick={() => navigate('/m/donor')}
-            style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit', display: 'flex' }}
-            aria-label="Back"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h4>{TITLES[step]}</h4>
-        </div>
-        <span className="m-label" style={{ flex: 'none' }}>
-          {step === 'done' ? 'DONE' : `STEP ${step === 'shoot' ? 1 : step === 'read' ? 2 : 3}/3`}
-        </span>
-      </header>
-
-      <div className="m-body">
-        {step === 'shoot' && (
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div className="m-placeholder" style={{ flex: 1, minHeight: 380, position: 'relative' }}>
-              <span>camera viewfinder — point at the tray</span>
-            </div>
-            <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <p style={{ fontSize: 12.5, lineHeight: 1.55, color: 'rgba(32,30,29,.7)' }}>
-                One photo is the whole form. Vision reads the dish, estimates portions and grades
-                freshness; you only correct what it got wrong.
-              </p>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={onFile}
-                style={{ display: 'none' }}
+      {step !== 'done' && (
+        <div className="px-5 py-3 bg-white border-b border-gray-200 flex items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+            Step {step === 'shoot' ? 1 : step === 'read' ? 2 : 3} of 3
+          </span>
+          <div className="flex gap-1.5">
+            {(['shoot', 'read', 'confirm'] as Step[]).map(s => (
+              <span
+                key={s}
+                className={`w-6 h-1 rounded-full ${
+                  s === step ? 'bg-emerald-700' : 'bg-gray-200'
+                }`}
               />
-              <button type="button" className="m-btn m-btn-primary" onClick={() => fileRef.current?.click()}>
-                <Camera size={18} />
-                Capture food
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 'shoot' && (
+        <>
+          <div className="mx-5 mt-5 rounded-2xl border border-dashed border-gray-300 bg-gray-100 h-64 flex flex-col items-center justify-center text-center px-6">
+            <Camera size={28} className="text-gray-400" />
+            <p className="mt-2 text-sm text-gray-500">Point the camera at the tray</p>
+          </div>
+          <div className="p-5 space-y-2.5">
+            <p className="text-sm text-gray-600 leading-relaxed">
+              One photo is the whole form. The reader estimates the dish, the portion count and the
+              storage type — you only correct what it gets wrong.
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={onFile}
+              className="hidden"
+            />
+            <button type="button" className="m-btn-primary" onClick={() => fileRef.current?.click()}>
+              <Camera size={18} />
+              Capture food
+            </button>
+            <button type="button" className="m-btn-secondary" onClick={() => navigate('/donor/create')}>
+              <Pencil size={16} />
+              Enter details by hand
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === 'read' && (
+        <>
+          {photo ? (
+            <img src={photo} alt="" className="w-full h-56 object-cover" />
+          ) : (
+            <div className="w-full h-56 bg-gray-200" />
+          )}
+          <div className="p-5 space-y-3.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+              Reading photo
+            </p>
+            <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+              <div className="h-full w-8/12 rounded-full bg-emerald-600 transition-all duration-700" />
+            </div>
+            <div className="space-y-2.5 text-sm text-gray-700">
+              {READINGS.map(r => (
+                <p key={r} className="flex items-center gap-2">
+                  <Check size={15} className="text-emerald-600 shrink-0" />
+                  {r}
+                </p>
+              ))}
+              <p className="flex items-center gap-2 text-gray-400">
+                <Loader size={15} className="shrink-0 animate-spin" />
+                Freshness window…
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {step === 'confirm' && (
+        <>
+          <div className="flex gap-4 p-5 bg-white border-b border-gray-200">
+            {photo ? (
+              <img src={photo} alt="" className="w-24 h-24 rounded-xl object-cover shrink-0" />
+            ) : (
+              <div className="w-24 h-24 rounded-xl bg-gray-200 shrink-0" />
+            )}
+            <div className="min-w-0">
+              <span className="m-chip bg-emerald-50 text-emerald-700">
+                <Sparkles size={11} />
+                96% confident
+              </span>
+              <p className="mt-1.5 font-display font-semibold text-lg text-gray-900 leading-snug">
+                {qty} Vegetarian Meals
+              </p>
+              <p className="text-xs text-gray-500">Dal makhani · paneer bhurji · rice</p>
+            </div>
+          </div>
+
+          <MSection title="Correct anything" />
+
+          <div className="flex items-center justify-between gap-4 px-5 py-3 bg-white border-b border-gray-100">
+            <span className="text-sm text-gray-500">Quantity</span>
+            <div className="flex items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => setQty(q => Math.max(5, q - 5))}
+                className="w-11 h-11 rounded-l-xl border border-gray-300 text-lg font-semibold text-gray-700 active:bg-gray-100"
+                aria-label="Decrease quantity"
+              >
+                –
               </button>
-              <button type="button" className="m-btn m-btn-secondary" onClick={() => navigate('/donor/create')}>
-                <Pencil size={16} />
-                Enter details by hand
+              <span className="w-24 h-11 flex items-center justify-center border-y border-gray-300 text-sm font-semibold text-gray-900">
+                {qty} meals
+              </span>
+              <button
+                type="button"
+                onClick={() => setQty(q => q + 5)}
+                className="w-11 h-11 rounded-r-xl border border-gray-300 text-lg font-semibold text-gray-700 active:bg-gray-100"
+                aria-label="Increase quantity"
+              >
+                +
               </button>
             </div>
           </div>
-        )}
 
-        {step === 'read' && (
-          <>
-            {photo
-              ? <img src={photo} alt="" style={{ width: '100%', height: 260, objectFit: 'cover', filter: 'grayscale(1) contrast(1.08)' }} />
-              : <div className="m-placeholder" style={{ height: 260 }} />}
-            <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="m-kicker">Reading photo</div>
-              <div style={{ height: 4, background: 'var(--color-neutral-300)' }}>
-                <div style={{ width: '72%', height: 4, background: 'var(--color-accent)' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9, fontSize: 12.5 }}>
-                {READINGS.map(r => (
-                  <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Check size={14} style={{ color: 'var(--color-accent)', flex: 'none' }} />
-                    {r}
-                  </div>
-                ))}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(32,30,29,.5)' }}>
-                  <Loader size={14} style={{ flex: 'none' }} />
-                  Freshness window…
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+          <MDetail label="Category" value="Vegetarian" />
+          <MDetail label="Storage" value="Room temperature" />
+          <MDetail
+            label="Pickup before"
+            value={<span className="text-clay-700 font-semibold">8:00 PM</span>}
+          />
 
-        {step === 'confirm' && (
-          <>
-            <div style={{ display: 'flex', borderBottom: '2px solid var(--color-divider)' }}>
-              {photo
-                ? <img src={photo} alt="" style={{ width: 110, height: 104, objectFit: 'cover', flex: 'none', filter: 'grayscale(1) contrast(1.08)', borderRight: '2px solid var(--color-divider)' }} />
-                : <div className="m-placeholder" style={{ width: 110, height: 104, flex: 'none' }} />}
-              <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <span className="m-tag m-tag-accent" style={{ alignSelf: 'flex-start' }}>Vision · 96% confident</span>
-                <div style={{ fontWeight: 800, fontSize: 17, lineHeight: 1.2 }}>{qty} Vegetarian Meals</div>
-                <div className="m-muted">Dal makhani · paneer bhurji · rice</div>
-              </div>
-            </div>
-
-            <div className="m-sec"><h6>Correct anything</h6></div>
-
-            <div style={{ padding: '10px 18px', borderTop: '1px solid var(--color-divider)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <span style={{ fontSize: 13, color: 'rgba(32,30,29,.6)' }}>Quantity</span>
-              <span style={{ display: 'flex', flex: 'none' }}>
-                <button type="button" onClick={() => setQty(q => Math.max(5, q - 5))} style={{ width: 44, height: 44, border: '1px solid var(--color-divider)', background: 'none', cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 16 }}>–</button>
-                <span style={{ minWidth: 86, textAlign: 'center', lineHeight: '44px', fontWeight: 800, fontSize: 15, borderTop: '1px solid var(--color-divider)', borderBottom: '1px solid var(--color-divider)' }}>{qty} meals</span>
-                <button type="button" onClick={() => setQty(q => q + 5)} style={{ width: 44, height: 44, border: '1px solid var(--color-divider)', background: 'none', cursor: 'pointer', font: 'inherit', fontWeight: 800, fontSize: 16 }}>+</button>
-              </span>
-            </div>
-
-            {[['Category', 'Vegetarian'], ['Storage', 'Room temperature']].map(([k, v]) => (
-              <div key={k} style={{ padding: '12px 18px', borderTop: '1px solid var(--color-divider)', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, color: 'rgba(32,30,29,.6)' }}>{k}</span>
-                <span style={{ fontWeight: 800, fontSize: 13 }}>{v}</span>
-              </div>
-            ))}
-            <div style={{ padding: '12px 18px', borderTop: '1px solid var(--color-divider)', borderBottom: '2px solid var(--color-divider)', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: 'rgba(32,30,29,.6)' }}>Pickup before</span>
-              <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--color-accent-700)' }}>8:00 PM</span>
-            </div>
-
-            <div style={{ padding: '12px 18px', display: 'flex', gap: 9, background: 'var(--color-surface)' }}>
-              <MapPin size={15} style={{ marginTop: 2, flex: 'none' }} />
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 12.5 }}>College Central Mess, Thapar University</div>
-                <div className="m-muted" style={{ marginTop: 2 }}>From your saved default · GPS confirmed</div>
-              </div>
-            </div>
-
-            <div style={{ padding: '16px 18px 18px' }}>
-              <button type="button" className="m-btn m-btn-primary" onClick={publish}>
-                Publish donation
-                <ArrowRight size={17} style={{ marginLeft: 'auto' }} />
-              </button>
-              <p className="m-muted" style={{ marginTop: 10 }}>
-                Matching runs on publish: distance, capacity and intake reliability are scored
-                against every kitchen within 8 km.
+          <div className="m-5 rounded-2xl bg-gray-100 p-4 flex gap-3">
+            <MapPin size={16} className="text-gray-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-gray-900">
+                College Central Mess, Thapar University
               </p>
+              <p className="text-xs text-gray-500 mt-0.5">From your saved default · GPS confirmed</p>
             </div>
-          </>
-        )}
+          </div>
 
-        {step === 'done' && (
-          <>
-            <section className="m-poster">
-              <div className="m-kicker" style={{ color: 'inherit', opacity: 0.85 }}>Matched in 4 seconds</div>
-              <div className="m-poster-num" style={{ fontSize: 72, marginTop: 6 }}>
-                {created?.matchScore ?? 94}%
-              </div>
-              <div style={{ fontWeight: 800, fontSize: 15, marginTop: 8 }}>
-                {created?.recipientName ?? 'Helping Hands Community Kitchen'}
-              </div>
-              <div style={{ fontSize: 12, marginTop: 3, opacity: 0.9 }}>
-                Community kitchen · {created?.distanceKm ?? 1.8} km · 95% reliable
-              </div>
-            </section>
+          <div className="px-5 pb-6">
+            <button type="button" className="m-btn-primary" onClick={publish}>
+              Publish donation
+              <ArrowRight size={17} />
+            </button>
+            <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+              Matching runs on publish: distance, capacity and intake reliability are scored against
+              every kitchen within 8 km.
+            </p>
+          </div>
+        </>
+      )}
 
-            <div className="m-sec"><h6>Why this kitchen</h6></div>
-            {[['Distance', 98], ['Quantity fit', 92], ['Capacity', 88], ['Reliability', 95]].map(([label, v]) => (
-              <div key={label as string} className="m-score">
-                <span className="m-score-num">{v}%</span>
-                <span className="m-score-track"><span className="m-score-fill" style={{ width: `${v}%`, display: 'block' }} /></span>
-                <span className="m-score-label">{label}</span>
+      {step === 'done' && (
+        <>
+          <section className="px-5 pt-6 pb-6 bg-emerald-700 text-white">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">
+              Matched in 4 seconds
+            </p>
+            <p className="mt-1.5 font-display font-semibold text-5xl leading-none">
+              {created?.matchScore ?? 94}%
+            </p>
+            <p className="mt-3 font-medium">
+              {created?.recipientName ?? 'Helping Hands Community Kitchen'}
+            </p>
+            <p className="text-sm text-emerald-100 mt-0.5">
+              Community kitchen · {created?.distanceKm ?? 1.8} km · 95% reliable
+            </p>
+          </section>
+
+          <MSection title="Why this kitchen" />
+          <div className="bg-white border-y border-gray-100 py-1.5">
+            <MMeter label="Distance" score={98} />
+            <MMeter label="Quantity fit" score={92} />
+            <MMeter label="Capacity" score={88} />
+            <MMeter label="Reliability" score={95} />
+          </div>
+
+          <MSection title="What happens next" />
+          <div className="px-5 pb-2 space-y-3">
+            {([
+              ['Kitchen notified · awaiting accept', true],
+              ['Volunteer courier assigned', false],
+              ['Picked up before 8:00 PM', false],
+            ] as [string, boolean][]).map(([label, done]) => (
+              <div key={label} className="flex items-center gap-3">
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${done ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                />
+                <span className={`text-sm ${done ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                  {label}
+                </span>
               </div>
             ))}
+          </div>
 
-            <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '2px solid var(--color-divider)' }}>
-              {[['Kitchen notified · awaiting accept', true], ['Volunteer courier assigned', false], ['Picked up before 8:00 PM', false]].map(([label, done]) => (
-                <div key={label as string} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ width: 8, height: 8, flex: 'none', background: done ? 'var(--color-accent)' : 'var(--color-neutral-400)' }} />
-                  <span style={{ fontSize: 12.5, fontWeight: done ? 800 : 400, color: done ? 'inherit' : 'rgba(32,30,29,.55)' }}>
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ padding: '6px 18px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button type="button" className="m-btn m-btn-primary" onClick={() => navigate('/m/donor')}>Back to home</button>
-              <button type="button" className="m-btn m-btn-secondary" onClick={() => { setStep('shoot'); setPhoto(undefined); setCreated(null); }}>
-                List another
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          <div className="p-5 space-y-2.5">
+            <button type="button" className="m-btn-primary" onClick={() => navigate('/m/donor')}>
+              Back to home
+            </button>
+            <button
+              type="button"
+              className="m-btn-secondary"
+              onClick={() => {
+                setStep('shoot');
+                setPhoto(undefined);
+                setCreated(null);
+              }}
+            >
+              List another
+            </button>
+          </div>
+        </>
+      )}
     </>
   );
 }

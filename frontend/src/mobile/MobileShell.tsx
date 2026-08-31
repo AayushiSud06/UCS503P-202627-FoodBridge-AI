@@ -1,46 +1,43 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Package, BarChart2, User, type LucideIcon } from 'lucide-react';
+import { Repeat } from 'lucide-react';
+import type { RoleConfig } from './nav';
 
-export interface Tab {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-}
-
-export const DONOR_TABS: Tab[] = [
-  { to: '/m/donor', label: 'HOME', icon: Home },
-  { to: '/m/donor/listings', label: 'LISTINGS', icon: Package },
-  { to: '/m/donor/impact', label: 'IMPACT', icon: BarChart2 },
-  { to: '/m/donor/profile', label: 'PROFILE', icon: User },
-];
-
-interface Props {
-  kicker: string;
-  title: string;
-  initials: string;
-  tabs: Tab[];
-}
-
-export default function MobileShell({ kicker, title, initials, tabs }: Props) {
+/**
+ * Chrome shared by every mobile portal: a header carrying the signed-in
+ * identity, a scrolling body, and a tab bar mirroring the desktop sidebar.
+ */
+export default function MobileShell({ config }: { config: RoleConfig }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  const active =
+    config.tabs.find(t => t.to !== config.base && pathname.startsWith(t.to)) ??
+    config.tabs[0];
+
   return (
     <>
-      <header className="m-head">
-        <div>
-          <div className="m-kicker">{kicker}</div>
-          <h3 style={{ marginTop: 4 }}>{title}</h3>
+      <header className="m-head items-center">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 truncate">
+            {config.kicker}
+          </p>
+          <h1 className="mt-0.5 text-xl font-display font-semibold text-gray-900 truncate">
+            {active.label.charAt(0) + active.label.slice(1).toLowerCase()}
+          </h1>
         </div>
-        <div
-          style={{
-            width: 38, height: 38, flex: 'none', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            background: 'var(--color-text)', color: 'var(--color-bg)',
-            fontWeight: 800, fontSize: 12,
-          }}
-        >
-          {initials}
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate('/m')}
+            aria-label="Switch role"
+            className="w-9 h-9 rounded-full border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100"
+          >
+            <Repeat size={15} />
+          </button>
+          <span className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
+            {config.initials}
+          </span>
         </div>
       </header>
 
@@ -49,18 +46,21 @@ export default function MobileShell({ kicker, title, initials, tabs }: Props) {
       </div>
 
       <nav className="m-tabs">
-        {tabs.map(({ to, label, icon: Icon }) => (
-          <button
-            key={to}
-            type="button"
-            className="m-tab"
-            aria-current={pathname === to ? 'page' : undefined}
-            onClick={() => navigate(to)}
-          >
-            <Icon size={19} />
-            {label}
-          </button>
-        ))}
+        {config.tabs.map(({ to, label, icon: Icon }) => {
+          const isActive = to === active.to;
+          return (
+            <button
+              key={to}
+              type="button"
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => navigate(to)}
+              className={isActive ? 'm-tab m-tab-active' : 'm-tab'}
+            >
+              <Icon size={18} strokeWidth={isActive ? 2.4 : 1.9} />
+              {label}
+            </button>
+          );
+        })}
       </nav>
     </>
   );

@@ -1,12 +1,15 @@
+import { Leaf, Trash2, Route } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
+import { DONOR_ID } from './nav';
+import { MHero, MSection, MDetail } from './parts';
 
-const DONOR_ID = 'u-donor-1';
 const BARS = [38, 52, 30, 74, 58, 100];
-const MONTHS = ['MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG'];
+const MONTHS = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
 
 export default function DonorImpact() {
   const mine = useDonations().filter(d => d.donorId === DONOR_ID);
   const meals = mine.reduce((s, d) => s + d.quantity, 0);
+  const km = mine.reduce((s, d) => s + (d.distanceKm ?? 0), 0);
 
   const byKitchen = new Map<string, number>();
   mine.forEach(d => {
@@ -14,52 +17,88 @@ export default function DonorImpact() {
     byKitchen.set(d.recipientName, (byKitchen.get(d.recipientName) ?? 0) + d.quantity);
   });
   const kitchens = [...byKitchen.entries()].sort((a, b) => b[1] - a[1]);
-
-  const km = mine.reduce((s, d) => s + (d.distanceKm ?? 0), 0);
+  const topShare = kitchens[0]?.[1] ?? 1;
 
   return (
     <>
-      <section style={{ padding: 18, borderBottom: '2px solid var(--color-divider)' }}>
-        <div className="m-kicker">Meals rescued</div>
-        <div style={{ fontWeight: 800, fontSize: 64, lineHeight: 1, letterSpacing: '-0.03em', marginTop: 4 }}>
-          {meals}
-        </div>
-        <div style={{ display: 'flex', gap: 2, marginTop: 14, height: 40, alignItems: 'flex-end' }}>
+      <MHero label="Meals rescued" value={meals} sub="Counted from every donation you have listed." />
+
+      <section className="px-5 py-5 bg-white border-b border-gray-200">
+        <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Last six months</p>
+        <div className="mt-3 flex items-end gap-1.5 h-24">
           {BARS.map((h, i) => (
-            <div
-              key={i}
-              style={{
-                flex: 1, height: `${h}%`,
-                background: i === BARS.length - 1 ? 'var(--color-accent)' : 'var(--color-neutral-400)',
-              }}
-            />
+            <div key={i} className="flex-1 flex flex-col justify-end h-full">
+              <div
+                className={`rounded-t-md ${i === BARS.length - 1 ? 'bg-emerald-600' : 'bg-emerald-200'}`}
+                style={{ height: `${h}%` }}
+              />
+            </div>
           ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 10, color: 'rgba(32,30,29,.5)' }}>
-          <span>{MONTHS[0]}</span>
-          <span>{MONTHS[MONTHS.length - 1]}</span>
+        <div className="mt-2 flex justify-between text-[11px] text-gray-400">
+          {MONTHS.map(m => (
+            <span key={m}>{m}</span>
+          ))}
         </div>
       </section>
 
-      {[
-        ['CO₂ avoided', `${Math.round(meals * 0.86)} kg`],
-        ['Food kept out of landfill', `${Math.round(meals * 0.45)} kg`],
-        ['Volunteer kilometres', `${km.toFixed(1)} km`],
-      ].map(([k, v]) => (
-        <div key={k} style={{ padding: '14px 18px', borderBottom: '1px solid var(--color-divider)', display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 13 }}>{k}</span>
-          <span style={{ fontWeight: 800, fontSize: 13 }}>{v}</span>
-        </div>
-      ))}
+      <MSection title="Environmental effect" />
+      <MDetail
+        label={
+          <span className="inline-flex items-center gap-2">
+            <Leaf size={14} className="text-emerald-600" /> CO₂ avoided
+          </span>
+        }
+        value={`${Math.round(meals * 0.86)} kg`}
+      />
+      <MDetail
+        label={
+          <span className="inline-flex items-center gap-2">
+            <Trash2 size={14} className="text-emerald-600" /> Kept out of landfill
+          </span>
+        }
+        value={`${Math.round(meals * 0.45)} kg`}
+      />
+      <MDetail
+        label={
+          <span className="inline-flex items-center gap-2">
+            <Route size={14} className="text-emerald-600" /> Courier distance
+          </span>
+        }
+        value={`${km.toFixed(1)} km`}
+      />
 
-      <div className="m-sec"><h6>Kitchens you supply</h6></div>
-      {kitchens.map(([name, qty]) => (
-        <div key={name} style={{ padding: '11px 18px', borderTop: '1px solid var(--color-divider)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontWeight: 800, fontSize: 13 }}>{name}</span>
-          <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--color-accent-700)', flex: 'none' }}>{qty}</span>
+      <MSection title="Kitchens you supply" />
+      {kitchens.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-gray-500 bg-white border-b border-gray-100">
+          No kitchen has been matched to your surplus yet.
+        </p>
+      ) : (
+        kitchens.map(([name, qty]) => (
+          <div key={name} className="px-5 py-3 bg-white border-b border-gray-100">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium text-gray-900 truncate">{name}</span>
+              <span className="text-sm font-semibold text-emerald-700 shrink-0">{qty}</span>
+            </div>
+            <div className="mt-1.5 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-600"
+                style={{ width: `${Math.round((qty / topShare) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))
+      )}
+
+      <div className="p-5">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+          <p className="font-display font-semibold text-emerald-950">UN Sustainable Development Goals</p>
+          <p className="mt-1 text-sm text-emerald-800 leading-relaxed">
+            Every rescued meal contributes to Goal 2 (Zero Hunger) and Goal 12 (Responsible
+            Consumption and Production).
+          </p>
         </div>
-      ))}
-      <div style={{ height: 18 }} />
+      </div>
     </>
   );
 }

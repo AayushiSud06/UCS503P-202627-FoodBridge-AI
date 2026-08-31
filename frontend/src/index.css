@@ -65,6 +65,102 @@
   .text-muted {
     @apply text-sm text-gray-500;
   }
+
+  /* ─── Mobile web app (/m) ───────────────────────────────────────────────
+     The mobile portals share the desktop palette and type scale; only the
+     chrome differs (fixed viewport, safe-area insets, thumb-sized targets).
+     Everything is scoped under .m-app so it cannot leak into the desktop
+     portals. Screens themselves use ordinary Tailwind utilities. */
+
+  .m-app {
+    @apply fixed inset-0 flex flex-col bg-gray-50 text-gray-900 antialiased;
+  }
+
+  .m-head {
+    @apply flex-none flex items-start justify-between gap-3 px-5 py-4 bg-white border-b border-gray-200;
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  .m-body {
+    @apply flex-1 overflow-y-auto overscroll-contain;
+  }
+
+  .m-tabs {
+    @apply flex-none flex bg-white border-t border-gray-200;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .m-tab {
+    @apply flex-1 flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold tracking-wide text-gray-400 transition-colors;
+    min-height: 3.5rem;
+  }
+
+  .m-tab-active {
+    @apply text-emerald-700;
+  }
+
+  .m-actions {
+    @apply flex-none flex flex-col gap-2.5 px-5 py-4 bg-white border-t border-gray-200;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .m-sec {
+    @apply px-5 pt-5 pb-2 flex items-baseline justify-between gap-3;
+  }
+
+  .m-sec-title {
+    @apply text-sm font-display font-semibold text-gray-900;
+  }
+
+  .m-btn {
+    @apply inline-flex items-center justify-center gap-2 w-full rounded-full px-5 font-medium text-sm transition-colors;
+    min-height: 3rem;
+  }
+
+  .m-btn-primary {
+    @apply m-btn bg-emerald-700 text-white active:bg-emerald-900 disabled:opacity-40;
+  }
+
+  .m-btn-secondary {
+    @apply m-btn bg-white text-gray-700 border border-gray-300 active:bg-gray-100 disabled:opacity-40;
+  }
+
+  .m-btn-icon {
+    @apply inline-flex items-center justify-center rounded-full bg-white text-gray-700 border border-gray-300 active:bg-gray-100 shrink-0;
+    width: 3rem;
+    min-height: 3rem;
+  }
+
+  .m-fab {
+    @apply absolute right-5 w-14 h-14 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-lg shadow-emerald-900/20 active:bg-emerald-900;
+    bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+
+  .m-backdrop {
+    @apply absolute inset-0 w-full bg-gray-950/40;
+  }
+
+  .m-sheet {
+    @apply absolute left-0 right-0 bottom-0 flex flex-col bg-gray-50 rounded-t-3xl shadow-2xl overflow-hidden;
+    max-height: 85%;
+  }
+
+  .m-input {
+    @apply w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/40 focus:border-emerald-600 transition-colors;
+    min-height: 3rem;
+  }
+
+  .m-chip {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  /* The shared ToastContainer pins itself to the bottom-right of the viewport,
+     which on a phone lands underneath the tab bar. Lift and widen it. */
+  .m-toasts > div {
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 /* Smooth scrolling */
