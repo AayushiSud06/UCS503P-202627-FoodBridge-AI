@@ -32,6 +32,12 @@ export interface User {
   role: UserRole;
   avatarInitials: string;
   organization?: string;
+  /**
+   * Id this account owns inside donation records: `donorId` for donors,
+   * `recipientId` ("r-*") for NGOs, `volunteerId` ("v-*") for volunteers.
+   * Admins have none — they see everything.
+   */
+  entityId?: string;
 }
 
 export interface Donation {

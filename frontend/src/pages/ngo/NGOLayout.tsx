@@ -27,10 +27,10 @@ export default function NGOLayout() {
           <div className="relative w-64 bg-white shadow-xl flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center">
+                <div className="w-7 h-7 bg-emerald-700 rounded-full flex items-center justify-center">
                   <Leaf size={15} className="text-white" />
                 </div>
-                <span className="font-bold text-gray-900">FoodLink <span className="text-emerald-600">AI</span></span>
+                <span className="font-display font-semibold text-gray-900">FoodLink <span className="text-emerald-600">AI</span></span>
               </div>
               <button onClick={() => setMobileOpen(false)}><X size={20} className="text-gray-500" /></button>
             </div>
@@ -54,7 +54,7 @@ export default function NGOLayout() {
           <button onClick={() => setMobileOpen(true)} className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100">
             <Menu size={20} />
           </button>
-          <span className="font-bold text-gray-900">FoodLink AI</span>
+          <span className="font-display font-semibold text-gray-900">FoodLink AI</span>
           <div className="w-8 h-8 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">HH</div>
         </div>
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">

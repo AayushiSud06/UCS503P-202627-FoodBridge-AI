@@ -22,10 +22,10 @@ export default function Sidebar({ items, userName, userRole, userInitials, baseP
     <aside className="hidden lg:flex flex-col w-64 min-h-screen bg-white border-r border-gray-200 shrink-0">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-gray-100">
-        <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+        <div className="w-8 h-8 bg-emerald-700 rounded-full flex items-center justify-center">
           <Leaf size={18} className="text-white" />
         </div>
-        <span className="text-base font-bold text-gray-900">
+        <span className="text-base font-display font-semibold text-gray-900">
           FoodLink <span className="text-emerald-600">AI</span>
         </span>
       </div>

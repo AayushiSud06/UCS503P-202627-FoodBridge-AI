@@ -21,7 +21,7 @@ const ROLES: RoleOption[] = [
     description: 'I have surplus food to donate',
     path: '/donor',
     color: 'border-gray-200 hover:border-emerald-300 hover:bg-emerald-50',
-    activeColor: 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200',
+    activeColor: 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-200',
   },
   {
     role: 'ngo',
@@ -29,8 +29,8 @@ const ROLES: RoleOption[] = [
     icon: Heart,
     description: 'I represent a recipient organization',
     path: '/ngo',
-    color: 'border-gray-200 hover:border-rose-300 hover:bg-rose-50',
-    activeColor: 'border-rose-500 bg-rose-50 ring-2 ring-rose-200',
+    color: 'border-gray-200 hover:border-clay-300 hover:bg-clay-50',
+    activeColor: 'border-clay-500 bg-clay-50 ring-2 ring-clay-200',
   },
   {
     role: 'volunteer',
@@ -38,8 +38,8 @@ const ROLES: RoleOption[] = [
     icon: Users,
     description: 'I help with food pickup & delivery',
     path: '/volunteer',
-    color: 'border-gray-200 hover:border-blue-300 hover:bg-blue-50',
-    activeColor: 'border-blue-500 bg-blue-50 ring-2 ring-blue-200',
+    color: 'border-gray-200 hover:border-sky-300 hover:bg-sky-50',
+    activeColor: 'border-sky-500 bg-sky-50 ring-2 ring-sky-200',
   },
   {
     role: 'admin',
@@ -83,19 +83,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#FBF8F3] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
-            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 bg-emerald-700 rounded-full flex items-center justify-center shadow-md">
               <Leaf size={20} className="text-white" />
             </div>
-            <span className="text-2xl font-extrabold text-gray-900">
-              FoodLink <span className="text-emerald-600">AI</span>
+            <span className="text-2xl font-display font-semibold text-gray-900">
+              FoodLink <span className="text-emerald-700">AI</span>
             </span>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">Welcome back</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Welcome back</h1>
           <p className="text-sm text-gray-500 mt-1">Sign in to continue to your dashboard</p>
         </div>
 

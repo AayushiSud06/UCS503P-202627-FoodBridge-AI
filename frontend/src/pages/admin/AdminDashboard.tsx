@@ -67,19 +67,21 @@ export default function AdminDashboard() {
       {/* Charts + Activity */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Meals chart */}
-        <div className="card p-6 lg:col-span-2">
+        <div className="card p-6 lg:col-span-2 flex flex-col">
           <h2 className="section-title mb-5">Meals Redistributed — This Week</h2>
-          <div className="flex items-end gap-3 h-40">
+          <div className="flex items-end gap-3 flex-1 min-h-[10rem]">
             {MEAL_DATA.map((val, i) => {
               const height = (val / maxMeals) * 100;
               return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div key={i} className="flex-1 h-full flex flex-col items-center gap-1.5">
                   <span className="text-xs text-gray-400 font-medium">{val}</span>
-                  <div
-                    className="w-full bg-emerald-500 rounded-t-lg transition-all duration-700 hover:bg-emerald-600"
-                    style={{ height: `${height}%`, minHeight: '8px' }}
-                    title={`${DAYS[i]}: ${val} meals`}
-                  />
+                  <div className="w-full flex-1 flex items-end">
+                    <div
+                      className="w-full bg-emerald-600 rounded-t-lg transition-all duration-700 hover:bg-emerald-700"
+                      style={{ height: `${height}%`, minHeight: '6px' }}
+                      title={`${DAYS[i]}: ${val} meals`}
+                    />
+                  </div>
                   <span className="text-xs text-gray-500">{DAYS[i]}</span>
                 </div>
               );
@@ -153,8 +155,9 @@ export default function AdminDashboard() {
               { phase: 'Advanced Phase', color: 'text-blue-600 bg-blue-50', items: ['AI food image categorization', 'NLP donation understanding', 'Community heatmap'], done: false },
             ].map(phase => (
               <div key={phase.phase} className={`rounded-xl p-4 ${phase.color}`}>
-                <p className={`text-xs font-bold uppercase tracking-wider mb-2`}>
-                  {phase.done ? '✅' : '⏳'} {phase.phase}
+                <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider mb-2">
+                  {phase.done ? <CheckCircle size={13} /> : <Clock size={13} />}
+                  {phase.phase}
                 </p>
                 {phase.items.map(item => (
                   <div key={item} className="flex items-start gap-2 mb-1">

@@ -1,82 +1,148 @@
 import { Link } from 'react-router-dom';
-import { Package, CheckSquare, Heart, Truck } from 'lucide-react';
-import StatCard from '../../components/StatCard';
-import DonationCard from '../../components/DonationCard';
-import EmptyState from '../../components/EmptyState';
+import { Package, ArrowRight } from 'lucide-react';
+import DonationRow from '../../components/DonationRow';
 import { useDonations } from '../../context/AppContext';
+import { deadlineStatus, byUrgency } from '../../lib/time';
 
 export default function NGODashboard() {
   const donations = useDonations();
 
-  const available = donations.filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status));
-  const accepted = donations.filter(d => ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status) && d.recipientId === 'r-1');
+  const open = donations
+    .filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status))
+    .sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
+
+  const accepted = donations.filter(
+    d => ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status) && d.recipientId === 'r-1'
+  );
   const completed = donations.filter(d => d.status === 'COMPLETED' && d.recipientId === 'r-1');
 
-  const mealsReceived = completed.reduce((s, d) => s + d.quantity, 0) + 184;
+  const mealsOnOffer = open.reduce((sum, d) => sum + d.quantity, 0);
+  const mealsReceived = completed.reduce((sum, d) => sum + d.quantity, 0) + 184;
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const closest = [...open].sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99))[0];
+  const soonest = open[0];
+  const soonestStatus = soonest ? deadlineStatus(soonest.pickupDeadline) : null;
 
   return (
-    <div className="space-y-8 max-w-6xl">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{greeting}, Helping Hands 👋</h1>
-          <p className="text-gray-500 mt-1">Food available for your community kitchen today.</p>
-        </div>
-        <Link to="/ngo/available" className="btn-primary shrink-0">
-          <Package size={18} /> Browse Available Food
-        </Link>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Available Matches" value={available.length} icon={Package} color="emerald" trend="Updated just now" />
-        <StatCard label="Accepted" value={accepted.length + 5} icon={CheckSquare} color="blue" />
-        <StatCard label="Meals Received" value={mealsReceived} icon={Heart} color="rose" />
-        <StatCard label="Successful Pickups" value={completed.length + 23} icon={Truck} color="purple" />
-      </div>
-
-      {/* Available donations */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="section-title">Available Donations</h2>
-          <Link to="/ngo/available" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">View all →</Link>
-        </div>
-
-        {available.length === 0 ? (
-          <EmptyState
-            icon={Package}
-            title="No matches available"
-            description="No suitable food donations are available right now. Check back soon!"
+    <div className="max-w-4xl space-y-10">
+      {/* ── What's on offer right now ──────────────────────────────────────── */}
+      <section className="relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-[#FBF8F3] px-7 py-8 sm:px-9 sm:py-10">
+        <svg
+          viewBox="0 0 200 200"
+          className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 opacity-50"
+          aria-hidden="true"
+        >
+          <path
+            fill="#e3ead3"
+            d="M45.3,-58.4C59.5,-49.9,72.4,-37.7,76.9,-22.9C81.5,-8.1,77.7,9.3,69.6,23.7C61.6,38.1,49.3,49.5,35.4,58.6C21.6,67.6,6.1,74.3,-9.9,74.6C-25.9,74.9,-42.4,68.9,-54.6,58C-66.8,47.1,-74.7,31.4,-77.4,14.5C-80.1,-2.3,-77.6,-20.3,-68.7,-34.3C-59.8,-48.3,-44.5,-58.2,-29.4,-65.7C-14.2,-73.1,0.8,-78.1,15.9,-76.1C31,-74.1,45.3,-58.4,45.3,-58.4Z"
+            transform="translate(100 100)"
           />
+        </svg>
+
+        <div className="relative">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-clay-700">
+            Helping Hands Community Kitchen
+          </p>
+
+          <h1 className="mt-3 font-display text-3xl sm:text-[2.5rem] font-medium leading-[1.15] text-gray-900">
+            {open.length === 0 ? (
+              <>Nothing on offer right now.</>
+            ) : (
+              <>
+                <span className="italic text-emerald-800">{mealsOnOffer}</span> meals are open
+                to claim.
+              </>
+            )}
+          </h1>
+
+          <p className="mt-3 max-w-lg text-sm leading-relaxed text-gray-600">
+            {open.length === 0
+              ? 'We’ll flag new donations here the moment a donor lists them nearby.'
+              : `Closest is ${closest?.distanceKm ?? '—'} km away${
+                  soonestStatus && soonestStatus.urgency !== 'ok'
+                    ? `, and the soonest closes in ${soonestStatus.label.replace(' left', '')}`
+                    : ''
+                }.`}
+          </p>
+
+          <Link to="/ngo/available" className="btn-primary mt-7 px-6 py-3 text-base">
+            <Package size={18} />
+            Browse available food
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Decide on these ────────────────────────────────────────────────── */}
+      <section>
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 className="section-title">Open to claim</h2>
+          <Link
+            to="/ngo/available"
+            className="text-sm font-medium text-emerald-800 hover:text-emerald-900"
+          >
+            View all →
+          </Link>
+        </div>
+
+        {open.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-300 px-6 py-12 text-center">
+            <p className="font-display text-lg text-gray-900">Nothing available</p>
+            <p className="mt-1 text-sm text-gray-500">Check back shortly — listings move fast.</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {available.slice(0, 3).map(d => (
-              <DonationCard
+          <div className="space-y-3">
+            {open.map(d => (
+              <DonationRow
                 key={d.id}
                 donation={d}
-                viewAs="ngo"
-                detailPath={`/ngo/available/${d.id}`}
+                to={`/ngo/available/${d.id}`}
+                showDonor
+                showMatch
               />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Accepted donations */}
+      {/* ── Already yours ──────────────────────────────────────────────────── */}
       {accepted.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title">Active Accepted Donations</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <section>
+          <h2 className="section-title mb-4">Coming to you</h2>
+          <div className="space-y-3">
             {accepted.map(d => (
-              <DonationCard key={d.id} donation={d} viewAs="ngo" />
+              <DonationRow key={d.id} donation={d} to="/ngo/accepted" showDonor />
             ))}
           </div>
-        </div>
+        </section>
       )}
+
+      {/* ── Impact, deliberately quiet ─────────────────────────────────────── */}
+      <section className="border-t border-gray-200 pt-7">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div className="flex flex-wrap gap-x-10 gap-y-4">
+            {[
+              { value: mealsReceived, label: 'meals received' },
+              { value: completed.length + 23, label: 'pickups completed' },
+              { value: accepted.length + 5, label: 'currently accepted' },
+            ].map(stat => (
+              <div key={stat.label}>
+                <p className="font-display text-2xl font-semibold text-gray-900">
+                  {stat.value.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <Link
+            to="/ngo/impact"
+            className="group inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-emerald-800"
+          >
+            See your full impact
+            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

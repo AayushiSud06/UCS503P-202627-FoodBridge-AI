@@ -7,6 +7,7 @@ import type {
 export const MOCK_USERS: User[] = [
   {
     id: 'u-donor-1',
+    entityId: 'u-donor-1',
     name: 'Aayushi Sharma',
     email: 'aayushi@thapar.edu',
     role: 'donor',
@@ -15,6 +16,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u-donor-2',
+    entityId: 'u-donor-2',
     name: 'Vikram Mehta',
     email: 'vikram@grandorchid.com',
     role: 'donor',
@@ -23,6 +25,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u-ngo-1',
+    entityId: 'r-1',
     name: 'Raj Malhotra',
     email: 'raj@helpinghands.org',
     role: 'ngo',
@@ -31,6 +34,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u-ngo-2',
+    entityId: 'r-2',
     name: 'Priya Singh',
     email: 'priya@umeedshelter.org',
     role: 'ngo',
@@ -39,6 +43,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u-volunteer-1',
+    entityId: 'v-1',
     name: 'Aarav Sharma',
     email: 'aarav@thapar.edu',
     role: 'volunteer',
@@ -47,6 +52,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u-volunteer-2',
+    entityId: 'v-2',
     name: 'Meera Kapoor',
     email: 'meera@gmail.com',
     role: 'volunteer',

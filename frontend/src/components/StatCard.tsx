@@ -45,7 +45,7 @@ export default function StatCard({
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-500 mb-1">{label}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="font-display text-3xl font-semibold text-gray-900">{value}</p>
           {trend && (
             <p className="text-xs text-emerald-600 font-medium mt-1">{trend}</p>
           )}

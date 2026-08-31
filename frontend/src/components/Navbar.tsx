@@ -11,12 +11,12 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center group-hover:bg-emerald-700 transition-colors">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 bg-emerald-700 rounded-full flex items-center justify-center group-hover:bg-emerald-800 transition-colors">
               <Leaf className="w-4.5 h-4.5 text-white" size={18} />
             </div>
-            <span className="text-lg font-bold text-gray-900">
-              FoodLink <span className="text-emerald-600">AI</span>
+            <span className="text-lg font-display font-semibold text-gray-900">
+              FoodLink <span className="text-emerald-700">AI</span>
             </span>
           </Link>
 

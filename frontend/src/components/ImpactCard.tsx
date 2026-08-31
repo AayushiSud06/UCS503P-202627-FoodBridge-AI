@@ -1,4 +1,4 @@
-import { type LucideIcon } from 'lucide-react';
+import { Sprout, type LucideIcon } from 'lucide-react';
 
 interface ImpactCardProps {
   title: string;
@@ -73,21 +73,21 @@ export default function ImpactCard({
       {/* Background soft glow */}
       <div className={`absolute top-0 right-0 w-24 h-24 rounded-full ${c.bg} -mr-8 -mt-8 opacity-60 pointer-events-none`} />
 
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${c.iconBg} shrink-0`}>
+      <div className="relative flex items-start justify-between gap-3 mb-3">
+        <div className={`w-11 h-11 rounded-full flex items-center justify-center ${c.iconBg} shrink-0`}>
           <Icon size={22} />
         </div>
         {trend && (
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${c.badge}`}>
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${c.badge}`}>
             {trend}
           </span>
         )}
       </div>
 
-      <div>
+      <div className="relative">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{title}</p>
         <div className="flex items-baseline gap-1.5 mb-1">
-          <span className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+          <span className="font-display text-3xl sm:text-4xl font-semibold text-gray-900 tracking-tight">
             {typeof value === 'number' ? value.toLocaleString() : value}
           </span>
           {unit && <span className="text-sm font-semibold text-gray-500">{unit}</span>}
@@ -96,7 +96,7 @@ export default function ImpactCard({
 
         {equivalent && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-1.5 text-xs font-medium text-gray-500">
-            <span className="text-base">🌱</span>
+            <Sprout size={14} className="text-emerald-600 shrink-0" />
             <span>{equivalent}</span>
           </div>
         )}

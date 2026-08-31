@@ -23,11 +23,11 @@ export default function AdminLayout() {
       {/* Sidebar */}
       <aside className="hidden lg:flex flex-col w-64 min-h-screen bg-gray-900 text-gray-100 shrink-0">
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-gray-800">
-          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-emerald-700 rounded-full flex items-center justify-center">
             <Leaf size={18} className="text-white" />
           </div>
           <div>
-            <span className="text-base font-bold text-white">FoodLink <span className="text-emerald-400">AI</span></span>
+            <span className="text-base font-display font-semibold text-white">FoodLink <span className="text-emerald-400">AI</span></span>
             <p className="text-xs text-gray-500">Admin Panel</p>
           </div>
         </div>
@@ -75,8 +75,8 @@ export default function AdminLayout() {
           <div className="relative w-64 bg-gray-900 flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center"><Leaf size={15} className="text-white" /></div>
-                <span className="font-bold text-white">FoodLink <span className="text-emerald-400">AI</span></span>
+                <div className="w-7 h-7 bg-emerald-700 rounded-full flex items-center justify-center"><Leaf size={15} className="text-white" /></div>
+                <span className="font-display font-semibold text-white">FoodLink <span className="text-emerald-400">AI</span></span>
               </div>
               <button onClick={() => setMobileOpen(false)}><X size={20} className="text-gray-400" /></button>
             </div>
@@ -99,7 +99,7 @@ export default function AdminLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-gray-900 text-white border-b border-gray-800">
           <button onClick={() => setMobileOpen(true)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-800"><Menu size={20} /></button>
-          <span className="font-bold">FoodLink AI — Admin</span>
+          <span className="font-display font-semibold">FoodLink AI — Admin</span>
           <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-gray-300">AD</div>
         </div>
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto"><Outlet /></main>

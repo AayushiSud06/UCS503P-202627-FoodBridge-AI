@@ -28,7 +28,7 @@ export default function MatchScore({ score, size = 'md', showLabel = true }: Mat
     <div className="flex flex-col items-center gap-2">
       <div className={`relative ${sizeConfig.container} flex items-center justify-center`}>
         <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#e7e5e4" strokeWidth="8" />
           <circle
             cx="50" cy="50" r="40" fill="none"
             stroke="currentColor"
@@ -44,7 +44,7 @@ export default function MatchScore({ score, size = 'md', showLabel = true }: Mat
         </div>
       </div>
       {showLabel && (
-        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${colors.bg}`}>
+        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap ${colors.bg}`}>
           <Zap size={sizeConfig.icon - 2} className={colors.text} />
           <span className={`${sizeConfig.labelSize} font-semibold ${colors.text}`}>
             AI MATCH
