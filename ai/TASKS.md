@@ -1,6 +1,6 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against commit `b2e696b` + uncommitted working-tree changes. Context:
+> Verified against commit `ea0f499` + the uncommitted CI workflow. Context:
 > `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -12,27 +12,23 @@
 
 ## Current
 
-**Nothing in progress**, but the working tree is **not clean**: donation read scoping is
-complete and uncommitted (see *Completed*), alongside the signing-key hardening and the
-Alembic migration system. No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`.
+**Nothing in progress.** The only uncommitted change is `.github/workflows/ci.yml`
+(see *Completed*); the signing-key hardening, Alembic and donation read scoping are
+committed (`3e1e168`, `ea0f499`). No feature branch, no partial implementation, no
+TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
 
-Hardening is the current phase; CI is the one *Next* item left.
+The hardening phase is finished — *Next* is empty.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-Alembic and donation read scoping, formerly the other two items here, are both done —
-see *Completed*.
+**Empty.** Every item that was here — the signing key, Alembic, donation read scoping
+and CI — is done; see *Completed*.
 
-- [ ] **Add CI.** GitHub Actions running `pytest code/tests` and
-      `npm run build --prefix frontend` (the build runs `tsc`, catching type
-      regressions). *~30 min. 80 tests currently exist and never run automatically.*
-      Note: CI must export `FOODLINK_SECRET_KEY` or rely on `conftest.py`'s own key —
-      the app is now fail-closed without one. Worth adding `alembic check` to catch a
-      model change committed without a revision (`test_migrations.py` already does this
-      for a fresh database).
+Nothing has been promoted from *Backlog* to replace them. The strongest candidates, if
+hardening continues, are rate limiting on `/api/auth/login` and scoping
+`GET /api/recipients`; both are recommendations from analysis, not commitments.
 
 ---
 
@@ -133,7 +129,22 @@ One item is *sequenced* rather than blocked:
 
 ## Completed (verified in the repository)
 
-### Donation read authorization — *uncommitted working-tree change*
+### Continuous integration — *uncommitted working-tree change*
+- [x] **`.github/workflows/ci.yml`** runs on push to `master`/`main` and on every pull
+      request, in two parallel jobs.
+- [x] Backend job (Python 3.13): `pip install -r code/requirements-dev.txt`, then
+      `pytest code/tests` — no signing key is exported for it, because `conftest.py`
+      supplies its own, which keeps the suite's self-containment under test.
+- [x] Migration drift is caught by `alembic -c code/alembic.ini upgrade head` followed by
+      `alembic ... check`, against a throwaway SQLite file in the workspace. That step
+      needs a key only because `migrations/env.py` resolves the URL through the
+      fail-closed `Settings`; the workflow supplies a literal non-secret placeholder.
+- [x] Frontend job (Node 20): `npm ci` + `npm run build` (= `tsc && vite build`), so a
+      type regression fails CI. pip and npm caches keyed off the lockfile/requirements.
+- [x] `.github/workflows/mkdocs.yml` left alone — documentation deployment stays
+      separate from validation. No application code changed. See `DECISIONS.md` D-25.
+
+### Donation read authorization — `ea0f499`
 - [x] **`GET /api/donations` is scoped server-side by role and ownership**, whatever
       `mine` is set to. `mine` remains a narrowing convenience filter only.
 - [x] **`GET /api/donations/{id}` applies the identical scope**, in the query, so an
@@ -149,7 +160,7 @@ One item is *sequenced* rather than blocked:
       id lookup and the list agree for every role. Six of them fail against the previous
       code; the full suite is 80 passing.
 
-### Database migrations — *uncommitted working-tree change*
+### Database migrations — `3e1e168`
 - [x] **Alembic added** — `code/alembic.ini` + `code/migrations/`. `env.py` takes the
       URL from `Settings` rather than the ini, so no environment-specific value is
       committed and migrations cannot address a different database than the app.
@@ -167,7 +178,7 @@ One item is *sequenced* rather than blocked:
       `compare_metadata` assertion that a migrated fresh database matches
       `Base.metadata`, and a test that the baselining procedure loses no rows.
 
-### Security hardening — *uncommitted working-tree change*
+### Security hardening — `3e1e168`
 - [x] **Signing key is fail-closed.** `config.py` no longer defaults
       `FOODLINK_SECRET_KEY`; a missing key raises `ConfigurationError` while `Settings`
       is built — during import, so it precedes uvicorn binding and also covers
@@ -225,6 +236,6 @@ One item is *sequenced* rather than blocked:
 - [x] Vite dev proxy `/api → :8000`, eliminating CORS in development
 - [x] `.claude/launch.json` frontend dev-server config
 - [x] `.gitignore` covering `.env`, `node_modules`; no `.db` or `.env` tracked
-- [x] mkdocs documentation workflow — `.github/workflows/mkdocs.yml` (**docs only —
-      does not run tests**)
+- [x] mkdocs documentation workflow — `.github/workflows/mkdocs.yml` (docs only;
+      validation lives in `ci.yml`)
 - [x] `ai/` context scaffolding — `5264fb3`

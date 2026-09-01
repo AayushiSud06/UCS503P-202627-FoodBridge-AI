@@ -2,9 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-01, commit `b2e696b` + uncommitted
-> working-tree changes (signing-key hardening, Alembic, donation read scoping),
-> branch `master`.
+> Last verified against the repository: 2026-09-01, commit `ea0f499` + the
+> uncommitted CI workflow, branch `master`. The signing-key hardening, Alembic and
+> donation read scoping described below are now committed (`3e1e168`, `ea0f499`).
 
 ## What this project is
 
@@ -32,7 +32,7 @@ as ML.
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Backend tests | ✅ 80 tests passing (~33 s): 37 integration + 13 read-scope + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
-| CI | ⚠️ Docs-only workflow; tests never run automatically |
+| CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |
 
@@ -44,17 +44,22 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- *(uncommitted)* — **Donation reads scoped by role and ownership.** `GET /api/donations`
+- *(uncommitted)* — **CI.** `.github/workflows/ci.yml` runs on every push to
+  `master`/`main` and every pull request: a backend job (`pytest code/tests`, then
+  `alembic upgrade head` + `alembic check` against a throwaway SQLite file) and a
+  frontend job (`npm ci` + `npm run build`, which is `tsc && vite build`). The
+  mkdocs workflow is untouched. No application code changed. See `DECISIONS.md` D-25.
+- `ea0f499` — **Donation reads scoped by role and ownership.** `GET /api/donations`
   no longer returns every record to any authenticated account, and `GET /api/donations/{id}`
   (plus `/matches`) applies the same scope in the query — an unauthorised id returns the
   ordinary 404, so it does not confirm the donation exists. Admin stays unrestricted; the
   lifecycle, matching and auth paths are untouched. 13 new tests. See `DECISIONS.md` D-24.
-- *(uncommitted)* — **Alembic migration system.** `code/alembic.ini` + `code/migrations/`;
+- `3e1e168` — **Alembic migration system.** `code/alembic.ini` + `code/migrations/`;
   one revision (`ae4636b1e6d4`) representing the schema as it already was. All three
   `create_all` callers (`main.py` lifespan, `cli._session`, `seed`) now call
   `migrate.ensure_schema_current()`. Both existing dev databases baselined with
   `alembic stamp head`, data intact. 8 new tests. See `DECISIONS.md` D-23.
-- *(uncommitted)* — **Signing-key hardening.** `config.py` no longer defaults the JWT
+- `3e1e168` — **Signing-key hardening.** `config.py` no longer defaults the JWT
   secret; missing configuration raises `ConfigurationError` at import. Adds
   `FOODLINK_DEV_INSECURE_SECRET` as the explicit local-development opt-in and 22 config
   tests. See `DECISIONS.md` D-22.
@@ -74,10 +79,11 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-No feature work is in progress. The natural next phase is **hardening**: the
-application works, but nothing about it is production-safe yet. The highest-value
-work is in `TASKS.md` → Next, and it is mostly infrastructure and authorization
-scoping rather than new features.
+No feature work is in progress. The prioritised hardening list is now **empty** —
+signing-key configuration, migrations, donation read scoping and CI are all done, and
+`TASKS.md` → *Next* has nothing in it. Remaining work is in `TASKS.md` → *Backlog*,
+where rate limiting and scoping `GET /api/recipients` are the highest-value items;
+none has been committed to.
 
 ## Known issues and blockers
 
@@ -104,11 +110,14 @@ read-exposure caveat, unchanged:** `GET /api/recipients` still returns every
 organisation's contact person and phone to any authenticated account, and
 `GET /api/metrics` is still platform-wide for everyone.
 
+✅ **Resolved:** tests never ran in CI. `.github/workflows/ci.yml` runs the backend
+suite, the frontend build and `alembic check` on push and pull request (D-25).
+**Remaining caveat:** there are still no frontend tests, so `tsc` is the only frontend
+gate — a type-correct behavioural regression passes CI.
+
 ### High
 3. **No rate limiting anywhere.** Login is brute-forceable; bcrypt cost is the only
    bound.
-4. **Tests never run in CI.** Only `.github/workflows/mkdocs.yml` exists and it
-   deploys documentation. A commit breaking all 80 tests merges with no signal.
 
 ### Medium
 5. **Courier claim is a read-then-write race.** The guard in `update_status` reads
@@ -164,8 +173,8 @@ organisation's contact person and phone to any authenticated account, and
 
 ## Immediate priorities
 
-1. Add CI running `pytest` + `npm run build` (and `alembic check`)
-2. Scope `GET /api/recipients` — the remaining unscoped read of personal contact data
+1. Scope `GET /api/recipients` — the remaining unscoped read of personal contact data
+2. Rate-limit `POST /api/auth/login` and `/register`
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

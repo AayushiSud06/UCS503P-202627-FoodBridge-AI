@@ -490,3 +490,42 @@ mean "not yet claimed". A geographic or availability-based courier scope would n
 relationship. The write path is untouched: `update_status` still uses the unscoped
 `_get_or_404`, because its authorisation is `TRANSITION_ROLES` plus ownership, and the
 claim step legitimately acts on a donation before the courier is bound to it.
+
+---
+
+## D-25 · CI validates; it does not deploy, and holds no secret **[documented]**
+
+**Decision.** `.github/workflows/ci.yml` runs the backend suite, `alembic check` and the
+frontend build on push and pull request, as two parallel jobs. It is a second workflow
+rather than steps added to `mkdocs.yml`. The `pytest` step is given no environment; the
+Alembic step is given a literal placeholder `FOODLINK_SECRET_KEY`, not a repository secret.
+
+**Reasoning.**
+
+- **Separate from mkdocs.** The documentation workflow deploys to `gh-pages` and needs
+  `contents: write`; validation needs only `contents: read` and must be able to fail
+  without taking documentation down with it. Merging them would also mean a docs-only
+  edit paying for a full test run.
+- **No key for the tests.** `conftest.py` sets its own key before importing the app
+  (D-22). If CI exported one globally, a future regression that made the suite depend on
+  ambient configuration would pass here and fail on a developer's fresh clone. Saying
+  nothing is what keeps that property under test.
+- **A placeholder, not a secret, for `alembic check`.** `migrations/env.py` reads the
+  database URL through `Settings`, so the fail-closed rule applies to migrations too — but
+  the key signs nothing in that step, so there is no secret to protect. A repository secret
+  would imply the value matters and add a rotation obligation for a string that does not.
+  It is 45 characters (past `MIN_SECRET_KEY_LENGTH`) and is neither the retired public key
+  nor `DEV_SIGNING_KEY`.
+- **`upgrade head` then `check`, on a throwaway database.** `check` compares the models
+  against a live schema, so it needs one built from the revision history; a file in the
+  workspace is discarded with the runner. This catches the same drift as
+  `test_migrations.py` but through the real `alembic` CLI, which is the path a developer
+  actually uses.
+- **Python 3.13, Node 20.** 3.13 is what the project is developed on, and the code needs
+  3.10+ regardless (the root `pyproject.toml`'s `requires-python = ">=3.8"` is template
+  residue and wrong). Node 20 is the current LTS and is what Vite 5 targets.
+
+**Constraints.** CI proves the backend and the type layer, not the frontend's behaviour —
+there are no frontend tests, so `tsc` passing is the whole frontend signal. The workflow
+deliberately contains no deployment: the project has no deployment configuration, and
+inventing one in CI would be the wrong place to start.

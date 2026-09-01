@@ -260,3 +260,18 @@ Plus 22 config unit tests and 8 migration tests (`test_migrations.py`, temp file
 databases, never `DATABASE_URL`) — 80 in total. `test_donation_reads.py` holds the
 read-scope tests: for every role, what the list withholds the id lookup withholds too.
 Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.
+
+## Continuous integration — `.github/workflows/ci.yml`
+
+Two independent jobs on push to `master`/`main` and on every pull request.
+**backend** (Python 3.13): `pip install -r code/requirements-dev.txt` → `pytest code/tests`
+→ `alembic -c code/alembic.ini upgrade head` + `alembic ... check` against a throwaway
+SQLite file, which fails the build when the models have drifted from the revision history.
+**frontend** (Node 20): `npm ci` → `npm run build`, i.e. `tsc` is the type gate.
+
+The test step exports no signing key — `conftest.py` sets its own (D-22), and leaving CI
+silent about it keeps that self-containment tested. Only the Alembic step needs one, because
+`migrations/env.py` resolves `DATABASE_URL` through the fail-closed `Settings`; it gets a
+literal non-secret placeholder. `.github/workflows/mkdocs.yml` remains separate and deploys
+documentation only. Nothing here deploys the application — there is no deployment
+configuration in the repository at all.
