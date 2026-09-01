@@ -25,9 +25,9 @@ any third-party API. The backend makes zero outbound HTTP requests.
 
 ## Stack
 
-**Backend** — FastAPI ≥0.115 · SQLAlchemy 2.0 (typed `Mapped[...]`) · Pydantic 2.9 ·
-PyJWT · bcrypt · uvicorn · python-multipart (login is OAuth2 form-encoded).
-Tests: pytest ≥8.3 + httpx.
+**Backend** — FastAPI ≥0.115 · SQLAlchemy 2.0 (typed `Mapped[...]`) · Alembic ≥1.13 ·
+Pydantic 2.9 · PyJWT · bcrypt · uvicorn · python-multipart (login is OAuth2
+form-encoded). Tests: pytest ≥8.3 + httpx.
 **Frontend** — React 18.3 · TypeScript 5.5 · Vite 5.4 · React Router 6.26 ·
 Tailwind 3.4 · lucide-react. No Redux, no Axios, no form library, no test framework.
 **Python** — needs 3.10+ in practice (`X | None` syntax) despite `pyproject.toml`.
@@ -36,9 +36,10 @@ Tailwind 3.4 · lucide-react. No Redux, no Axios, no form library, no test frame
 
 | Module | Responsibility |
 |---|---|
-| `main.py` | App, CORS, mounts 5 routers, `/api/health`. Lifespan runs `create_all`. |
-| `config.py` | `Settings` from env, `@lru_cache`. All deployment variance lives here. |
+| `main.py` | App, CORS, mounts 5 routers, `/api/health`. Lifespan applies migrations and warns if the dev signing key is in use. |
+| `config.py` | `Settings` from env, `@lru_cache`. All deployment variance lives here. **Fail-closed on the signing key** — raises `ConfigurationError` rather than defaulting. |
 | `database.py` | Engine, `SessionLocal`, `Base`, `get_db` generator dependency. |
+| `migrate.py` | `ensure_schema_current()` — in-process `alembic upgrade head`. The only schema-creation path outside the tests. |
 | `models.py` | 6 tables + `UserRole` + `DonationStatus` + **`ALLOWED_TRANSITIONS`** + `SELF_SIGNUP_ROLES` + `UtcDateTime`. The most important file. |
 | `schemas.py` | All request/response shapes. `alias_generator=to_camel`. Field constraints. |
 | `security.py` | 73 lines: bcrypt, JWT mint/verify, `get_current_user`, `require_roles`. |
@@ -90,8 +91,19 @@ users ──1:1?── recipients ──1:N── requirements
   server, never from a client. Every metric derives from it.
 - `requirements` — standing needs, so demand is visible before supply.
 
-**No many-to-many relationships. No migrations.** Indexes cover the real access
-patterns: status, deadline, owner FKs, `status_events.donation_id`.
+**No many-to-many relationships.** Indexes cover the real access patterns: status,
+deadline, owner FKs, `status_events.donation_id`.
+
+**Schema evolution — Alembic** (`code/alembic.ini`, `code/migrations/`, D-23).
+One revision so far: `ae4636b1e6d4 initial schema`, the six tables as they already
+were. `env.py` takes the URL from `Settings`, not from the ini, so migrations and the
+app cannot address different databases; it also needs the D-22 signing key, like every
+other entry point. `main.py`, `cli.py` and `seed.py` all call
+`migrate.ensure_schema_current()`, so a fresh database is built from the revision
+history on first start. A database predating migrations is **reported, not rewritten** —
+it is baselined once with `alembic stamp head` (both local dev databases already have
+been). `code/migrations/README.md` carries the commands. The test suite is the one
+exception: it still calls `create_all` on throwaway in-memory databases.
 
 **`UtcDateTime`** (`models.py`) is a `TypeDecorator` normalising every datetime to
 timezone-aware UTC in both directions. It exists because SQLite has no timezone type
@@ -201,7 +213,8 @@ insufficient.
 | Env var | Default | Note |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./foodlink.db` | ⚠️ **relative path** — differs by cwd |
-| `FOODLINK_SECRET_KEY` | insecure in-code default | ⚠️ app starts anyway if unset |
+| `FOODLINK_SECRET_KEY` | **none — required** | Missing → `ConfigurationError` at import. Must be ≥32 chars; the retired public key is refused. |
+| `FOODLINK_DEV_INSECURE_SECRET` | unset | Dev-only opt-in (`1/true/yes/on`) enabling a known development signing key. Warns loudly at startup. |
 | `ACCESS_TOKEN_MINUTES` | `720` (12 h) | |
 | `CORS_ORIGINS` | the two localhost dev origins | comma-separated allowlist, not `*` |
 | `MAX_MATCH_RADIUS_KM` | `8` | |
@@ -214,7 +227,9 @@ proxy target). `VITE_*` values are **inlined at build time** — never secrets.
 
 1. **SQLite has one writer.** Blocks multi-worker uvicorn. Postgres is prerequisite
    for horizontal scaling; the code already supports it via `DATABASE_URL`.
-2. **No migrations.** Schema changes currently require dropping the database.
+2. **Migrations run in the app's own startup.** Safe only while constraint 1 holds a
+   deployment to one process; multiple workers against Postgres would race. At that
+   point `ensure_schema_current()` leaves the lifespan and becomes a deploy step.
 3. **The API is stateless** (JWT, no server session store) — so it *would* scale
    horizontally once the database does. This is a real property, not an aspiration.
 4. **Invariants live in application code**, not the schema. The state machine,
@@ -232,4 +247,6 @@ in-memory SQLite. `conftest.py` uses `StaticPool` — required because in-memory
 exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
+Plus 22 config unit tests and 8 migration tests (`test_migrations.py`, temp file
+databases, never `DATABASE_URL`) — 67 in total.
 Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.

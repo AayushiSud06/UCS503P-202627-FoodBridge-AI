@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+import os
 
-from foodlink.database import Base, get_db
-from foodlink.main import app
+# The application refuses to start without an explicitly configured signing key
+# (see `foodlink.config`), and importing the app below is what builds Settings.
+# Tests therefore supply their own key. `setdefault` so that a developer who
+# already has one exported keeps using it, and so the suite never depends on
+# the development fallback being enabled.
+os.environ.setdefault(
+    "FOODLINK_SECRET_KEY", "test-only-signing-key-not-used-outside-the-suite"
+)
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from foodlink.database import Base, get_db  # noqa: E402
+from foodlink.main import app  # noqa: E402
 
 
 @pytest.fixture

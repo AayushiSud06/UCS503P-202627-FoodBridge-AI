@@ -24,7 +24,8 @@ import sys
 
 from sqlalchemy import select
 
-from .database import Base, SessionLocal, engine
+from .database import SessionLocal
+from .migrate import ensure_schema_current
 from .models import User, UserRole
 from .security import hash_password
 
@@ -64,9 +65,9 @@ def _read_password(confirm: bool = True) -> str:
 
 def _session():
     # A fresh clone may never have started the API, so the tables might not
-    # exist yet. Creating them here means bootstrapping works on a bare
-    # checkout without a separate migration step.
-    Base.metadata.create_all(bind=engine)
+    # exist yet. Applying the migrations here means bootstrapping works on a
+    # bare checkout without a separate step.
+    ensure_schema_current()
     return SessionLocal()
 
 

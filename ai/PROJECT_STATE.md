@@ -2,7 +2,8 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-01, commit `5264fb3`, branch `master`.
+> Last verified against the repository: 2026-09-01, commit `5264fb3` + uncommitted
+> working-tree changes (signing-key hardening, Alembic), branch `master`.
 
 ## What this project is
 
@@ -27,16 +28,30 @@ as ML.
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers |
-| Backend tests | ✅ 37 integration tests, all passing (~19 s) |
+| Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
+| Backend tests | ✅ 67 tests passing (~21 s): 37 integration + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ⚠️ Docs-only workflow; tests never run automatically |
-| Migrations | ❌ None — `create_all` at startup |
+| Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |
 
-Working tree is clean. Untracked: `CLAUDE.md`, `PROJECT_KNOWLEDGE_GUIDE.{md,pdf}`.
+⚠️ **Local development now requires one env var.** A fresh clone must export either
+`FOODLINK_SECRET_KEY` or `FOODLINK_DEV_INSECURE_SECRET=1` before the backend, the CLI
+**or an `alembic` command** will start — `migrations/env.py` gets the database URL from
+the same `Settings` object. The error message states both options. Tests supply their
+own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
+- *(uncommitted)* — **Alembic migration system.** `code/alembic.ini` + `code/migrations/`;
+  one revision (`ae4636b1e6d4`) representing the schema as it already was. All three
+  `create_all` callers (`main.py` lifespan, `cli._session`, `seed`) now call
+  `migrate.ensure_schema_current()`. Both existing dev databases baselined with
+  `alembic stamp head`, data intact. 8 new tests. See `DECISIONS.md` D-23.
+- *(uncommitted)* — **Signing-key hardening.** `config.py` no longer defaults the JWT
+  secret; missing configuration raises `ConfigurationError` at import. Adds
+  `FOODLINK_DEV_INSECURE_SECRET` as the explicit local-development opt-in and 22 config
+  tests. See `DECISIONS.md` D-22.
 - `5264fb3` — `ai/` context scaffolding committed (these four files, initially empty)
 - `01a9861` — **`frontend/src/data/mockData.ts` deleted (506 lines).** Completes the
   migration from prototype mock data to the live API. No `mockData` references remain
@@ -60,52 +75,56 @@ scoping rather than new features.
 
 ## Known issues and blockers
 
-**Nothing blocks development or local use.** Items 1–2 below do block *deployment* —
-that is a gate on shipping, not on continuing to build. Ordered by severity.
+**Nothing blocks development or local use.** Ordered by severity; numbering is kept
+stable as items are resolved, so gaps are expected.
 
-### Critical
-1. **Default JWT signing key ships in code.** `config.py` falls back to
-   `"dev-only-insecure-key-replace-me-in-deployment"` when `FOODLINK_SECRET_KEY` is
-   unset, and **the app starts anyway**. A misconfigured deployment allows anyone to
-   forge an admin token. Blocks any deployment.
-2. **No migrations.** `Base.metadata.create_all` creates missing tables but never
-   alters existing ones. Adding a model column silently does nothing; queries then
-   fail. Current workaround is deleting the `.db` file. Blocks any deployment that
-   must retain data.
+✅ **Resolved:** the insecure default JWT signing key. `config.py` is now fail-closed —
+a missing `FOODLINK_SECRET_KEY` raises `ConfigurationError` during import (before
+uvicorn binds, and covering the CLI). Local development opts in explicitly via
+`FOODLINK_DEV_INSECURE_SECRET=1`, which warns at every startup. The retired public key
+is refused even when set deliberately.
+
+✅ **Resolved:** no migration system. Alembic now owns the schema (D-23); a fresh
+database is built from the revision history and a model change can be applied without
+dropping data. **Remaining migration-related caveat:** `ensure_schema_current()` runs
+inside the app's lifespan, which is safe only because SQLite confines a deployment to
+one process. Moving to Postgres with multiple uvicorn workers requires moving it to a
+deploy step first, or the workers race to migrate.
 
 ### High
-3. **Donation reads are not scoped by ownership.** `GET /api/donations` defaults to
+2. **Donation reads are not scoped by ownership.** `GET /api/donations` defaults to
    `mine=false` and `GET /api/donations/{id}` has no ownership check, so any
    authenticated account can read every donation including exact coordinates and
    donor names. `GET /api/recipients` likewise exposes contact person and phone.
-4. **No rate limiting anywhere.** Login is brute-forceable; bcrypt cost is the only
+3. **No rate limiting anywhere.** Login is brute-forceable; bcrypt cost is the only
    bound.
-5. **Tests never run in CI.** Only `.github/workflows/mkdocs.yml` exists and it
-   deploys documentation. A commit breaking all 37 tests merges with no signal.
+4. **Tests never run in CI.** Only `.github/workflows/mkdocs.yml` exists and it
+   deploys documentation. A commit breaking all 67 tests merges with no signal.
 
 ### Medium
-6. **Courier claim is a read-then-write race.** The guard in `update_status` reads
+5. **Courier claim is a read-then-write race.** The guard in `update_status` reads
    `volunteer_id` then writes it with no row lock or unique constraint. SQLite
    serialises writes so it holds today; on Postgres it is a genuine TOCTOU window.
-7. **Expiry sweep has no scheduler.** `POST /api/admin/maintenance/expire` must be
+6. **Expiry sweep has no scheduler.** `POST /api/admin/maintenance/expire` must be
    called manually, so the expiry-loss metric currently **understates** reality.
-8. **`GET /api/metrics` loads the whole donations table plus all events into memory**
+7. **`GET /api/metrics` loads the whole donations table plus all events into memory**
    and computes medians in Python.
-9. **Match ranking loads every recipient**; the radius filter runs in Python after
+8. **Match ranking loads every recipient**; the radius filter runs in Python after
    the rows are already fetched. `config.py`'s comment claims the radius bounds the
    work — it does not, as written.
-10. **SQLite foreign keys are not enforced** — `PRAGMA foreign_keys` is never issued.
+9. **SQLite foreign keys are not enforced** — `PRAGMA foreign_keys` is never issued.
 
 ### Low / correctness oddities
-11. **A donation accepted but never delivered is stuck forever** — the sweep only
+10. **A donation accepted but never delivered is stuck forever** — the sweep only
     touches `AVAILABLE` and `MATCHED`. Undecided whether intentional.
-12. **Revoking verification mid-lifecycle has no effect** on an already-accepted
+11. **Revoking verification mid-lifecycle has no effect** on an already-accepted
     donation. Untested, undecided.
-13. Two `foodlink.db` files exist (repo root and `code/`) because the SQLite path is
-    relative to the working directory — a recurring "my data vanished" trap.
-14. `image_url` has no length or format validation; frontend sends base64 data URLs
+12. Two `foodlink.db` files exist (repo root and `code/`) because the SQLite path is
+    relative to the working directory — a recurring "my data vanished" trap. Both are
+    now stamped at head; only `code/foodlink.db` holds data (10 users, 6 donations).
+13. `image_url` has no length or format validation; frontend sends base64 data URLs
     into a `Text` column.
-15. An unhandled 500 reaches the user as "Cannot reach the FoodLink server" because
+14. An unhandled 500 reaches the user as "Cannot reach the FoodLink server" because
     `api.ts` maps a bodiless 5xx to `NetworkError` — a crash looks like an outage.
 
 ## Technical debt
@@ -136,10 +155,8 @@ that is a gate on shipping, not on continuing to build. Ordered by severity.
 
 ## Immediate priorities
 
-1. Fail fast on the default secret key
-2. Add Alembic and an initial revision
-3. Scope donation reads by role/ownership
-4. Add CI running `pytest` + `npm run build`
+1. Scope donation reads by role/ownership
+2. Add CI running `pytest` + `npm run build` (and `alembic check`)
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

@@ -1,6 +1,7 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 sqlalchemy>=2.0
+alembic>=1.13
 pydantic[email]>=2.9
 pyjwt>=2.9
 bcrypt>=4.2

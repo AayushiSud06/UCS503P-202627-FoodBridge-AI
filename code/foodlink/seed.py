@@ -13,7 +13,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from .database import Base, SessionLocal, engine
+from .database import SessionLocal
+from .migrate import ensure_schema_current
 from .models import (
     Donation, DonationStatus, Recipient, Requirement, StatusEvent, User, UserRole, Volunteer,
 )
@@ -26,7 +27,7 @@ DEMO_PASSWORD = "foodlink123"
 
 
 def seed() -> None:
-    Base.metadata.create_all(bind=engine)
+    ensure_schema_current()
 
     with SessionLocal() as db:
         if db.scalar(select(User).limit(1)):
