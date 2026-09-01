@@ -1,14 +1,16 @@
 import { Package, Leaf, Droplets, Heart, Award, TrendingUp, CheckCircle, Download } from 'lucide-react';
 import ImpactCard from '../../components/ImpactCard';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 
 export default function DonorImpact() {
   const donations = useDonations();
-  const myDonations = donations.filter(d => d.donorId === 'u-donor-1');
-  const totalMeals = myDonations.reduce((sum, d) => sum + d.quantity, 0) + 120;
+  const user = useCurrentUser();
+  const myDonations = donations.filter(d => d.donorId === user.id);
+  const totalMeals = myDonations.reduce((sum, d) => sum + d.quantity, 0);
   const completedMeals = myDonations
     .filter(d => d.status === 'COMPLETED')
-    .reduce((sum, d) => sum + d.quantity, 0) + 96;
+    .reduce((sum, d) => sum + d.quantity, 0);
 
   // Environmental equivalency formulas
   const co2AvoidedKg = Math.round(completedMeals * 2.5); // ~2.5 kg CO2e per kg food saved

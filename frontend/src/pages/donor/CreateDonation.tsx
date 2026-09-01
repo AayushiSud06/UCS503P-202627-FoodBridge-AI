@@ -1,8 +1,11 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, ImageIcon, Info, AlertCircle, Sparkles } from 'lucide-react';
+import { Upload, X, ImageIcon, Info, AlertCircle, Sparkles, MapPin, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import type { Donation, FoodCategory, FoodUnit, StorageType } from '../../types';
+import { errorMessage } from '../../context/AuthContext';
+import { toFutureIso, toIsoToday } from '../../lib/time';
+import { DEFAULT_COORDS, isValidCoords, requestCoords } from '../../lib/geo';
+import type { FoodCategory, FoodUnit, StorageType } from '../../types';
 
 const CATEGORIES: FoodCategory[] = ['Vegetarian', 'Non-Vegetarian', 'Bakery', 'Fruits & Vegetables', 'Packaged Food', 'Other'];
 const UNITS: FoodUnit[] = ['Meals', 'Kg', 'Boxes', 'Pieces'];
@@ -23,7 +26,7 @@ function FormField({ label, required, children, hint }: {
 }
 
 export default function CreateDonation() {
-  const { addDonation, showToast } = useApp();
+  const { createDonation, showToast } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,10 +40,14 @@ export default function CreateDonation() {
     location: '',
     description: '',
     storageType: 'Room Temperature' as StorageType,
+    // The matcher ranks recipients by real distance, so a pin is required.
+    latitude: String(DEFAULT_COORDS.latitude),
+    longitude: String(DEFAULT_COORDS.longitude),
   });
   const [imagePreview, setImagePreview] = useState<string | undefined>();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -58,6 +65,8 @@ export default function CreateDonation() {
       location: 'College Central Mess, Thapar University',
       description: 'Freshly prepared wholesome vegetarian meals with dal makhani, paneer bhurji, 4 rotis, and jeera rice. Packed in insulated food-grade trays.',
       storageType: 'Room Temperature',
+      latitude: String(DEFAULT_COORDS.latitude),
+      longitude: String(DEFAULT_COORDS.longitude),
     });
     setErrors({});
     showToast('info', 'Demo Preset Loaded', '50 Vegetarian Meals (Pickup before 8 PM) populated.');
@@ -71,57 +80,80 @@ export default function CreateDonation() {
     reader.readAsDataURL(file);
   };
 
+  const useMyLocation = async () => {
+    setIsLocating(true);
+    const coords = await requestCoords();
+    setIsLocating(false);
+    if (!coords) {
+      showToast('info', 'Location unavailable', 'Enter the pickup coordinates by hand instead.');
+      return;
+    }
+    setForm(prev => ({
+      ...prev,
+      latitude: String(coords.latitude),
+      longitude: String(coords.longitude),
+    }));
+    setErrors(prev => { const e = { ...prev }; delete e.coords; return e; });
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!form.foodName.trim()) newErrors.foodName = 'Food name is required';
     if (!form.quantity || Number(form.quantity) <= 0) newErrors.quantity = 'Enter a valid quantity';
     if (!form.pickupDeadline) newErrors.pickupDeadline = 'Pickup deadline is required';
     if (!form.location.trim()) newErrors.location = 'Location is required';
+    if (!isValidCoords(Number(form.latitude), Number(form.longitude))) {
+      newErrors.coords = 'Enter a valid latitude and longitude';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
+    const deadline = toFutureIso(form.pickupDeadline);
+    if (!deadline) {
+      setErrors(prev => ({ ...prev, pickupDeadline: 'Enter a valid pickup time' }));
+      return;
+    }
+
     setIsSubmitting(true);
+    try {
+      // The server owns everything not asked for here: who the donor is, the
+      // match score, and the first entries in the status history.
+      const created = await createDonation({
+        foodName: form.foodName.trim(),
+        category: form.category,
+        quantity: Number(form.quantity),
+        unit: form.unit,
+        storageType: form.storageType,
+        description: form.description.trim(),
+        location: form.location.trim(),
+        latitude: Number(form.latitude),
+        longitude: Number(form.longitude),
+        preparedAt: form.preparedAt ? toIsoToday(form.preparedAt) : null,
+        pickupDeadline: deadline,
+        imageUrl: imagePreview ?? null,
+      });
 
-    const newDonation: Donation = {
-      id: `don-${Date.now()}`,
-      donorId: 'u-donor-1',
-      donorName: 'Aayushi Sharma',
-      donorOrganization: 'College Central Mess',
-      foodName: form.foodName.trim(),
-      category: form.category,
-      quantity: Number(form.quantity),
-      unit: form.unit,
-      preparedAt: form.preparedAt || '12:30 PM',
-      pickupDeadline: form.pickupDeadline.includes(':') && !form.pickupDeadline.includes('M')
-        ? `${form.pickupDeadline}`
-        : form.pickupDeadline,
-      location: form.location.trim(),
-      description: form.description.trim(),
-      storageType: form.storageType,
-      imagePreview,
-      status: 'AVAILABLE',
-      createdAt: new Date().toISOString(),
-      recipientId: 'r-1',
-      recipientName: 'Helping Hands Community Kitchen',
-      matchScore: 94,
-      distanceKm: 1.8,
-    };
-
-    // Simulate short network latency for realism
-    setTimeout(() => {
-      addDonation(newDonation);
       showToast(
         'success',
-        'Donation Listed Successfully!',
-        `${newDonation.quantity} ${newDonation.unit} of ${newDonation.foodName} is now matched with Helping Hands NGO.`
+        'Donation listed',
+        // A match is a suggestion, not an assignment — `recipientName` stays
+        // empty until a kitchen actually accepts, so the score is what tells
+        // us whether ranking found anyone.
+        created.matchScore
+          ? `Top match scored ${created.matchScore}%. A kitchen still has to accept it.`
+          : `${created.quantity} ${created.unit} of ${created.foodName} is now open for recipients.`,
       );
       navigate('/donor');
-    }, 500);
+    } catch (caught) {
+      showToast('error', 'Could not list the donation', errorMessage(caught));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -260,6 +292,50 @@ export default function CreateDonation() {
             {errors.location && (
               <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                 <AlertCircle size={12} /> {errors.location}
+              </p>
+            )}
+          </FormField>
+
+          <FormField
+            label="Pickup Coordinates"
+            required
+            hint="Recipients are ranked by real travel distance, so the pin has to be right"
+          >
+            <div className="flex gap-2 items-start">
+              <input
+                id="latitude"
+                type="number"
+                step="0.000001"
+                value={form.latitude}
+                onChange={e => handleChange('latitude', e.target.value)}
+                className={`input-field flex-1 ${errors.coords ? 'border-red-300 ring-1 ring-red-200' : ''}`}
+                placeholder="Latitude"
+                aria-label="Latitude"
+              />
+              <input
+                id="longitude"
+                type="number"
+                step="0.000001"
+                value={form.longitude}
+                onChange={e => handleChange('longitude', e.target.value)}
+                className={`input-field flex-1 ${errors.coords ? 'border-red-300 ring-1 ring-red-200' : ''}`}
+                placeholder="Longitude"
+                aria-label="Longitude"
+              />
+              <button
+                type="button"
+                id="btn-locate"
+                onClick={useMyLocation}
+                disabled={isLocating}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-60"
+              >
+                {isLocating ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                {isLocating ? 'Locating…' : 'Use my location'}
+              </button>
+            </div>
+            {errors.coords && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <AlertCircle size={12} /> {errors.coords}
               </p>
             )}
           </FormField>

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { ClipboardList, Plus, X } from 'lucide-react';
-import { useRequirements, useApp } from '../context/AppContext';
-import { MOCK_RECIPIENTS } from '../data/mockData';
+import { useRequirements, useApp, useMyRecipient } from '../context/AppContext';
+import { useAction } from '../lib/hooks';
 import type { NGORequirement } from '../types';
 import { MEmpty, MSection } from './parts';
 
-const RECIPIENT = MOCK_RECIPIENTS[0];
 const URGENCIES: NGORequirement['urgency'][] = ['High', 'Medium', 'Low'];
 
 const URGENCY_CHIP: Record<NGORequirement['urgency'], string> = {
@@ -16,7 +15,9 @@ const URGENCY_CHIP: Record<NGORequirement['urgency'], string> = {
 
 export default function NGORequirements() {
   const requirements = useRequirements();
-  const { addRequirement, showToast } = useApp();
+  const { createRequirement } = useApp();
+  const myRecipient = useMyRecipient();
+  const { run, isBusy } = useAction();
   const [open, setOpen] = useState(false);
 
   const [foodType, setFoodType] = useState('');
@@ -26,25 +27,34 @@ export default function NGORequirements() {
   const [recurring, setRecurring] = useState(true);
   const [notes, setNotes] = useState('');
 
-  const mine = requirements.filter(r => r.ngoId === RECIPIENT.id || r.ngoName === RECIPIENT.name);
+  const mine = myRecipient
+    ? requirements.filter(r => r.ngoId === myRecipient.id)
+    : requirements;
   const valid = foodType.trim() !== '' && Number(quantity) > 0;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    addRequirement({
-      id: `req-${Date.now()}`,
-      ngoId: RECIPIENT.id,
-      ngoName: RECIPIENT.name,
-      foodType: foodType.trim(),
-      quantityNeeded: Number(quantity),
-      unit: 'Meals',
-      beneficiaryCount: Number(beneficiaries) || 0,
-      urgency,
-      dailyRecurring: recurring,
-      notes: notes.trim(),
-    });
-    showToast('success', 'Requirement posted', 'Matching donations will be ranked for you first.');
+
+    const created = await run(
+      'create-requirement',
+      () =>
+        createRequirement({
+          foodType: foodType.trim(),
+          quantityNeeded: Number(quantity),
+          unit: 'Meals',
+          beneficiaryCount: Number(beneficiaries) || 0,
+          urgency,
+          dailyRecurring: recurring,
+          notes: notes.trim(),
+        }),
+      {
+        success: { message: 'Requirement posted', subtitle: 'Donors can now see what you need.' },
+        errorTitle: 'Could not post this requirement',
+      },
+    );
+    if (!created) return;
+
     setFoodType('');
     setQuantity('');
     setBeneficiaries('');
@@ -199,7 +209,7 @@ export default function NGORequirements() {
             </div>
 
             <div className="m-actions">
-              <button type="submit" className="m-btn-primary" disabled={!valid}>
+              <button type="submit" className="m-btn-primary disabled:opacity-60" disabled={!valid || isBusy}>
                 Post requirement
               </button>
             </div>

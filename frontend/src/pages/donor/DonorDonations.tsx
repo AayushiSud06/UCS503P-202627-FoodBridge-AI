@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import DonationCard from '../../components/DonationCard';
 import EmptyState from '../../components/EmptyState';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 import type { DonationStatus } from '../../types';
 
 const FILTERS: { label: string; value: DonationStatus | 'ALL' }[] = [
@@ -17,9 +18,10 @@ const FILTERS: { label: string; value: DonationStatus | 'ALL' }[] = [
 
 export default function DonorDonations() {
   const donations = useDonations();
+  const user = useCurrentUser();
   const [filter, setFilter] = useState<DonationStatus | 'ALL'>('ALL');
 
-  const myDonations = donations.filter(d => d.donorId === 'u-donor-1');
+  const myDonations = donations.filter(d => d.donorId === user.id);
   const filtered = filter === 'ALL'
     ? myDonations
     : myDonations.filter(d => d.status === filter);

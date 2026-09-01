@@ -1,19 +1,19 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BarChart2, Package } from 'lucide-react';
-import { useDonations, useRequirements } from '../context/AppContext';
-import { MOCK_RECIPIENTS } from '../data/mockData';
+import { useDonations, useMyRecipient, useRequirements } from '../context/AppContext';
+import { useCurrentUser } from '../context/AuthContext';
 import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
 import { MHero, MStatGrid, MSection, MEmpty } from './parts';
-
-const RECIPIENT = MOCK_RECIPIENTS[0];
 
 export default function NGOHome() {
   const navigate = useNavigate();
   const donations = useDonations();
   const requirements = useRequirements();
+  const user = useCurrentUser();
+  const myRecipient = useMyRecipient();
 
   const available = donations.filter(d => d.status === 'AVAILABLE' || d.status === 'MATCHED');
-  const mine = donations.filter(d => d.recipientId === RECIPIENT.id);
+  const mine = donations.filter(d => d.recipientId === user.entityId);
   const inbound = mine.filter(d =>
     ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status)
   );
@@ -40,7 +40,7 @@ export default function NGOHome() {
           { label: 'Available', value: available.length },
           { label: 'Inbound', value: inbound.length },
           { label: 'Completed', value: received.length },
-          { label: 'Capacity', value: RECIPIENT.capacity },
+          { label: 'Capacity', value: myRecipient?.capacity ?? '—' },
         ]}
       />
 

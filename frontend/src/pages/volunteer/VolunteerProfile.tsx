@@ -1,22 +1,62 @@
-import { useState } from 'react';
-import { User, Mail, Phone, MapPin, ShieldCheck, Save, Navigation, Bike } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useEffect, useState } from 'react';
+import { Mail, Phone, MapPin, ShieldCheck, Save, Navigation, Bike } from 'lucide-react';
+import { useApp, useMyVolunteer } from '../../context/AppContext';
+import { useAuth, useCurrentUser } from '../../context/AuthContext';
+import { useAction } from '../../lib/hooks';
+import { api } from '../../lib/api';
+import PasswordCard from '../../components/PasswordCard';
 
 export default function VolunteerProfile() {
-  const { showToast } = useApp();
+  const user = useCurrentUser();
+  const me = useMyVolunteer();
+  const { updateProfile } = useAuth();
+  const { refresh } = useApp();
+  const { run, isBusy } = useAction();
+
   const [profile, setProfile] = useState({
-    name: 'Aarav Sharma',
-    email: 'aarav@thapar.edu',
-    phone: '+91-98001-23456',
-    location: 'Thapar University Campus, Patiala',
-    vehicleType: 'Bicycle / EV Scooter',
+    name: user.name,
+    email: user.email,
+    phone: '',
+    location: '',
+    // Transport and radius are not modelled server-side yet, so they are
+    // local notes rather than something the dispatcher can act on.
+    vehicleType: '',
     maxDistanceKm: 6,
     isAvailable: true,
   });
 
+  useEffect(() => {
+    if (!me) return;
+    setProfile(prev => ({
+      ...prev,
+      phone: me.phone === '—' ? '' : me.phone,
+      location: me.location === 'Location not set' ? '' : me.location,
+      isAvailable: me.isAvailable,
+    }));
+  }, [me]);
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('success', 'Volunteer Settings Saved', 'Your courier availability and vehicle preferences have been updated.');
+    return run(
+      'profile',
+      async () => {
+        await updateProfile({ name: profile.name.trim(), phone: profile.phone.trim() || undefined });
+        await api.updateMyVolunteer({
+          isAvailable: profile.isAvailable,
+          location: profile.location.trim(),
+        });
+        await refresh();
+      },
+      {
+        success: {
+          message: 'Courier profile saved',
+          subtitle: profile.isAvailable
+            ? 'You are on duty and will be offered pickups.'
+            : 'You are off duty. No new pickups will be offered.',
+        },
+        errorTitle: 'Could not save your profile',
+      },
+    );
   };
 
   return (
@@ -31,12 +71,12 @@ export default function VolunteerProfile() {
           <div className="flex items-center justify-between border-b border-gray-100 pb-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-blue-100 text-blue-800 rounded-2xl flex items-center justify-center font-extrabold text-lg">
-                AS
+                {user.avatarInitials}
               </div>
               <div>
                 <h2 className="font-bold text-gray-900">{profile.name}</h2>
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                  <ShieldCheck size={12} /> Verified Community Courier
+                  <ShieldCheck size={12} /> {me ? `${me.completedDeliveries} runs · ${me.rating.toFixed(1)}★` : 'Community courier'}
                 </span>
               </div>
             </div>
@@ -66,8 +106,9 @@ export default function VolunteerProfile() {
                 <input
                   type="email"
                   value={profile.email}
-                  onChange={e => setProfile({ ...profile, email: e.target.value })}
-                  className="input-field pl-9"
+                  readOnly
+                  title="Your sign-in address. An administrator can change it."
+                  className="input-field pl-9 bg-gray-50 text-gray-500 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -140,10 +181,12 @@ export default function VolunteerProfile() {
           </div>
         </div>
 
-        <button type="submit" className="btn-primary">
-          <Save size={16} /> Save Volunteer Profile
+        <button type="submit" className="btn-primary disabled:opacity-60" disabled={isBusy}>
+          <Save size={16} /> {isBusy ? 'Saving…' : 'Save Volunteer Profile'}
         </button>
       </form>
+
+      <PasswordCard />
     </div>
   );
 }

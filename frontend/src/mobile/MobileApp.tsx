@@ -1,9 +1,11 @@
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ChevronRight, Leaf } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import MobileShell from './MobileShell';
 import { ROLE_CONFIG } from './nav';
 import ToastContainer from '../components/ToastContainer';
+import { useCurrentUser } from '../context/AuthContext';
+import type { UserRole } from '../types';
 
 import DonorHome from './DonorHome';
 import DonorListings from './DonorListings';
@@ -30,72 +32,43 @@ import AdminOrgs from './AdminOrgs';
 import AdminVolunteers from './AdminVolunteers';
 import AdminAnalytics from './AdminAnalytics';
 
-const ROLES = [
-  { to: '/m/donor', kicker: 'Donor', name: 'College Central Mess', blurb: 'List surplus food in one photo and watch it get matched.' },
-  { to: '/m/ngo', kicker: 'Recipient', name: 'Helping Hands Kitchen', blurb: 'Browse what is available nearby and accept the best match.' },
-  { to: '/m/volunteer', kicker: 'Courier', name: 'Aarav Sharma', blurb: 'Claim a pickup and move it through to delivery.' },
-  { to: '/m/admin', kicker: 'Administrator', name: 'FoodLink Platform', blurb: 'Watch throughput, organisations and couriers across the platform.' },
-];
+/** Where each role's phone portal lives. */
+const MOBILE_HOME: Record<UserRole, string> = {
+  donor: '/m/donor',
+  ngo: '/m/ngo',
+  volunteer: '/m/volunteer',
+  admin: '/m/admin',
+};
 
-function RolePicker() {
-  const navigate = useNavigate();
-  return (
-    <>
-      <header className="m-head">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center">
-              <Leaf size={15} className="text-white" />
-            </span>
-            <span className="font-display font-semibold text-gray-900">
-              FoodLink <span className="text-emerald-600">AI</span>
-            </span>
-          </div>
-          <h1 className="mt-3 text-2xl font-display font-semibold text-gray-900 leading-tight">
-            Who are you
-            <br />
-            signing in as?
-          </h1>
-        </div>
-      </header>
-
-      <div className="m-body">
-        {ROLES.map(r => (
-          <button
-            key={r.to}
-            type="button"
-            onClick={() => navigate(r.to)}
-            className="w-full text-left flex items-start gap-3 px-5 py-4 bg-white border-b border-gray-100 active:bg-gray-50"
-          >
-            <span className="flex-1 min-w-0">
-              <span className="block text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                {r.kicker}
-              </span>
-              <span className="block mt-1 font-display font-semibold text-lg text-gray-900 leading-snug">
-                {r.name}
-              </span>
-              <span className="block mt-1 text-sm text-gray-500 leading-relaxed">{r.blurb}</span>
-            </span>
-            <ChevronRight size={18} className="text-gray-300 shrink-0 mt-6" />
-          </button>
-        ))}
-
-        <p className="px-5 py-5 text-sm text-gray-500 leading-relaxed">
-          Stands in for login. Every role reads and writes the same store as the desktop portals, so
-          a donation listed here shows up there immediately.
-        </p>
-      </div>
-    </>
-  );
+/**
+ * Keeps a portal from rendering for an account that does not hold the role.
+ * `/m` itself is a redirect: the account decides which portal opens, so there
+ * is nothing to pick.
+ */
+function MobileRole({ allow, children }: { allow: UserRole; children: ReactNode }) {
+  const user = useCurrentUser();
+  if (user.role !== allow && user.role !== 'admin') {
+    return <Navigate to={MOBILE_HOME[user.role]} replace />;
+  }
+  return <>{children}</>;
 }
 
 export default function MobileApp() {
+  const user = useCurrentUser();
+
   return (
     <div className="m-app">
       <Routes>
-        <Route index element={<RolePicker />} />
+        <Route index element={<Navigate to={MOBILE_HOME[user.role]} replace />} />
 
-        <Route path="donor" element={<MobileShell config={ROLE_CONFIG.donor} />}>
+        <Route
+          path="donor"
+          element={
+            <MobileRole allow="donor">
+              <MobileShell config={ROLE_CONFIG.donor} />
+            </MobileRole>
+          }
+        >
           <Route index element={<DonorHome />} />
           <Route path="listings" element={<DonorListings />} />
           <Route path="create" element={<CreateDonationCamera />} />
@@ -103,7 +76,14 @@ export default function MobileApp() {
           <Route path="profile" element={<DonorProfile />} />
         </Route>
 
-        <Route path="ngo" element={<MobileShell config={ROLE_CONFIG.ngo} />}>
+        <Route
+          path="ngo"
+          element={
+            <MobileRole allow="ngo">
+              <MobileShell config={ROLE_CONFIG.ngo} />
+            </MobileRole>
+          }
+        >
           <Route index element={<NGOHome />} />
           <Route path="available" element={<NGOAvailable />} />
           <Route path="accepted" element={<NGOAccepted />} />
@@ -112,7 +92,14 @@ export default function MobileApp() {
           <Route path="profile" element={<NGOProfile />} />
         </Route>
 
-        <Route path="volunteer" element={<MobileShell config={ROLE_CONFIG.volunteer} />}>
+        <Route
+          path="volunteer"
+          element={
+            <MobileRole allow="volunteer">
+              <MobileShell config={ROLE_CONFIG.volunteer} />
+            </MobileRole>
+          }
+        >
           <Route index element={<VolunteerHome />} />
           <Route path="tasks" element={<VolunteerTasks />} />
           <Route path="history" element={<VolunteerHistory />} />
@@ -120,7 +107,14 @@ export default function MobileApp() {
           <Route path="profile" element={<VolunteerProfile />} />
         </Route>
 
-        <Route path="admin" element={<MobileShell config={ROLE_CONFIG.admin} />}>
+        <Route
+          path="admin"
+          element={
+            <MobileRole allow="admin">
+              <MobileShell config={ROLE_CONFIG.admin} />
+            </MobileRole>
+          }
+        >
           <Route index element={<AdminHome />} />
           <Route path="donations" element={<AdminDonations />} />
           <Route path="orgs" element={<AdminOrgs />} />

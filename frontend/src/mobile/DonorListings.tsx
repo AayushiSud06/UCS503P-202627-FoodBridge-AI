@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Package } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
 import { byUrgency } from '../lib/time';
-import { DONOR_ID } from './nav';
+import { useCurrentUser } from '../context/AuthContext';
 import { MDonationRow, MEmpty, MSegmented } from './parts';
 
 const FILTERS = ['All', 'Live', 'Completed'] as const;
@@ -10,7 +10,8 @@ const CLOSED = ['COMPLETED', 'CANCELLED'];
 
 export default function DonorListings() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All');
-  const mine = useDonations().filter(d => d.donorId === DONOR_ID);
+  const user = useCurrentUser();
+  const mine = useDonations().filter(d => d.donorId === user.id);
 
   const rows = mine
     .filter(d => {

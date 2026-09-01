@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Clock, MapPin, Package, Sparkles, X } from 'lucide-react';
-import { useDonations, useApp } from '../context/AppContext';
-import { computeMockMatchScore, MOCK_RECIPIENTS } from '../data/mockData';
-import { deadlineStatus, URGENCY_STYLES, byUrgency } from '../lib/time';
+import { useDonations, useApp, useMyRecipient } from '../context/AppContext';
+import { useCurrentUser } from '../context/AuthContext';
+import { useAction, useMatchAnalysis } from '../lib/hooks';
+import { deadlineStatus, formatClock, URGENCY_STYLES, byUrgency } from '../lib/time';
 import type { Donation } from '../types';
 import { MEmpty, MSegmented, MMeter } from './parts';
 
-const RECIPIENT = MOCK_RECIPIENTS[0];
 const SORTS = ['Best match', 'Nearest', 'Closing soon'] as const;
 
 export default function NGOAvailable() {
   const donations = useDonations();
-  const { updateDonationStatus, showToast } = useApp();
+  const { updateDonationStatus } = useApp();
+  const user = useCurrentUser();
+  const myRecipient = useMyRecipient();
+  const { run, isBusy } = useAction();
   const [sort, setSort] = useState<(typeof SORTS)[number]>('Best match');
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -24,24 +27,21 @@ export default function NGOAvailable() {
     });
 
   const selected = donations.find(d => d.id === openId) ?? null;
-  const analysis = selected
-    ? computeMockMatchScore(
-        selected.quantity,
-        RECIPIENT.capacity,
-        selected.distanceKm ?? RECIPIENT.distanceKm,
-        RECIPIENT.reliabilityScore
-      )
-    : null;
+  // Scored by the server, against this kitchen rather than a stand-in.
+  const { analysis } = useMatchAnalysis(openId, user.role === 'ngo' ? user.entityId : undefined);
 
-  const accept = (d: Donation) => {
-    updateDonationStatus(d.id, 'ACCEPTED', {
-      recipientId: RECIPIENT.id,
-      recipientName: RECIPIENT.name,
-      matchScore: d.matchScore ?? 94,
-      distanceKm: d.distanceKm ?? RECIPIENT.distanceKm,
-    });
-    showToast('success', 'Accepted', 'A volunteer courier will be assigned shortly.');
-    setOpenId(null);
+  const awaitingVerification = myRecipient !== null && myRecipient.isVerified === false;
+
+  const accept = async (d: Donation) => {
+    const accepted = await run(
+      d.id,
+      () => updateDonationStatus(d.id, 'ACCEPTED', { recipientId: user.entityId }),
+      {
+        success: { message: 'Accepted', subtitle: 'A courier can now claim the pickup.' },
+        errorTitle: 'Could not accept this donation',
+      },
+    );
+    if (accepted) setOpenId(null);
   };
 
   return (
@@ -108,7 +108,7 @@ export default function NGOAvailable() {
 
       <div className="h-4" />
 
-      {selected && analysis && (
+      {selected && (
         <>
           <button
             type="button"
@@ -128,7 +128,7 @@ export default function NGOAvailable() {
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
                   {selected.donorOrganization} · {selected.distanceKm ?? '–'} km · by{' '}
-                  {selected.pickupDeadline}
+                  {formatClock(selected.pickupDeadline)}
                 </p>
               </div>
               <button
@@ -142,37 +142,58 @@ export default function NGOAvailable() {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              <div className="py-2 bg-white border-b border-gray-100">
-                <MMeter label="Overall suitability" score={analysis.overallScore} />
-                <MMeter label="Distance & logistics" score={analysis.distanceScore} />
-                <MMeter label="Quantity fit" score={analysis.quantityScore} />
-                <MMeter label="Your capacity" score={analysis.capacityScore} />
-                <MMeter label="Pickup window" score={analysis.pickupAvailabilityScore} />
-              </div>
+              {analysis ? (
+                <>
+                  <div className="py-2 bg-white border-b border-gray-100">
+                    <MMeter label="Overall suitability" score={analysis.overallScore} />
+                    <MMeter label="Distance & logistics" score={analysis.distanceScore} />
+                    <MMeter label="Quantity fit" score={analysis.quantityScore} />
+                    <MMeter label="Your capacity" score={analysis.capacityScore} />
+                    <MMeter label="Pickup window" score={analysis.pickupAvailabilityScore} />
+                  </div>
 
-              <div className="px-5 py-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Why you were ranked first
+                  <div className="px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      How this donation scores for you
+                    </p>
+                    <ul className="mt-2.5 space-y-2">
+                      {analysis.reasons.map(r => (
+                        <li key={r} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
+                          <Check size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-4 text-xs text-gray-400 leading-relaxed">
+                      Scores are computed on the server from a fixed weighted formula. Accepting is
+                      always your decision — nothing is assigned automatically.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <p className="px-5 py-8 text-sm text-gray-500 leading-relaxed">
+                  Scoring this donation…
                 </p>
-                <ul className="mt-2.5 space-y-2">
-                  {analysis.reasons.map(r => (
-                    <li key={r} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
-                      <Check size={15} className="text-emerald-600 shrink-0 mt-0.5" />
-                      {r}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-4 text-xs text-gray-400 leading-relaxed">
-                  Scores are computed from a fixed weighted formula. Accepting is always your
-                  decision — nothing is assigned automatically.
-                </p>
-              </div>
+              )}
             </div>
 
             <div className="m-actions">
-              <button type="button" className="m-btn-primary" onClick={() => accept(selected)}>
-                Accept {selected.quantity} {selected.unit.toLowerCase()}
-                <ArrowRight size={17} />
+              {awaitingVerification && (
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  {myRecipient?.name} is awaiting verification by an administrator and cannot
+                  accept donations yet.
+                </p>
+              )}
+              <button
+                type="button"
+                className="m-btn-primary disabled:opacity-60"
+                disabled={isBusy || awaitingVerification}
+                onClick={() => accept(selected)}
+              >
+                {isBusy
+                  ? 'Accepting…'
+                  : `Accept ${selected.quantity} ${selected.unit.toLowerCase()}`}
+                {!isBusy && <ArrowRight size={17} />}
               </button>
               <button type="button" className="m-btn-secondary" onClick={() => setOpenId(null)}>
                 Not this time

@@ -1,10 +1,10 @@
 import { MapPin, ShieldCheck } from 'lucide-react';
-import { MOCK_RECIPIENTS } from '../data/mockData';
-import { useDonations } from '../context/AppContext';
+import { useDonations, useRecipients } from '../context/AppContext';
 import { MSection } from './parts';
 
 export default function AdminOrgs() {
   const donations = useDonations();
+  const recipients = useRecipients();
 
   const donorOrgs = [...new Set(donations.map(d => d.donorOrganization))].map(name => ({
     name,
@@ -16,8 +16,8 @@ export default function AdminOrgs() {
 
   return (
     <>
-      <MSection title={`Recipient organisations (${MOCK_RECIPIENTS.length})`} />
-      {MOCK_RECIPIENTS.map(r => (
+      <MSection title={`Recipient organisations (${recipients.length})`} />
+      {recipients.map(r => (
         <article key={r.id} className="px-5 py-4 bg-white border-b border-gray-100">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -28,13 +28,13 @@ export default function AdminOrgs() {
             </div>
             <span className="m-chip bg-emerald-50 text-emerald-700 shrink-0">
               <ShieldCheck size={11} />
-              {r.reliabilityScore}%
+              {r.isVerified ? `${r.reliabilityScore}%` : 'Pending'}
             </span>
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs text-gray-500">
             <span className="inline-flex items-center gap-1">
               <MapPin size={12} />
-              {r.distanceKm} km
+              {r.location}
             </span>
             <span>{r.capacity} meal capacity</span>
             <span>{r.acceptedDonations} accepted</span>

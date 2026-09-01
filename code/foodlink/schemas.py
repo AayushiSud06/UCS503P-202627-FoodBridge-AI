@@ -1,0 +1,294 @@
+"""Request and response bodies.
+
+Field names are camelCase on the wire to match the existing TypeScript types,
+while staying snake_case in Python. `alias_generator` does the translation so
+neither side has to compromise.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic.alias_generators import to_camel
+
+from .models import SELF_SIGNUP_ROLES, DonationStatus, UserRole
+
+
+class Schema(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+
+# ─── Auth ────────────────────────────────────────────────────────────────────
+
+class RegisterRequest(Schema):
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole
+    organization: str | None = None
+    phone: str | None = None
+
+    # NGO-only. These seed the recipient organisation created alongside the
+    # account. All optional so signing up stays short — an organisation
+    # without coordinates is simply not matchable until it fills them in.
+    organization_type: str | None = None
+    location: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    capacity: int | None = Field(default=None, gt=0)
+
+    @field_validator("role")
+    @classmethod
+    def _reject_self_made_admins(cls, role: UserRole) -> UserRole:
+        """Registration cannot mint an administrator.
+
+        Rejected here rather than in the router so the restriction is part of
+        the published schema: `admin` is not an accepted value for this field
+        and the OpenAPI document says so.
+        """
+        if role not in SELF_SIGNUP_ROLES:
+            raise ValueError(
+                "Administrator accounts cannot be created through registration"
+            )
+        return role
+
+
+class AdminUserCreate(Schema):
+    """Account creation by an existing administrator.
+
+    Same shape as registration minus the guard: this is the one path through
+    the API that may set `role` to `admin`, and it is reachable only with an
+    administrator's own bearer token.
+    """
+
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole
+    organization: str | None = None
+    phone: str | None = None
+
+
+class UserUpdate(Schema):
+    """Administrative changes to an account. Every field is optional."""
+
+    is_active: bool | None = None
+    role: UserRole | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    organization: str | None = None
+    phone: str | None = None
+
+
+class ProfileUpdate(Schema):
+    """What an account may change about itself.
+
+    Role, email and active status are absent: they decide what the account can
+    do and who it is, so they belong to an administrator, not to the holder.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    organization: str | None = None
+    phone: str | None = None
+
+
+class PasswordChange(Schema):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class UserOut(Schema):
+    id: int
+    name: str
+    email: EmailStr
+    role: UserRole
+    organization: str | None = None
+    initials: str
+    #: Which record this account acts for. Exactly one is set for ngo and
+    #: volunteer accounts; donors act as themselves and admins act for nobody.
+    recipient_id: int | None = None
+    volunteer_id: int | None = None
+
+
+class UserAdminOut(UserOut):
+    """The fuller view an administrator sees on the user list."""
+
+    phone: str | None = None
+    is_active: bool
+    created_at: datetime
+
+
+class TokenResponse(Schema):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+# ─── Recipients ──────────────────────────────────────────────────────────────
+
+class RecipientOut(Schema):
+    id: int
+    name: str
+    type: str
+    location: str
+    latitude: float | None = None
+    longitude: float | None = None
+    capacity: int
+    contact_person: str | None = None
+    phone: str | None = None
+    is_verified: bool
+    reliability_score: int
+    accepted_donations: int
+
+
+class RecipientUpdate(Schema):
+    """An organisation completing or correcting its own profile."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    type: str | None = None
+    location: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    capacity: int | None = Field(default=None, gt=0)
+    contact_person: str | None = None
+    phone: str | None = None
+
+
+# ─── Couriers ────────────────────────────────────────────────────────────────
+
+class VolunteerOut(Schema):
+    id: int
+    name: str
+    phone: str | None = None
+    location: str
+    is_available: bool
+    completed_deliveries: int
+    rating: float
+
+
+class VolunteerUpdate(Schema):
+    """A courier adjusting their own availability or base location."""
+
+    is_available: bool | None = None
+    location: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+
+
+# ─── Donations ───────────────────────────────────────────────────────────────
+
+class DonationCreate(Schema):
+    food_name: str = Field(min_length=1, max_length=160)
+    category: str
+    quantity: int = Field(gt=0)
+    unit: str = "Meals"
+    storage_type: str = "Room Temperature"
+    description: str = ""
+    location: str
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    prepared_at: datetime | None = None
+    pickup_deadline: datetime
+    image_url: str | None = None
+
+
+class StatusEventOut(Schema):
+    to_status: DonationStatus
+    from_status: DonationStatus | None = None
+    occurred_at: datetime
+    note: str | None = None
+
+
+class DonationOut(Schema):
+    id: int
+    donor_id: int
+    donor_name: str
+    donor_organization: str | None = None
+    food_name: str
+    category: str
+    quantity: int
+    unit: str
+    storage_type: str
+    description: str
+    image_url: str | None = None
+    location: str
+    latitude: float
+    longitude: float
+    prepared_at: datetime | None = None
+    pickup_deadline: datetime
+    status: DonationStatus
+    recipient_id: int | None = None
+    recipient_name: str | None = None
+    volunteer_id: int | None = None
+    volunteer_name: str | None = None
+    match_score: int | None = None
+    distance_km: float | None = None
+    created_at: datetime
+    events: list[StatusEventOut] = []
+
+
+class StatusUpdate(Schema):
+    status: DonationStatus
+    #: Only meaningful on ACCEPTED — which recipient is taking it.
+    recipient_id: int | None = None
+    note: str | None = None
+
+
+# ─── Matching ────────────────────────────────────────────────────────────────
+
+class MatchOut(Schema):
+    recipient_id: int
+    recipient_name: str
+    overall_score: int
+    distance_km: float
+    distance_score: int
+    quantity_score: int
+    capacity_score: int
+    deadline_score: int
+    reliability_score: int
+    reasons: list[str]
+
+
+# ─── Requirements ────────────────────────────────────────────────────────────
+
+class RequirementCreate(Schema):
+    food_type: str = Field(min_length=1, max_length=160)
+    quantity_needed: int = Field(gt=0)
+    unit: str = "Meals"
+    beneficiary_count: int = 0
+    urgency: str = "Medium"
+    daily_recurring: bool = False
+    notes: str = ""
+
+
+class RequirementOut(RequirementCreate):
+    id: int
+    recipient_id: int
+    recipient_name: str
+    is_active: bool
+    created_at: datetime
+
+
+# ─── Metrics ─────────────────────────────────────────────────────────────────
+
+class MetricsOut(Schema):
+    """The figures the proposal commits to reporting."""
+
+    total_donations: int
+    total_meals: int
+    completed_donations: int
+    active_donations: int
+    expired_donations: int
+    total_organizations: int
+    total_volunteers: int
+
+    #: Primary metric — median minutes from posting to a recipient accepting.
+    median_time_to_claim_minutes: float | None = None
+    #: Share of donations that completed before their deadline.
+    rescue_rate_percent: float | None = None
+    expiry_loss_rate_percent: float | None = None
+    median_handover_minutes: float | None = None

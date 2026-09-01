@@ -1,46 +1,50 @@
 import { useState } from 'react';
-import { Package } from 'lucide-react';
-import { useDonations, useApp } from '../../context/AppContext';
+import { Package, AlertCircle } from 'lucide-react';
+import { useApp, useDonations, useMyRecipient } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
+import { useAction, useMatchAnalysis } from '../../lib/hooks';
 import type { Donation } from '../../types';
 import DonationCard from '../../components/DonationCard';
 import EmptyState from '../../components/EmptyState';
 import MatchAnalysisPanel from '../../components/MatchAnalysis';
 import StatusTimeline from '../../components/StatusTimeline';
-import { computeMockMatchScore, MOCK_RECIPIENTS } from '../../data/mockData';
 
 export default function NGOAvailableDonations() {
   const donations = useDonations();
-  const { updateDonationStatus, showToast } = useApp();
+  const { updateDonationStatus } = useApp();
+  const user = useCurrentUser();
+  const myRecipient = useMyRecipient();
+  const { run, isPending, isBusy } = useAction();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [accepting, setAccepting] = useState<string | null>(null);
 
   const available = donations.filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status));
   const selectedDonation = donations.find(d => d.id === selectedId);
 
-  const handleAccept = (donation: Donation) => {
-    setAccepting(donation.id);
-    setTimeout(() => {
-      updateDonationStatus(donation.id, 'ACCEPTED', {
-        recipientId: 'r-1',
-        recipientName: 'Helping Hands Community Kitchen',
-        matchScore: donation.matchScore ?? 94,
-        distanceKm: donation.distanceKm ?? 1.8,
-      });
-      showToast('success', 'Donation accepted!', 'A volunteer will be assigned shortly.');
-      setAccepting(null);
-      setSelectedId(null);
-    }, 700);
-  };
+  // Scores come from the server's ranker, against this account's own kitchen.
+  const { analysis, recipientName, isLoading: analysisLoading } = useMatchAnalysis(
+    selectedId,
+    user.role === 'ngo' ? user.entityId : undefined,
+  );
 
-  // Compute analysis for selected donation
-  const getAnalysis = (donation: Donation) => {
-    const recipient = MOCK_RECIPIENTS[0];
-    return computeMockMatchScore(
-      donation.quantity,
-      recipient.capacity,
-      donation.distanceKm ?? recipient.distanceKm,
-      recipient.reliabilityScore,
+  // An unverified organisation may browse but cannot take custody; saying so
+  // up front beats letting them click and collect a 403.
+  const awaitingVerification = myRecipient !== null && myRecipient.isVerified === false;
+
+  const handleAccept = async (donation: Donation) => {
+    const accepted = await run(
+      donation.id,
+      // The server resolves which organisation an NGO is acting for; only an
+      // administrator standing in for one has to name it.
+      () => updateDonationStatus(donation.id, 'ACCEPTED', { recipientId: user.entityId }),
+      {
+        success: {
+          message: 'Donation accepted',
+          subtitle: 'It is yours to collect — a courier can now claim the pickup.',
+        },
+        errorTitle: 'Could not accept this donation',
+      },
     );
+    if (accepted) setSelectedId(null);
   };
 
   return (
@@ -49,6 +53,19 @@ export default function NGOAvailableDonations() {
         <h1 className="text-2xl font-bold text-gray-900">Available Donations</h1>
         <p className="text-gray-500 mt-1">{available.length} donation{available.length !== 1 ? 's' : ''} available for pickup</p>
       </div>
+
+      {awaitingVerification && (
+        <div className="card p-4 flex items-start gap-2.5 border-amber-200 bg-amber-50">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Awaiting verification</p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              An administrator has to vouch for {myRecipient?.name} before it can accept
+              donations. You can browse in the meantime.
+            </p>
+          </div>
+        </div>
+      )}
 
       {available.length === 0 ? (
         <EmptyState
@@ -69,8 +86,8 @@ export default function NGOAvailableDonations() {
                 <DonationCard
                   donation={d}
                   viewAs="ngo"
-                  onAction={handleAccept}
-                  actionLabel={accepting === d.id ? 'Accepting…' : 'Accept Donation'}
+                  onAction={awaitingVerification ? undefined : handleAccept}
+                  actionLabel={isPending(d.id) ? 'Accepting…' : 'Accept Donation'}
                 />
               </div>
             ))}
@@ -80,10 +97,26 @@ export default function NGOAvailableDonations() {
           <div className="lg:col-span-2 space-y-4">
             {selectedDonation ? (
               <>
-                <MatchAnalysisPanel
-                  analysis={getAnalysis(selectedDonation)}
-                  recipientName="Helping Hands Community Kitchen"
-                />
+                {analysisLoading ? (
+                  <div className="card p-12 text-center text-gray-400">
+                    <span className="inline-block w-5 h-5 border-2 border-gray-200 border-t-emerald-500 rounded-full animate-spin" />
+                    <p className="text-sm mt-3">Scoring this donation…</p>
+                  </div>
+                ) : analysis ? (
+                  <MatchAnalysisPanel
+                    analysis={analysis}
+                    recipientName={recipientName}
+                    foodName={selectedDonation.foodName}
+                    quantity={selectedDonation.quantity}
+                    unit={selectedDonation.unit}
+                  />
+                ) : (
+                  <div className="card p-6 text-center text-gray-500">
+                    <p className="text-sm">
+                      No verified organisation is close enough to this pickup to be scored.
+                    </p>
+                  </div>
+                )}
 
                 {/* Action */}
                 {selectedDonation.status === 'MATCHED' || selectedDonation.status === 'AVAILABLE' ? (
@@ -97,10 +130,10 @@ export default function NGOAvailableDonations() {
                     <button
                       id="btn-accept-donation"
                       onClick={() => handleAccept(selectedDonation)}
-                      disabled={accepting === selectedDonation.id}
-                      className="btn-primary"
+                      disabled={isBusy || awaitingVerification}
+                      className="btn-primary disabled:opacity-60"
                     >
-                      {accepting === selectedDonation.id ? (
+                      {isPending(selectedDonation.id) ? (
                         <span className="flex items-center gap-2">
                           <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                           Accepting…

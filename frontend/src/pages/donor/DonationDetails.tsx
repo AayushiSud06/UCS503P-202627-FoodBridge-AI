@@ -3,6 +3,7 @@ import { ArrowLeft, MapPin, Clock, Package, User, Truck } from 'lucide-react';
 import StatusBadge from '../../components/StatusBadge';
 import StatusTimeline from '../../components/StatusTimeline';
 import { useDonations } from '../../context/AppContext';
+import { formatClock } from '../../lib/time';
 
 export default function DonationDetails() {
   const { id } = useParams<{ id: string }>();
@@ -58,8 +59,8 @@ export default function DonationDetails() {
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-4">
           {[
             { icon: Package, label: 'Quantity', value: `${donation.quantity} ${donation.unit}` },
-            { icon: Clock, label: 'Prepared', value: donation.preparedAt },
-            { icon: Clock, label: 'Pickup Deadline', value: donation.pickupDeadline },
+            { icon: Clock, label: 'Prepared', value: formatClock(donation.preparedAt) },
+            { icon: Clock, label: 'Pickup Deadline', value: formatClock(donation.pickupDeadline) },
             { icon: MapPin, label: 'Location', value: donation.location },
             { icon: Package, label: 'Category', value: donation.category },
             { icon: Package, label: 'Storage', value: donation.storageType },

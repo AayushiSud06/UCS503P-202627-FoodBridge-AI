@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Public Pages
 import Landing from './pages/Landing';
@@ -40,61 +42,82 @@ import AdminVolunteers from './pages/admin/AdminVolunteers';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import MobileApp from './mobile/MobileApp';
 
+/**
+ * Each portal sits behind a `ProtectedRoute`. The server checks the caller's
+ * role on every request regardless — the guard here only stops the app from
+ * rendering a portal that would fill with 403s, and sends people to their own.
+ *
+ * Admins are allowed into the other portals as well: an administrator can act
+ * on any donation through the API, and being able to see what a donor or a
+ * kitchen sees is most of what platform support consists of.
+ */
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
+    <AuthProvider>
+      <AppProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
 
-          {/* Donor Portal */}
-          <Route path="/donor" element={<DonorLayout />}>
-            <Route index element={<DonorDashboard />} />
-            <Route path="donations" element={<DonorDonations />} />
-            <Route path="donations/:id" element={<DonationDetails />} />
-            <Route path="create" element={<CreateDonation />} />
-            <Route path="impact" element={<DonorImpact />} />
-            <Route path="profile" element={<DonorProfile />} />
-          </Route>
+            {/* Donor Portal */}
+            <Route element={<ProtectedRoute allow={['donor', 'admin']} />}>
+              <Route path="/donor" element={<DonorLayout />}>
+                <Route index element={<DonorDashboard />} />
+                <Route path="donations" element={<DonorDonations />} />
+                <Route path="donations/:id" element={<DonationDetails />} />
+                <Route path="create" element={<CreateDonation />} />
+                <Route path="impact" element={<DonorImpact />} />
+                <Route path="profile" element={<DonorProfile />} />
+              </Route>
+            </Route>
 
-          {/* NGO / Recipient Portal */}
-          <Route path="/ngo" element={<NGOLayout />}>
-            <Route index element={<NGODashboard />} />
-            <Route path="available" element={<NGOAvailableDonations />} />
-            <Route path="available/:id" element={<NGOAvailableDonations />} />
-            <Route path="accepted" element={<NGOAcceptedDonations />} />
-            <Route path="requirements" element={<NGORequirements />} />
-            <Route path="impact" element={<NGOImpact />} />
-            <Route path="profile" element={<NGOProfile />} />
-          </Route>
+            {/* NGO / Recipient Portal */}
+            <Route element={<ProtectedRoute allow={['ngo', 'admin']} />}>
+              <Route path="/ngo" element={<NGOLayout />}>
+                <Route index element={<NGODashboard />} />
+                <Route path="available" element={<NGOAvailableDonations />} />
+                <Route path="available/:id" element={<NGOAvailableDonations />} />
+                <Route path="accepted" element={<NGOAcceptedDonations />} />
+                <Route path="requirements" element={<NGORequirements />} />
+                <Route path="impact" element={<NGOImpact />} />
+                <Route path="profile" element={<NGOProfile />} />
+              </Route>
+            </Route>
 
-          {/* Volunteer Courier Portal */}
-          <Route path="/volunteer" element={<VolunteerLayout />}>
-            <Route index element={<VolunteerDashboard />} />
-            <Route path="tasks" element={<VolunteerTasks />} />
-            <Route path="history" element={<VolunteerHistory />} />
-            <Route path="impact" element={<VolunteerImpact />} />
-            <Route path="profile" element={<VolunteerProfile />} />
-          </Route>
+            {/* Volunteer Courier Portal */}
+            <Route element={<ProtectedRoute allow={['volunteer', 'admin']} />}>
+              <Route path="/volunteer" element={<VolunteerLayout />}>
+                <Route index element={<VolunteerDashboard />} />
+                <Route path="tasks" element={<VolunteerTasks />} />
+                <Route path="history" element={<VolunteerHistory />} />
+                <Route path="impact" element={<VolunteerImpact />} />
+                <Route path="profile" element={<VolunteerProfile />} />
+              </Route>
+            </Route>
 
-          {/* Platform Administrator */}
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="donations" element={<AdminDonations />} />
-            <Route path="orgs" element={<AdminOrganizations />} />
-            <Route path="volunteers" element={<AdminVolunteers />} />
-            <Route path="analytics" element={<AdminAnalytics />} />
-          </Route>
-	
- 	 {/* Mobile web */}
-          <Route path="/m/*" element={<MobileApp />} />
+            {/* Platform Administrator */}
+            <Route element={<ProtectedRoute allow={['admin']} />}>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="donations" element={<AdminDonations />} />
+                <Route path="orgs" element={<AdminOrganizations />} />
+                <Route path="volunteers" element={<AdminVolunteers />} />
+                <Route path="analytics" element={<AdminAnalytics />} />
+              </Route>
+            </Route>
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AppProvider>
+            {/* Mobile web — the same portals in a phone layout. */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/m/*" element={<MobileApp />} />
+            </Route>
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
+    </AuthProvider>
   );
 }

@@ -1,20 +1,27 @@
 import { useState } from 'react';
 import { CheckSquare, Clock, MapPin, Package, User, Truck, CheckCircle2, ChevronRight } from 'lucide-react';
-import { useDonations } from '../../context/AppContext';
+import { useApp, useDonations, useMyRecipient } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
+import { useAction } from '../../lib/hooks';
 import StatusBadge from '../../components/StatusBadge';
 import StatusTimeline from '../../components/StatusTimeline';
 import MapPreview from '../../components/MapPreview';
 import EmptyState from '../../components/EmptyState';
 import { Link } from 'react-router-dom';
+import { formatClock } from '../../lib/time';
 
 export default function NGOAcceptedDonations() {
   const donations = useDonations();
+  const user = useCurrentUser();
+  const myRecipient = useMyRecipient();
+  const { updateDonationStatus } = useApp();
+  const { run, isPending } = useAction();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Accepted donations for this NGO (r-1)
+  // Accepted donations for the organisation this account acts for.
   const acceptedDonations = donations.filter(d =>
     ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP', 'DELIVERED', 'COMPLETED'].includes(d.status) &&
-    (d.recipientId === 'r-1' || !d.recipientId)
+    d.recipientId === user.entityId
   );
 
   const selected = acceptedDonations.find(d => d.id === selectedId) || acceptedDonations[0];
@@ -70,7 +77,7 @@ export default function NGOAcceptedDonations() {
 
                   <div className="flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 pt-2">
                     <span className="flex items-center gap-1">
-                      <Clock size={12} /> by {d.pickupDeadline}
+                      <Clock size={12} /> by {formatClock(d.pickupDeadline)}
                     </span>
                     <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
                       Details <ChevronRight size={12} />
@@ -132,11 +139,46 @@ export default function NGOAcceptedDonations() {
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Live Corridor Tracking</h3>
                   <MapPreview
                     pickupLocation={selected.location}
-                    dropoffLocation="Helping Hands Community Kitchen, Sector 38"
+                    dropoffLocation={
+                      myRecipient
+                        ? `${myRecipient.name}, ${myRecipient.location}`
+                        : (selected.recipientName ?? 'Your kitchen')
+                    }
                     distanceKm={selected.distanceKm ?? 1.8}
                     volunteerLocation={selected.volunteerName ? `${selected.volunteerName} (Active)` : 'Awaiting Courier'}
                   />
                 </div>
+
+                {/* Confirming receipt is what closes the loop: it is the last
+                    server-stamped event, and every completion metric reads it. */}
+                {selected.status === 'DELIVERED' && (
+                  <div className="border-t border-gray-100 pt-4 flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="font-semibold text-gray-900">The courier has handed this over.</p>
+                      <p className="text-sm text-gray-500">
+                        Confirm you received {selected.quantity} {selected.unit} to close the record.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      id={`btn-confirm-receipt-${selected.id}`}
+                      disabled={isPending(selected.id)}
+                      onClick={() =>
+                        run(selected.id, () => updateDonationStatus(selected.id, 'COMPLETED'), {
+                          success: {
+                            message: 'Receipt confirmed',
+                            subtitle: `${selected.quantity} ${selected.unit} logged against your intake.`,
+                          },
+                          errorTitle: 'Could not confirm receipt',
+                        })
+                      }
+                      className="btn-primary disabled:opacity-60"
+                    >
+                      <CheckCircle2 size={16} />
+                      {isPending(selected.id) ? 'Confirming…' : 'Confirm receipt'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Status Timeline */}
                 <div className="border-t border-gray-100 pt-4">

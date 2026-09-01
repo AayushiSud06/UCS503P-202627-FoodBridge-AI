@@ -1,16 +1,47 @@
 import { Package, Building2, Users, Heart, CheckCircle, Clock, Truck, AlertCircle } from 'lucide-react';
 import StatCard from '../../components/StatCard';
 import { useDonations, useStats, useActivity } from '../../context/AppContext';
+import type { Donation } from '../../types';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MEAL_DATA = [145, 210, 178, 320, 267, 390, 130];
 
-const CATEGORIES = [
-  { label: 'Vegetarian', pct: 62, color: 'bg-emerald-500' },
-  { label: 'Bakery', pct: 18, color: 'bg-amber-400' },
-  { label: 'Fruits & Vegetables', pct: 12, color: 'bg-blue-400' },
-  { label: 'Packaged Food', pct: 8, color: 'bg-purple-400' },
+const CATEGORY_COLORS = [
+  'bg-emerald-500', 'bg-amber-400', 'bg-blue-400', 'bg-purple-400', 'bg-rose-400', 'bg-gray-400',
 ];
+
+/** Meals completed per weekday over the last seven days, from real records. */
+function weeklyMeals(donations: Donation[]): number[] {
+  const buckets = new Array(7).fill(0);
+  const now = new Date();
+
+  for (const donation of donations) {
+    if (donation.status !== 'COMPLETED' || !donation.completedAt) continue;
+    const when = new Date(donation.completedAt);
+    const daysAgo = Math.floor((now.getTime() - when.getTime()) / 86_400_000);
+    if (daysAgo < 0 || daysAgo > 6) continue;
+    // getDay() is Sunday-first; DAYS starts on Monday.
+    buckets[(when.getDay() + 6) % 7] += donation.quantity;
+  }
+  return buckets;
+}
+
+/** Share of listed quantity by food category. */
+function categoryShare(donations: Donation[]): { label: string; pct: number; color: string }[] {
+  const totals = new Map<string, number>();
+  for (const d of donations) totals.set(d.category, (totals.get(d.category) ?? 0) + d.quantity);
+
+  const grand = [...totals.values()].reduce((a, b) => a + b, 0);
+  if (grand === 0) return [];
+
+  return [...totals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, CATEGORY_COLORS.length)
+    .map(([label, quantity], i) => ({
+      label,
+      pct: Math.round((100 * quantity) / grand),
+      color: CATEGORY_COLORS[i],
+    }));
+}
 
 const ACTIVITY_ICON: Record<string, React.ReactNode> = {
   completed:          <div className="w-2 h-2 rounded-full bg-emerald-500" />,
@@ -37,10 +68,15 @@ export default function AdminDashboard() {
   const stats = useStats();
   const activity = useActivity();
 
-  const completed = donations.filter(d => d.status === 'COMPLETED').length;
-  const active = donations.filter(d => !['COMPLETED', 'CANCELLED'].includes(d.status)).length;
-  const totalMeals = donations.reduce((s, d) => s + d.quantity, 0) + 1100;
-  const maxMeals = Math.max(...MEAL_DATA);
+  const active = donations.filter(
+    d => !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(d.status),
+  ).length;
+  const totalMeals = donations.reduce((s, d) => s + d.quantity, 0);
+
+  const MEAL_DATA = weeklyMeals(donations);
+  const CATEGORIES = categoryShare(donations);
+  // Keeps the bars from collapsing to nothing on a quiet week.
+  const maxMeals = Math.max(1, ...MEAL_DATA);
 
   return (
     <div className="space-y-8 max-w-7xl">
@@ -51,7 +87,7 @@ export default function AdminDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Donations" value={donations.length + 119} icon={Package} color="emerald" />
+        <StatCard label="Total Donations" value={stats.totalDonations} icon={Package} color="emerald" />
         <StatCard label="Organizations" value={stats.totalOrganizations} icon={Building2} color="blue" />
         <StatCard label="Volunteers" value={stats.totalVolunteers} icon={Users} color="purple" />
         <StatCard label="Meals Redistributed" value={(totalMeals).toLocaleString()} icon={Heart} color="rose" />
@@ -59,7 +95,7 @@ export default function AdminDashboard() {
 
       {/* Secondary stats */}
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Completed Today" value={completed + 12} icon={CheckCircle} color="emerald" />
+        <StatCard label="Completed" value={stats.completedDonations} icon={CheckCircle} color="emerald" />
         <StatCard label="Active Donations" value={active} icon={Clock} color="amber" />
         <StatCard label="Successful Pickups" value={stats.successfulPickups} icon={Truck} color="blue" />
       </div>

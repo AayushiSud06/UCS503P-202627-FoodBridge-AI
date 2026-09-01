@@ -2,17 +2,19 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
 import { useDonations } from '../../context/AppContext';
-import { deadlineStatus, byUrgency } from '../../lib/time';
+import { deadlineStatus, byUrgency, formatClock } from '../../lib/time';
+import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
 
 export default function VolunteerDashboard() {
   const donations = useDonations();
+  const user = useCurrentUser();
 
   // Tasks assigned to this volunteer (v-1) or newly accepted and unclaimed.
   const myTasks = donations
     .filter(
       d =>
-        (d.volunteerId === 'v-1' || d.status === 'ACCEPTED') &&
+        (d.volunteerId === user.entityId || (d.status === 'ACCEPTED' && !d.volunteerId)) &&
         !['COMPLETED', 'CANCELLED', 'AVAILABLE', 'MATCHED'].includes(d.status)
     )
     .sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
@@ -20,7 +22,7 @@ export default function VolunteerDashboard() {
   const [nextRun, ...queue] = myTasks;
   const nextStatus = nextRun ? deadlineStatus(nextRun.pickupDeadline) : null;
 
-  const completedTasks = donations.filter(d => d.volunteerId === 'v-1' && d.status === 'COMPLETED');
+  const completedTasks = donations.filter(d => d.volunteerId === user.entityId && d.status === 'COMPLETED');
   const mealsMoved = completedTasks.reduce((sum, d) => sum + d.quantity, 0) + 42;
 
   // Food already collected is a drop-off, not a pickup — the copy has to follow the stage.
@@ -33,7 +35,7 @@ export default function VolunteerDashboard() {
   } else if (carrying) {
     runNote = `You're carrying ${nextRun.quantity} ${nextRun.unit} — drop it with ${dropOff}, ${nextRun.distanceKm ?? '~2'} km away.`;
   } else if (nextStatus?.urgency === 'expired') {
-    runNote = `Pickup was due by ${nextRun.pickupDeadline} — go as soon as you can.`;
+    runNote = `Pickup was due by ${formatClock(nextRun.pickupDeadline)} — go as soon as you can.`;
   } else {
     runNote = `${nextRun.distanceKm ?? '~2'} km away, and the pickup window closes in ${nextStatus?.label.replace(' left', '')}.`;
   }

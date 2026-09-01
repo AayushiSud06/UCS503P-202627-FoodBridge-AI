@@ -1,10 +1,12 @@
 import { Truck } from 'lucide-react';
 import EmptyState from '../../components/EmptyState';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
 
 export default function VolunteerTasks() {
   const donations = useDonations();
+  const user = useCurrentUser();
 
   // Show all tasks that are active (ACCEPTED, VOLUNTEER_ASSIGNED, PICKED_UP)
   const activeTasks = donations.filter(d =>
@@ -12,7 +14,7 @@ export default function VolunteerTasks() {
   );
 
   const completedTasks = donations.filter(d =>
-    d.status === 'COMPLETED' && (d.volunteerId === 'v-1' || d.volunteerName)
+    d.status === 'COMPLETED' && d.volunteerId === user.entityId
   );
 
   return (

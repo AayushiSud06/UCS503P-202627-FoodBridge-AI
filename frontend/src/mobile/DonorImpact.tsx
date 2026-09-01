@@ -1,13 +1,14 @@
 import { Leaf, Trash2, Route } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
-import { DONOR_ID } from './nav';
+import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MSection, MDetail } from './parts';
 
 const BARS = [38, 52, 30, 74, 58, 100];
 const MONTHS = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
 
 export default function DonorImpact() {
-  const mine = useDonations().filter(d => d.donorId === DONOR_ID);
+  const user = useCurrentUser();
+  const mine = useDonations().filter(d => d.donorId === user.id);
   const meals = mine.reduce((s, d) => s + d.quantity, 0);
   const km = mine.reduce((s, d) => s + (d.distanceKm ?? 0), 0);
 

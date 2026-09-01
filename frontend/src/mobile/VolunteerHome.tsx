@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, MapPin, Truck } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
 import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
-import { VOLUNTEER_ID } from './nav';
+import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MStatGrid, MSection, MEmpty } from './parts';
 import StatusBadge from '../components/StatusBadge';
 
@@ -11,8 +11,9 @@ const ACTIVE = ['VOLUNTEER_ASSIGNED', 'PICKED_UP'];
 export default function VolunteerHome() {
   const navigate = useNavigate();
   const donations = useDonations();
+  const user = useCurrentUser();
 
-  const mine = donations.filter(d => d.volunteerId === VOLUNTEER_ID);
+  const mine = donations.filter(d => d.volunteerId === user.entityId);
   const active = mine.filter(d => ACTIVE.includes(d.status));
   const completed = mine.filter(d => ['DELIVERED', 'COMPLETED'].includes(d.status));
   const unclaimed = donations.filter(d => d.status === 'ACCEPTED' && !d.volunteerId);

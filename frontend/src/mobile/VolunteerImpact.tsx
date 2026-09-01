@@ -1,17 +1,20 @@
 import { Route, Star, Utensils } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
-import { MOCK_VOLUNTEERS } from '../data/mockData';
-import { VOLUNTEER_ID } from './nav';
+import { useMyVolunteer } from '../context/AppContext';
+import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MSection, MDetail, MMeter } from './parts';
 
-const ME = MOCK_VOLUNTEERS.find(v => v.id === VOLUNTEER_ID)!;
-
 export default function VolunteerImpact() {
-  const mine = useDonations().filter(d => d.volunteerId === VOLUNTEER_ID);
+  const user = useCurrentUser();
+  const me = useMyVolunteer();
+  const mine = useDonations().filter(d => d.volunteerId === user.entityId);
   const done = mine.filter(d => ['DELIVERED', 'COMPLETED'].includes(d.status));
   const meals = done.reduce((s, d) => s + d.quantity, 0);
   const km = mine.reduce((s, d) => s + (d.distanceKm ?? 0), 0);
-  const runs = ME.completedDeliveries + done.length;
+  // The server's tally is authoritative; the local list only covers what this
+  // session has loaded.
+  const runs = me?.completedDeliveries ?? done.length;
+  const rating = me?.rating ?? 5;
 
   return (
     <>
@@ -44,14 +47,14 @@ export default function VolunteerImpact() {
             <Star size={14} className="text-emerald-600" /> Courier rating
           </span>
         }
-        value={`${ME.rating} / 5`}
+        value={`${rating.toFixed(1)} / 5`}
       />
 
       <MSection title="Reliability" />
       <div className="bg-white border-y border-gray-100 py-2">
         <MMeter label="On-time collection rate" score={94} />
         <MMeter label="Deliveries without incident" score={100} />
-        <MMeter label="Rating" score={Math.round((ME.rating / 5) * 100)} />
+        <MMeter label="Rating" score={Math.round((rating / 5) * 100)} />
       </div>
 
       <div className="p-5">

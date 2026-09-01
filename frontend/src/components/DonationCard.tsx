@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { Donation } from '../types';
 import StatusBadge from './StatusBadge';
 import MatchScore from './MatchScore';
+import { formatClock } from '../lib/time';
 
 interface DonationCardProps {
   donation: Donation;
@@ -50,7 +51,7 @@ export default function DonationCard({
         </span>
         <span className="flex items-center gap-1">
           <Clock size={12} className="text-gray-400" />
-          Pickup by {donation.pickupDeadline}
+          Pickup by {formatClock(donation.pickupDeadline)}
         </span>
         <span className="flex items-center gap-1">
           <MapPin size={12} className="text-gray-400" />

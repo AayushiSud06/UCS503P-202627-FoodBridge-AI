@@ -1,12 +1,22 @@
 import { MapPin, Star } from 'lucide-react';
-import { MOCK_VOLUNTEERS } from '../data/mockData';
+import { useDonations, useVolunteers } from '../context/AppContext';
+import type { Volunteer } from '../types';
 import { MSection } from './parts';
 
-export default function AdminVolunteers() {
-  const available = MOCK_VOLUNTEERS.filter(v => v.isAvailable);
-  const offDuty = MOCK_VOLUNTEERS.filter(v => !v.isAvailable);
+const IN_FLIGHT = ['VOLUNTEER_ASSIGNED', 'PICKED_UP'];
 
-  const row = (v: (typeof MOCK_VOLUNTEERS)[number]) => (
+export default function AdminVolunteers() {
+  const volunteers = useVolunteers();
+  const donations = useDonations();
+
+  const available = volunteers.filter(v => v.isAvailable);
+  const offDuty = volunteers.filter(v => !v.isAvailable);
+
+  // Live load is derivable from what each courier is currently holding.
+  const activeTrips = (id: string) =>
+    donations.filter(d => d.volunteerId === id && IN_FLIGHT.includes(d.status)).length;
+
+  const row = (v: Volunteer) => (
     <article key={v.id} className="px-5 py-4 bg-white border-b border-gray-100">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -28,11 +38,11 @@ export default function AdminVolunteers() {
         </span>
         <span className="inline-flex items-center gap-1">
           <Star size={12} />
-          {v.rating}
+          {v.rating.toFixed(1)}
         </span>
         <span>{v.completedDeliveries} runs</span>
-        {v.activeDeliveries > 0 && (
-          <span className="text-clay-700 font-medium">{v.activeDeliveries} active</span>
+        {activeTrips(v.id) > 0 && (
+          <span className="text-clay-700 font-medium">{activeTrips(v.id)} active</span>
         )}
       </div>
     </article>
@@ -40,6 +50,10 @@ export default function AdminVolunteers() {
 
   return (
     <>
+      {volunteers.length === 0 && (
+        <p className="px-5 py-8 text-sm text-gray-500">No couriers have registered yet.</p>
+      )}
+
       <MSection title={`On duty (${available.length})`} />
       {available.map(row)}
 

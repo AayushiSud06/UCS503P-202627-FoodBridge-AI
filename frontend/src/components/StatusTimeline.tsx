@@ -34,9 +34,10 @@ interface StatusTimelineProps {
 }
 
 export default function StatusTimeline({ donation }: StatusTimelineProps) {
-  const currentIdx = donation.status === 'CANCELLED'
-    ? -1
-    : STATUS_ORDER.indexOf(donation.status);
+  // Cancelled and expired donations left the flow rather than progressing
+  // through it, so no step is marked done.
+  const isTerminatedEarly = donation.status === 'CANCELLED' || donation.status === 'EXPIRED';
+  const currentIdx = isTerminatedEarly ? -1 : STATUS_ORDER.indexOf(donation.status);
 
   return (
     <div className="space-y-0">
@@ -95,6 +96,15 @@ export default function StatusTimeline({ donation }: StatusTimelineProps) {
       {donation.status === 'CANCELLED' && (
         <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-700 font-medium">Donation Cancelled</p>
+        </div>
+      )}
+
+      {donation.status === 'EXPIRED' && (
+        <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+          <p className="text-sm text-gray-700 font-medium">Expired before it was claimed</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            The pickup deadline passed with no recipient.
+          </p>
         </div>
       )}
     </div>

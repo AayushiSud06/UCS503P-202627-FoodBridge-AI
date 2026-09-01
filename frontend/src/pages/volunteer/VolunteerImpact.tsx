@@ -1,18 +1,23 @@
 import { Award, Truck, Navigation, Heart, Clock, Star, ShieldCheck } from 'lucide-react';
 import ImpactCard from '../../components/ImpactCard';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 
 export default function VolunteerImpact() {
   const donations = useDonations();
-  const completed = donations.filter(d => d.status === 'COMPLETED');
-  const deliveredMeals = completed.reduce((s, d) => s + d.quantity, 0) + 240;
+  const user = useCurrentUser();
+  // Only this courier's own runs — the impact page is about their record.
+  const completed = donations.filter(
+    d => d.status === 'COMPLETED' && d.volunteerId === user.entityId,
+  );
+  const deliveredMeals = completed.reduce((s, d) => s + d.quantity, 0);
 
   return (
     <div className="space-y-8 max-w-6xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Volunteer Courier Impact</h1>
         <p className="text-gray-500 mt-1">
-          Personal logistics contributions for <strong>Aarav Sharma</strong>.
+          Personal logistics contributions for <strong>{user.name}</strong>.
         </p>
       </div>
 

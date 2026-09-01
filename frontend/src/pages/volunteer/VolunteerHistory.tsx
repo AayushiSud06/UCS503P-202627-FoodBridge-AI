@@ -1,12 +1,14 @@
 import { History, CheckCircle, Package, MapPin, Clock, ExternalLink } from 'lucide-react';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
 
 export default function VolunteerHistory() {
   const donations = useDonations();
+  const user = useCurrentUser();
   const completed = donations.filter(d =>
-    d.status === 'COMPLETED' && (d.volunteerId === 'v-1' || d.volunteerName?.includes('Aarav') || true)
+    d.status === 'COMPLETED' && d.volunteerId === user.entityId
   );
 
   return (
@@ -33,7 +35,7 @@ export default function VolunteerHistory() {
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900 text-sm">{d.quantity} {d.unit} of {d.foodName}</h3>
-                    <p className="text-xs text-gray-500">{d.donorOrganization} → {d.recipientName ?? 'Helping Hands NGO'}</p>
+                    <p className="text-xs text-gray-500">{d.donorOrganization} → {d.recipientName ?? 'recipient'}</p>
                   </div>
                 </div>
                 <StatusBadge status={d.status} size="sm" />

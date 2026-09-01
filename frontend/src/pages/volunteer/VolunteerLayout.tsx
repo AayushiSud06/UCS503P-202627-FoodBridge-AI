@@ -3,6 +3,8 @@ import { LayoutDashboard, Truck, History, BarChart2, User, Menu, X, Leaf } from 
 import { useState } from 'react';
 import Sidebar from '../../components/Sidebar';
 import ToastContainer from '../../components/ToastContainer';
+import DataGate from '../../components/DataGate';
+import { useCurrentUser } from '../../context/AuthContext';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',     path: '/volunteer',          icon: LayoutDashboard },
@@ -14,11 +16,12 @@ const NAV_ITEMS = [
 
 export default function VolunteerLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const user = useCurrentUser();
   const location = useLocation();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar items={NAV_ITEMS} userName="Aarav Sharma" userRole="Volunteer" userInitials="AS" basePath="/volunteer" />
+      <Sidebar items={NAV_ITEMS} userName={user.name} userRole="Volunteer" userInitials={user.avatarInitials} basePath="/volunteer" />
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
@@ -50,9 +53,13 @@ export default function VolunteerLayout() {
         <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
           <button onClick={() => setMobileOpen(true)} className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100"><Menu size={20} /></button>
           <span className="font-display font-semibold text-gray-900">FoodLink AI</span>
-          <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">AS</div>
+          <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">{user.avatarInitials}</div>
         </div>
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto"><Outlet /></main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
+          <DataGate>
+            <Outlet />
+          </DataGate>
+        </main>
       </div>
       <ToastContainer />
     </div>

@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import { PlusCircle, ClipboardList, AlertCircle, Users, Check, Clock } from 'lucide-react';
-import { useRequirements, useApp } from '../../context/AppContext';
-import type { NGORequirement } from '../../types';
+import { useRequirements, useApp, useMyRecipient } from '../../context/AppContext';
+import { useAction } from '../../lib/hooks';
 
 export default function NGORequirements() {
-  const requirements = useRequirements();
-  const { addRequirement, showToast } = useApp();
+  const allRequirements = useRequirements();
+  const { createRequirement } = useApp();
+  const myRecipient = useMyRecipient();
+  const { run, isBusy } = useAction();
   const [showModal, setShowModal] = useState(false);
+
+  // Every kitchen posts to the same board; this page is about your own needs.
+  const requirements = myRecipient
+    ? allRequirements.filter(r => r.ngoId === myRecipient.id)
+    : allRequirements;
 
   const [form, setForm] = useState({
     foodType: '',
@@ -18,25 +25,32 @@ export default function NGORequirements() {
     notes: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.foodType || !form.quantityNeeded) return;
 
-    const newReq: NGORequirement = {
-      id: `req-${Date.now()}`,
-      ngoId: 'r-1',
-      ngoName: 'Helping Hands Community Kitchen',
-      foodType: form.foodType,
-      quantityNeeded: Number(form.quantityNeeded),
-      unit: form.unit,
-      beneficiaryCount: Number(form.beneficiaryCount) || 100,
-      urgency: form.urgency,
-      dailyRecurring: form.dailyRecurring,
-      notes: form.notes,
-    };
+    const created = await run(
+      'create-requirement',
+      () =>
+        createRequirement({
+          foodType: form.foodType,
+          quantityNeeded: Number(form.quantityNeeded),
+          unit: form.unit,
+          beneficiaryCount: Number(form.beneficiaryCount) || 0,
+          urgency: form.urgency,
+          dailyRecurring: form.dailyRecurring,
+          notes: form.notes,
+        }),
+      {
+        success: {
+          message: 'Requirement posted',
+          subtitle: 'Donors can now see what your kitchen needs.',
+        },
+        errorTitle: 'Could not post this requirement',
+      },
+    );
+    if (!created) return;
 
-    addRequirement(newReq);
-    showToast('success', 'Food requirement broadcasted!', 'AI matching engine is now scanning for matching donor surplus.');
     setShowModal(false);
     setForm({
       foodType: '',

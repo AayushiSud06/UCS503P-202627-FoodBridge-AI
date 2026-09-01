@@ -1,27 +1,33 @@
 import { useState } from 'react';
 import { CheckSquare } from 'lucide-react';
 import { useDonations, useApp } from '../context/AppContext';
-import { MOCK_RECIPIENTS } from '../data/mockData';
+import { useCurrentUser } from '../context/AuthContext';
+import { useAction } from '../lib/hooks';
 import { byUrgency } from '../lib/time';
 import { MDonationRow, MEmpty, MSegmented } from './parts';
 
-const RECIPIENT = MOCK_RECIPIENTS[0];
 const FILTERS = ['Inbound', 'Completed'] as const;
 const INBOUND = ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP', 'DELIVERED'];
 
 export default function NGOAccepted() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('Inbound');
-  const { updateDonationStatus, showToast } = useApp();
-  const mine = useDonations().filter(d => d.recipientId === RECIPIENT.id);
+  const { updateDonationStatus } = useApp();
+  const user = useCurrentUser();
+  const { run, isPending, isBusy } = useAction();
+  const mine = useDonations().filter(d => d.recipientId === user.entityId);
 
   const rows = mine
     .filter(d => (filter === 'Inbound' ? INBOUND.includes(d.status) : d.status === 'COMPLETED'))
     .sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
 
-  const confirm = (id: string, quantity: number, unit: string) => {
-    updateDonationStatus(id, 'COMPLETED');
-    showToast('success', 'Receipt confirmed', `${quantity} ${unit} logged against your intake.`);
-  };
+  const confirm = (id: string, quantity: number, unit: string) =>
+    run(id, () => updateDonationStatus(id, 'COMPLETED'), {
+      success: {
+        message: 'Receipt confirmed',
+        subtitle: `${quantity} ${unit} logged against your intake.`,
+      },
+      errorTitle: 'Could not confirm receipt',
+    });
 
   return (
     <>
@@ -48,10 +54,11 @@ export default function NGOAccepted() {
               <div className="px-5 py-3 bg-white border-b border-gray-100">
                 <button
                   type="button"
-                  className="m-btn-primary"
+                  className="m-btn-primary disabled:opacity-60"
+                  disabled={isBusy}
                   onClick={() => confirm(d.id, d.quantity, d.unit)}
                 >
-                  Confirm receipt
+                  {isPending(d.id) ? 'Confirming…' : 'Confirm receipt'}
                 </button>
               </div>
             )}

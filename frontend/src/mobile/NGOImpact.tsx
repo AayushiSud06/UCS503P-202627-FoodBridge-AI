@@ -1,9 +1,8 @@
 import { Users, Utensils, Building2 } from 'lucide-react';
-import { useDonations } from '../context/AppContext';
-import { MOCK_RECIPIENTS } from '../data/mockData';
+import { useDonations, useMyRecipient } from '../context/AppContext';
+import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MSection, MDetail, MMeter } from './parts';
 
-const RECIPIENT = MOCK_RECIPIENTS[0];
 const DEMOGRAPHICS: [string, number][] = [
   ['Children', 42],
   ['Elderly', 27],
@@ -11,11 +10,14 @@ const DEMOGRAPHICS: [string, number][] = [
 ];
 
 export default function NGOImpact() {
-  const mine = useDonations().filter(d => d.recipientId === RECIPIENT.id);
+  const user = useCurrentUser();
+  const me = useMyRecipient();
+  const capacity = me?.capacity ?? 100;
+  const mine = useDonations().filter(d => d.recipientId === user.entityId);
   const completed = mine.filter(d => d.status === 'COMPLETED');
   const meals = completed.reduce((s, d) => s + d.quantity, 0);
   const donors = new Set(mine.map(d => d.donorOrganization)).size;
-  const utilisation = Math.min(100, Math.round((meals / Math.max(RECIPIENT.capacity, 1)) * 100));
+  const utilisation = Math.min(100, Math.round((meals / Math.max(capacity, 1)) * 100));
 
   return (
     <>
@@ -53,8 +55,8 @@ export default function NGOImpact() {
 
       <MSection title="Capacity utilisation" />
       <div className="bg-white border-y border-gray-100 py-2">
-        <MMeter label={`Against ${RECIPIENT.capacity} meal capacity`} score={utilisation} />
-        <MMeter label="Intake reliability rating" score={RECIPIENT.reliabilityScore} />
+        <MMeter label={`Against ${capacity} meal capacity`} score={utilisation} />
+        <MMeter label="Intake reliability rating" score={(me?.reliabilityScore ?? 0)} />
       </div>
 
       <MSection title="Beneficiary mix" />
@@ -68,8 +70,8 @@ export default function NGOImpact() {
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
           <p className="font-display font-semibold text-emerald-950">Verified kitchen standards</p>
           <p className="mt-1 text-sm text-emerald-800 leading-relaxed">
-            {RECIPIENT.name} maintains a {RECIPIENT.reliabilityScore}% intake reliability rating
-            across {RECIPIENT.acceptedDonations} accepted donations.
+            {me?.name ?? 'Your organisation'} maintains a {(me?.reliabilityScore ?? 0)}% intake reliability rating
+            across {(me?.acceptedDonations ?? 0)} accepted donations.
           </p>
         </div>
       </div>

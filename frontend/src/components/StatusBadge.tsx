@@ -46,6 +46,13 @@ const STATUS_CONFIG: Record<DonationStatus, { label: string; classes: string; do
     classes: 'bg-red-50 text-red-700 border-red-200',
     dot: 'bg-red-400',
   },
+  // A deadline passed with nobody having claimed it. Distinct from cancelled:
+  // this is the loss the platform exists to prevent, and it is reported.
+  EXPIRED: {
+    label: 'Expired',
+    classes: 'bg-gray-100 text-gray-600 border-gray-300',
+    dot: 'bg-gray-400',
+  },
 };
 
 export default function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {

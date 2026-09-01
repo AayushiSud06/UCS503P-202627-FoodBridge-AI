@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ArrowRight, Navigation, Phone, Truck, X } from 'lucide-react';
 import { useDonations, useApp } from '../context/AppContext';
-import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
+import { useCurrentUser } from '../context/AuthContext';
+import { useAction } from '../lib/hooks';
+import { deadlineStatus, formatClock, URGENCY_STYLES } from '../lib/time';
 import type { Donation, DonationStatus } from '../types';
 import StatusBadge from '../components/StatusBadge';
-import { VOLUNTEER_ID, VOLUNTEER_NAME } from './nav';
 import { MEmpty, MSection } from './parts';
 
 /** The one action available at each point in a courier's run. */
@@ -28,27 +29,30 @@ const NEXT: Partial<Record<DonationStatus, { status: DonationStatus; cta: string
 
 export default function VolunteerTasks() {
   const donations = useDonations();
-  const { updateDonationStatus, showToast } = useApp();
+  const { updateDonationStatus } = useApp();
+  const user = useCurrentUser();
+  const { run, isBusy } = useAction();
   const [openId, setOpenId] = useState<string | null>(null);
 
+  // Your own live runs, plus anything accepted that nobody has claimed yet.
   const tasks = donations.filter(
     d =>
-      (d.volunteerId === VOLUNTEER_ID && !['COMPLETED', 'CANCELLED'].includes(d.status)) ||
+      (d.volunteerId === user.entityId && !['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(d.status)) ||
       (d.status === 'ACCEPTED' && !d.volunteerId)
   );
 
   const selected = donations.find(d => d.id === openId) ?? null;
 
-  const advance = (task: Donation) => {
+  const advance = async (task: Donation) => {
     const next = NEXT[task.status];
     if (!next) return;
-    const extra =
-      next.status === 'VOLUNTEER_ASSIGNED'
-        ? { volunteerId: VOLUNTEER_ID, volunteerName: VOLUNTEER_NAME }
-        : undefined;
-    updateDonationStatus(task.id, next.status, extra);
-    showToast('success', next.cta, `#${task.id} · ${task.quantity} ${task.unit}`);
-    if (next.status === 'DELIVERED') setOpenId(null);
+    // The server identifies the courier from the token and refuses a run that
+    // another courier already claimed, so no identity travels in the body.
+    const updated = await run(task.id, () => updateDonationStatus(task.id, next.status), {
+      success: { message: next.cta, subtitle: `${task.quantity} ${task.unit} · ${task.foodName}` },
+      errorTitle: 'Could not update this run',
+    });
+    if (updated && next.status === 'DELIVERED') setOpenId(null);
   };
 
   const time = (iso?: string) =>
@@ -66,7 +70,7 @@ export default function VolunteerTasks() {
         tasks.map(d => {
           const deadline = deadlineStatus(d.pickupDeadline);
           const urgency = URGENCY_STYLES[deadline.urgency];
-          const mine = d.volunteerId === VOLUNTEER_ID;
+          const mine = d.volunteerId === user.entityId;
           const awaitingPickup = d.status !== 'PICKED_UP';
           return (
             <button
@@ -153,7 +157,7 @@ export default function VolunteerTasks() {
               <div className="grid grid-cols-3 bg-white border-b border-gray-200">
                 {([
                   ['Load', `${selected.quantity} ${selected.unit}`, false],
-                  ['Deadline', selected.pickupDeadline, true],
+                  ['Deadline', formatClock(selected.pickupDeadline), true],
                   ['Storage', selected.storageType.split(' ')[0], false],
                 ] as const).map(([k, v, hot], i) => (
                   <div key={k} className={`px-4 py-3 ${i < 2 ? 'border-r border-gray-200' : ''}`}>
@@ -220,12 +224,12 @@ export default function VolunteerTasks() {
                 </button>
                 <button
                   type="button"
-                  className="m-btn-primary"
-                  disabled={!NEXT[selected.status]}
+                  className="m-btn-primary disabled:opacity-60"
+                  disabled={!NEXT[selected.status] || isBusy}
                   onClick={() => advance(selected)}
                 >
-                  {NEXT[selected.status]?.cta ?? 'Task complete'}
-                  {NEXT[selected.status] && <ArrowRight size={17} />}
+                  {isBusy ? 'Working…' : NEXT[selected.status]?.cta ?? 'Task complete'}
+                  {NEXT[selected.status] && !isBusy && <ArrowRight size={17} />}
                 </button>
               </div>
             </div>

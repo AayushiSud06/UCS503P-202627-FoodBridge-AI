@@ -5,6 +5,8 @@ import {
 import { useState } from 'react';
 import Sidebar from '../../components/Sidebar';
 import ToastContainer from '../../components/ToastContainer';
+import DataGate from '../../components/DataGate';
+import { useCurrentUser } from '../../context/AuthContext';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',      path: '/donor',          icon: LayoutDashboard },
@@ -16,6 +18,7 @@ const NAV_ITEMS = [
 
 export default function DonorLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const user = useCurrentUser();
   const location = useLocation();
 
   return (
@@ -23,9 +26,9 @@ export default function DonorLayout() {
       {/* Desktop sidebar */}
       <Sidebar
         items={NAV_ITEMS}
-        userName="Aayushi Sharma"
+        userName={user.name}
         userRole="Donor"
-        userInitials="AS"
+        userInitials={user.avatarInitials}
         basePath="/donor"
       />
 
@@ -74,11 +77,13 @@ export default function DonorLayout() {
             <Menu size={20} />
           </button>
           <span className="font-display font-semibold text-gray-900">FoodLink AI</span>
-          <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-xs font-bold">AS</div>
+          <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center text-xs font-bold">{user.avatarInitials}</div>
         </div>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-          <Outlet />
+          <DataGate>
+            <Outlet />
+          </DataGate>
         </main>
       </div>
 

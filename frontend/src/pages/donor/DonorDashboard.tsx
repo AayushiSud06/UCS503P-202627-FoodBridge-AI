@@ -3,6 +3,7 @@ import { PlusCircle, ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
 import { useDonations } from '../../context/AppContext';
 import { deadlineStatus, byUrgency } from '../../lib/time';
+import { useCurrentUser } from '../../context/AuthContext';
 
 /** Food is still sitting with the donor — the deadline genuinely matters. */
 const AWAITING_PICKUP = ['AVAILABLE', 'MATCHED', 'ACCEPTED', 'VOLUNTEER_ASSIGNED'];
@@ -11,7 +12,8 @@ const IN_TRANSIT = ['PICKED_UP', 'DELIVERED'];
 
 export default function DonorDashboard() {
   const donations = useDonations();
-  const mine = donations.filter(d => d.donorId === 'u-donor-1');
+  const user = useCurrentUser();
+  const mine = donations.filter(d => d.donorId === user.id);
 
   const live = mine
     .filter(d => AWAITING_PICKUP.includes(d.status))
@@ -36,7 +38,7 @@ export default function DonorDashboard() {
   }
 
   const mealsDonated = mine.reduce((sum, d) => sum + d.quantity, 0);
-  const mealsRedistributed = settled.reduce((sum, d) => sum + d.quantity, 0) + 96;
+  const mealsRedistributed = settled.reduce((sum, d) => sum + d.quantity, 0);
 
   return (
     <div className="max-w-4xl space-y-10">
@@ -140,7 +142,7 @@ export default function DonorDashboard() {
             {[
               { value: mealsDonated, label: 'meals listed' },
               { value: mealsRedistributed, label: 'meals redistributed' },
-              { value: settled.length + 12, label: 'pickups completed' },
+              { value: settled.length, label: 'pickups completed' },
             ].map(stat => (
               <div key={stat.label}>
                 <p className="font-display text-2xl font-semibold text-gray-900">

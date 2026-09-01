@@ -2,24 +2,29 @@ import { Link } from 'react-router-dom';
 import { Package, ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 import { deadlineStatus, byUrgency } from '../../lib/time';
 
 export default function NGODashboard() {
   const donations = useDonations();
+  const user = useCurrentUser();
 
   const open = donations
     .filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status))
     .sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
 
   const accepted = donations.filter(
-    d => ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status) && d.recipientId === 'r-1'
+    d => ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status) && d.recipientId === user.entityId
   );
-  const completed = donations.filter(d => d.status === 'COMPLETED' && d.recipientId === 'r-1');
+  const completed = donations.filter(d => d.status === 'COMPLETED' && d.recipientId === user.entityId);
 
   const mealsOnOffer = open.reduce((sum, d) => sum + d.quantity, 0);
-  const mealsReceived = completed.reduce((sum, d) => sum + d.quantity, 0) + 184;
+  const mealsReceived = completed.reduce((sum, d) => sum + d.quantity, 0);
 
-  const closest = [...open].sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99))[0];
+  // `distanceKm` is measured against the recipient a donation is matched to,
+  // so an unclaimed one has none to report from this kitchen's point of view.
+  // The ranked matches on the Available screen are where distance belongs.
+  const closest = open.find(d => typeof d.distanceKm === 'number');
   const soonest = open[0];
   const soonestStatus = soonest ? deadlineStatus(soonest.pickupDeadline) : null;
 
@@ -41,7 +46,7 @@ export default function NGODashboard() {
 
         <div className="relative">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-clay-700">
-            Helping Hands Community Kitchen
+            {user.organization ?? user.name}
           </p>
 
           <h1 className="mt-3 font-display text-3xl sm:text-[2.5rem] font-medium leading-[1.15] text-gray-900">
@@ -58,11 +63,14 @@ export default function NGODashboard() {
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-gray-600">
             {open.length === 0
               ? 'We’ll flag new donations here the moment a donor lists them nearby.'
-              : `Closest is ${closest?.distanceKm ?? '—'} km away${
+              : [
+                  closest ? `Closest is ${closest.distanceKm} km away` : 'Sorted by how soon each closes',
                   soonestStatus && soonestStatus.urgency !== 'ok'
-                    ? `, and the soonest closes in ${soonestStatus.label.replace(' left', '')}`
-                    : ''
-                }.`}
+                    ? `the soonest closes in ${soonestStatus.label.replace(' left', '')}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(', ') + '.'}
           </p>
 
           <Link to="/ngo/available" className="btn-primary mt-7 px-6 py-3 text-base">
@@ -122,8 +130,8 @@ export default function NGODashboard() {
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             {[
               { value: mealsReceived, label: 'meals received' },
-              { value: completed.length + 23, label: 'pickups completed' },
-              { value: accepted.length + 5, label: 'currently accepted' },
+              { value: completed.length, label: 'pickups completed' },
+              { value: accepted.length, label: 'currently accepted' },
             ].map(stat => (
               <div key={stat.label}>
                 <p className="font-display text-2xl font-semibold text-gray-900">

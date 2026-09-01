@@ -2,8 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Camera, Check, Loader, MapPin, Pencil, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useAction, useMatchAnalysis } from '../lib/hooks';
+import { DEFAULT_COORDS, requestCoords, type Coords } from '../lib/geo';
+import { formatClock, toFutureIso } from '../lib/time';
 import type { Donation } from '../types';
 import { MSection, MDetail, MMeter } from './parts';
+
+/** The collection deadline this flow assumes, matching the label it shows. */
+const DEADLINE_TIME = '20:00';
+const PICKUP_LOCATION = 'College Central Mess, Thapar University';
 
 type Step = 'shoot' | 'read' | 'confirm' | 'done';
 
@@ -15,19 +22,39 @@ const READINGS = [
 
 export default function CreateDonationCamera() {
   const navigate = useNavigate();
-  const { addDonation, showToast } = useApp();
+  const { createDonation } = useApp();
+  const { run, isBusy } = useAction();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>('shoot');
   const [photo, setPhoto] = useState<string | undefined>();
   const [qty, setQty] = useState(50);
   const [created, setCreated] = useState<Donation | null>(null);
+  const [coords, setCoords] = useState<Coords>(DEFAULT_COORDS);
+  const [gpsFixed, setGpsFixed] = useState(false);
+
+  // Once published, show the reasoning the server actually used rather than
+  // four decorative bars.
+  const { analysis, recipientName: analysisRecipient } = useMatchAnalysis(created?.id ?? null);
 
   // The scripted "vision read". Swap this timer for the real endpoint later.
+  // The pin, though, is fetched for real while it runs — by the time the
+  // confirm step claims GPS, it either has one or says it is using the default.
   useEffect(() => {
     if (step !== 'read') return;
+    let cancelled = false;
+
+    void requestCoords().then(found => {
+      if (cancelled || !found) return;
+      setCoords(found);
+      setGpsFixed(true);
+    });
+
     const t = setTimeout(() => setStep('confirm'), 1800);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [step]);
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,30 +66,32 @@ export default function CreateDonationCamera() {
     setStep('read');
   };
 
-  const publish = () => {
-    const donation: Donation = {
-      id: `don-${Date.now()}`,
-      donorId: 'u-donor-1',
-      donorName: 'Aayushi Sharma',
-      donorOrganization: 'College Central Mess',
-      foodName: 'Vegetarian Meals',
-      category: 'Vegetarian',
-      quantity: qty,
-      unit: 'Meals',
-      preparedAt: '12:30 PM',
-      pickupDeadline: '8:00 PM',
-      location: 'College Central Mess, Thapar University',
-      description: 'Read from photo: dal makhani, paneer bhurji, rice. Insulated trays.',
-      storageType: 'Room Temperature',
-      imagePreview: photo,
-      status: 'AVAILABLE',
-      createdAt: new Date().toISOString(),
-      matchScore: 94,
-      distanceKm: 1.8,
-    };
-    addDonation(donation);
+  const publish = async () => {
+    const deadline = toFutureIso(DEADLINE_TIME);
+    if (!deadline) return;
+
+    const donation = await run(
+      'publish',
+      () =>
+        createDonation({
+          foodName: 'Vegetarian Meals',
+          category: 'Vegetarian',
+          quantity: qty,
+          unit: 'Meals',
+          storageType: 'Room Temperature',
+          description: 'Read from photo: dal makhani, paneer bhurji, rice. Insulated trays.',
+          location: PICKUP_LOCATION,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          preparedAt: null,
+          pickupDeadline: deadline,
+          imageUrl: photo ?? null,
+        }),
+      { errorTitle: 'Could not publish this donation' },
+    );
+    if (!donation) return;
+
     setCreated(donation);
-    showToast('success', 'Listed', `${qty} meals matched with Helping Hands Community Kitchen.`);
     setStep('done');
   };
 
@@ -198,23 +227,34 @@ export default function CreateDonationCamera() {
           <MDetail label="Storage" value="Room temperature" />
           <MDetail
             label="Pickup before"
-            value={<span className="text-clay-700 font-semibold">8:00 PM</span>}
+            value={
+              <span className="text-clay-700 font-semibold">
+                {formatClock(toFutureIso(DEADLINE_TIME) ?? '')}
+              </span>
+            }
           />
 
           <div className="m-5 rounded-2xl bg-gray-100 p-4 flex gap-3">
             <MapPin size={16} className="text-gray-500 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-gray-900">
-                College Central Mess, Thapar University
+              <p className="text-sm font-medium text-gray-900">{PICKUP_LOCATION}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {gpsFixed
+                  ? `GPS fix · ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`
+                  : `Saved default · ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">From your saved default · GPS confirmed</p>
             </div>
           </div>
 
           <div className="px-5 pb-6">
-            <button type="button" className="m-btn-primary" onClick={publish}>
-              Publish donation
-              <ArrowRight size={17} />
+            <button
+              type="button"
+              className="m-btn-primary disabled:opacity-60"
+              onClick={publish}
+              disabled={isBusy}
+            >
+              {isBusy ? 'Publishing…' : 'Publish donation'}
+              {!isBusy && <ArrowRight size={17} />}
             </button>
             <p className="mt-3 text-xs text-gray-500 leading-relaxed">
               Matching runs on publish: distance, capacity and intake reliability are scored against
@@ -228,25 +268,35 @@ export default function CreateDonationCamera() {
         <>
           <section className="px-5 pt-6 pb-6 bg-emerald-700 text-white">
             <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">
-              Matched in 4 seconds
+              {created?.matchScore ? 'Top match' : 'Listed'}
             </p>
             <p className="mt-1.5 font-display font-semibold text-5xl leading-none">
-              {created?.matchScore ?? 94}%
+              {created?.matchScore ? `${created.matchScore}%` : `${created?.quantity ?? qty}`}
             </p>
             <p className="mt-3 font-medium">
-              {created?.recipientName ?? 'Helping Hands Community Kitchen'}
+              {analysis ? analysisRecipient : 'Open to every kitchen in range'}
             </p>
             <p className="text-sm text-emerald-100 mt-0.5">
-              Community kitchen · {created?.distanceKm ?? 1.8} km · 95% reliable
+              {analysis
+                ? `${analysis.distanceScore ? '' : ''}${created?.distanceKm ?? '–'} km · ${analysis.reliabilityScore}% reliable`
+                : 'No kitchen has accepted it yet.'}
             </p>
           </section>
 
-          <MSection title="Why this kitchen" />
+          <MSection title={analysis ? 'Why this kitchen' : 'Scoring'} />
           <div className="bg-white border-y border-gray-100 py-1.5">
-            <MMeter label="Distance" score={98} />
-            <MMeter label="Quantity fit" score={92} />
-            <MMeter label="Capacity" score={88} />
-            <MMeter label="Reliability" score={95} />
+            {analysis ? (
+              <>
+                <MMeter label="Distance" score={analysis.distanceScore} />
+                <MMeter label="Quantity fit" score={analysis.quantityScore} />
+                <MMeter label="Capacity" score={analysis.capacityScore} />
+                <MMeter label="Reliability" score={analysis.reliabilityScore} />
+              </>
+            ) : (
+              <p className="px-5 py-4 text-sm text-gray-500 leading-relaxed">
+                No verified kitchen within range scored this donation yet.
+              </p>
+            )}
           </div>
 
           <MSection title="What happens next" />
@@ -254,7 +304,7 @@ export default function CreateDonationCamera() {
             {([
               ['Kitchen notified · awaiting accept', true],
               ['Volunteer courier assigned', false],
-              ['Picked up before 8:00 PM', false],
+              [`Picked up before ${formatClock(created?.pickupDeadline)}`, false],
             ] as [string, boolean][]).map(([label, done]) => (
               <div key={label} className="flex items-center gap-3">
                 <span

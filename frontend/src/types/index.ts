@@ -8,7 +8,8 @@ export type DonationStatus =
   | 'PICKED_UP'
   | 'DELIVERED'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'EXPIRED';
 
 export type FoodCategory =
   | 'Vegetarian'
@@ -78,11 +79,18 @@ export interface Recipient {
   type: string;
   location: string;
   capacity: number;   // max meals they can handle
-  distanceKm: number;
+  /**
+   * Only known relative to a particular donation, so the API reports it there
+   * rather than on the organisation. Undefined outside that context.
+   */
+  distanceKm?: number;
   reliabilityScore: number;  // 0-100
   acceptedDonations: number;
   contactPerson: string;
   phone: string;
+  /** An administrator has vouched for this organisation. Unverified ones
+   *  cannot accept donations and are left out of match rankings. */
+  isVerified?: boolean;
 }
 
 export interface Volunteer {
@@ -90,9 +98,9 @@ export interface Volunteer {
   name: string;
   phone: string;
   location: string;
-  distanceKm: number;
+  distanceKm?: number;
   completedDeliveries: number;
-  activeDeliveries: number;
+  activeDeliveries?: number;
   rating: number; // 1-5
   isAvailable: boolean;
 }
@@ -152,4 +160,15 @@ export interface AppStats {
   totalOrganizations: number;
   totalVolunteers: number;
   successfulPickups: number;
+  expiredDonations?: number;
+
+  /**
+   * The evaluation figures the backend derives from server-stamped status
+   * history. Undefined until enough donations have moved through the flow to
+   * compute them — a fresh database has no median to report.
+   */
+  medianTimeToClaimMinutes?: number;
+  medianHandoverMinutes?: number;
+  rescueRatePercent?: number;
+  expiryLossRatePercent?: number;
 }

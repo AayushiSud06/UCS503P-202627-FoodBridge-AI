@@ -1,12 +1,13 @@
 import { History } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
-import { VOLUNTEER_ID } from './nav';
+import { useCurrentUser } from '../context/AuthContext';
 import { MEmpty, MSection } from './parts';
 import StatusBadge from '../components/StatusBadge';
 
 export default function VolunteerHistory() {
+  const user = useCurrentUser();
   const past = useDonations()
-    .filter(d => d.volunteerId === VOLUNTEER_ID && ['DELIVERED', 'COMPLETED'].includes(d.status))
+    .filter(d => d.volunteerId === user.entityId && ['DELIVERED', 'COMPLETED'].includes(d.status))
     .sort((a, b) => (b.deliveredAt ?? '').localeCompare(a.deliveredAt ?? ''));
 
   const day = (iso?: string) =>

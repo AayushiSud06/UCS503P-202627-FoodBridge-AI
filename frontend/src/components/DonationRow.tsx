@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, MapPin, Package } from 'lucide-react';
 import type { Donation } from '../types';
 import StatusBadge from './StatusBadge';
-import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
+import { deadlineStatus, formatClock, URGENCY_STYLES } from '../lib/time';
 
 interface DonationRowProps {
   donation: Donation;
@@ -96,11 +96,11 @@ export default function DonationRow({
       {/* Time pressure — the thing that actually decides what you do next */}
       <div className="hidden sm:block text-right shrink-0">
         {settled ? (
-          <span className="text-xs text-gray-400">{donation.pickupDeadline}</span>
+          <span className="text-xs text-gray-400">{formatClock(donation.pickupDeadline)}</span>
         ) : (
           <>
             <p className={`text-sm font-semibold ${styles.text}`}>{label}</p>
-            <p className="text-xs text-gray-400">by {donation.pickupDeadline}</p>
+            <p className="text-xs text-gray-400">by {formatClock(donation.pickupDeadline)}</p>
           </>
         )}
       </div>

@@ -22,9 +22,6 @@ export interface RoleConfig {
   role: UserRole;
   /** Small caps line above the screen title. */
   kicker: string;
-  /** Signed-in identity mirrored from the desktop layout. */
-  userName: string;
-  initials: string;
   base: string;
   tabs: Tab[];
 }
@@ -65,38 +62,25 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   donor: {
     role: 'donor',
     kicker: 'College Central Mess',
-    userName: 'Aayushi Sharma',
-    initials: 'AS',
     base: '/m/donor',
     tabs: DONOR_TABS,
   },
   ngo: {
     role: 'ngo',
     kicker: 'Helping Hands Kitchen',
-    userName: 'Raj Malhotra',
-    initials: 'HH',
     base: '/m/ngo',
     tabs: NGO_TABS,
   },
   volunteer: {
     role: 'volunteer',
     kicker: 'Courier',
-    userName: 'Aarav Sharma',
-    initials: 'AS',
     base: '/m/volunteer',
     tabs: VOLUNTEER_TABS,
   },
   admin: {
     role: 'admin',
     kicker: 'FoodLink Platform',
-    userName: 'Admin Controller',
-    initials: 'AC',
     base: '/m/admin',
     tabs: ADMIN_TABS,
   },
 };
-
-/** Demo identities, mirrored from `data/mockData.ts`. */
-export const DONOR_ID = 'u-donor-1';
-export const VOLUNTEER_ID = 'v-1';
-export const VOLUNTEER_NAME = 'Aarav Sharma';

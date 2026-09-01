@@ -2,14 +2,15 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Package } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
 import { byUrgency } from '../lib/time';
-import { DONOR_ID } from './nav';
+import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MStatGrid, MSection, MDonationRow, MEmpty } from './parts';
 
 const CLOSED = ['COMPLETED', 'CANCELLED'];
 
 export default function DonorHome() {
   const navigate = useNavigate();
-  const mine = useDonations().filter(d => d.donorId === DONOR_ID);
+  const user = useCurrentUser();
+  const mine = useDonations().filter(d => d.donorId === user.id);
 
   const active = mine
     .filter(d => !CLOSED.includes(d.status))

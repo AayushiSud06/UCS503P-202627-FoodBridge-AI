@@ -1,8 +1,10 @@
-import { useState } from 'react';
 import { MapPin, Clock, Package, Building2, Navigation, CheckCircle } from 'lucide-react';
 import StatusBadge from '../../components/StatusBadge';
 import MapPreview from '../../components/MapPreview';
 import { useApp } from '../../context/AppContext';
+import { useAction } from '../../lib/hooks';
+import { formatClock } from '../../lib/time';
+import { useState } from 'react';
 import type { Donation } from '../../types';
 
 interface TaskCardProps {
@@ -10,39 +12,40 @@ interface TaskCardProps {
 }
 
 export default function TaskCard({ donation }: TaskCardProps) {
-  const { updateDonationStatus, showToast } = useApp();
-  const [loading, setLoading] = useState(false);
+  const { updateDonationStatus } = useApp();
+  const { run, isBusy } = useAction();
   const [expanded, setExpanded] = useState(false);
+  const loading = isBusy;
 
-  const handleAcceptPickup = () => {
-    setLoading(true);
-    setTimeout(() => {
-      updateDonationStatus(donation.id, 'VOLUNTEER_ASSIGNED', {
-        volunteerId: 'v-1',
-        volunteerName: 'Aarav Sharma',
-      });
-      showToast('success', 'Pickup accepted!', 'Head to the donor location to collect the food.');
-      setLoading(false);
-    }, 600);
-  };
+  // The courier claiming a pickup is identified by their token, so the server
+  // resolves which volunteer profile this is — and refuses if another courier
+  // already claimed the run.
+  const handleAcceptPickup = () =>
+    run(donation.id, () => updateDonationStatus(donation.id, 'VOLUNTEER_ASSIGNED'), {
+      success: {
+        message: 'Pickup accepted',
+        subtitle: 'Head to the donor location to collect the food.',
+      },
+      errorTitle: 'Could not claim this pickup',
+    });
 
-  const handleMarkPickedUp = () => {
-    setLoading(true);
-    setTimeout(() => {
-      updateDonationStatus(donation.id, 'PICKED_UP');
-      showToast('info', 'Marked as picked up', 'Now deliver to ' + (donation.recipientName ?? 'the recipient'));
-      setLoading(false);
-    }, 600);
-  };
+  const handleMarkPickedUp = () =>
+    run(donation.id, () => updateDonationStatus(donation.id, 'PICKED_UP'), {
+      success: {
+        message: 'Marked as picked up',
+        subtitle: `Now deliver to ${donation.recipientName ?? 'the recipient'}.`,
+      },
+      errorTitle: 'Could not mark this collected',
+    });
 
-  const handleMarkDelivered = () => {
-    setLoading(true);
-    setTimeout(() => {
-      updateDonationStatus(donation.id, 'DELIVERED');
-      showToast('success', 'Delivered! 🎉', `${donation.quantity} ${donation.unit} of ${donation.foodName} delivered successfully.`);
-      setLoading(false);
-    }, 600);
-  };
+  const handleMarkDelivered = () =>
+    run(donation.id, () => updateDonationStatus(donation.id, 'DELIVERED'), {
+      success: {
+        message: 'Delivered',
+        subtitle: `${donation.quantity} ${donation.unit} of ${donation.foodName} handed over. The kitchen confirms from here.`,
+      },
+      errorTitle: 'Could not mark this delivered',
+    });
 
   const getActionButton = () => {
     if (loading) {
@@ -132,7 +135,7 @@ export default function TaskCard({ donation }: TaskCardProps) {
 
       {/* Details row */}
       <div className="px-5 pb-4 flex flex-wrap gap-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1"><Clock size={12} /> Pickup by {donation.pickupDeadline}</span>
+        <span className="flex items-center gap-1"><Clock size={12} /> Pickup by {formatClock(donation.pickupDeadline)}</span>
         <span className="flex items-center gap-1"><MapPin size={12} /> {donation.location}</span>
       </div>
 

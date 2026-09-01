@@ -1,24 +1,43 @@
 import { useState } from 'react';
-import { Building2, Mail, Phone, MapPin, Clock, ShieldCheck, Check, Save } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { Mail, Phone, MapPin, Clock, ShieldCheck, Check, Save } from 'lucide-react';
+import { useCurrentUser, useAuth } from '../../context/AuthContext';
+import { useAction } from '../../lib/hooks';
+import PasswordCard from '../../components/PasswordCard';
 
 export default function DonorProfile() {
-  const { showToast } = useApp();
+  const user = useCurrentUser();
+  const { updateProfile } = useAuth();
+  const { run, isBusy } = useAction();
+
+  // Name, organisation and phone are stored on the account. The rest are
+  // local preferences the API does not model yet — kept, but not pretended
+  // to be saved anywhere.
   const [profile, setProfile] = useState({
-    name: 'Aayushi Sharma',
-    email: 'aayushi@thapar.edu',
-    organization: 'College Central Mess',
-    phone: '+91-98765-11223',
-    location: 'College Central Mess, Thapar University, Patiala',
-    operatingHours: '07:00 AM - 09:30 PM',
-    foodSafetyCertified: true,
+    name: user.name,
+    email: user.email,
+    organization: user.organization ?? '',
+    phone: '',
+    location: '',
+    operatingHours: '',
     notificationEmail: true,
     notificationSMS: true,
   });
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('success', 'Profile updated successfully!', 'Your mess configuration and contact details have been saved.');
+    return run(
+      'profile',
+      () =>
+        updateProfile({
+          name: profile.name.trim(),
+          organization: profile.organization.trim(),
+          phone: profile.phone.trim() || undefined,
+        }),
+      {
+        success: { message: 'Profile saved', subtitle: 'Your contact details have been updated.' },
+        errorTitle: 'Could not save your profile',
+      },
+    );
   };
 
   return (
@@ -34,16 +53,16 @@ export default function DonorProfile() {
           <div className="flex items-center justify-between border-b border-gray-100 pb-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-emerald-100 text-emerald-800 rounded-2xl flex items-center justify-center font-extrabold text-lg">
-                AS
+                {user.avatarInitials}
               </div>
               <div>
-                <h2 className="font-bold text-gray-900">{profile.organization}</h2>
+                <h2 className="font-bold text-gray-900">{profile.organization || user.name}</h2>
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   <ShieldCheck size={12} /> Verified Institutional Donor
                 </span>
               </div>
             </div>
-            <span className="text-xs text-gray-400 font-mono">ID: u-donor-1</span>
+            <span className="text-xs text-gray-400 font-mono">Account #{user.id}</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -63,8 +82,9 @@ export default function DonorProfile() {
                 <input
                   type="email"
                   value={profile.email}
-                  onChange={e => setProfile({ ...profile, email: e.target.value })}
-                  className="input-field pl-9"
+                  readOnly
+                  title="Your sign-in address. An administrator can change it."
+                  className="input-field pl-9 bg-gray-50 text-gray-500 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -146,11 +166,13 @@ export default function DonorProfile() {
 
         {/* Submit */}
         <div className="flex items-center gap-3">
-          <button type="submit" className="btn-primary">
-            <Save size={16} /> Save Profile Settings
+          <button type="submit" className="btn-primary disabled:opacity-60" disabled={isBusy}>
+            <Save size={16} /> {isBusy ? 'Saving…' : 'Save Profile Settings'}
           </button>
         </div>
       </form>
+
+      <PasswordCard />
     </div>
   );
 }

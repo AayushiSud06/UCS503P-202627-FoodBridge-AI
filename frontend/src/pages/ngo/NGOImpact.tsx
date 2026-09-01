@@ -1,10 +1,12 @@
 import { Heart, Users, Package, Clock, Award, ShieldCheck, Download } from 'lucide-react';
 import ImpactCard from '../../components/ImpactCard';
 import { useDonations } from '../../context/AppContext';
+import { useCurrentUser } from '../../context/AuthContext';
 
 export default function NGOImpact() {
   const donations = useDonations();
-  const completed = donations.filter(d => d.status === 'COMPLETED' && (d.recipientId === 'r-1' || !d.recipientId));
+  const user = useCurrentUser();
+  const completed = donations.filter(d => d.status === 'COMPLETED' && d.recipientId === user.entityId);
   const mealsDistributed = completed.reduce((sum, d) => sum + d.quantity, 0) + 1240;
 
   return (
@@ -13,7 +15,7 @@ export default function NGOImpact() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Community Nutrition & Intake Impact</h1>
           <p className="text-gray-500 mt-1">
-            Verified hunger relief and meal distribution metrics for <strong>Helping Hands Community Kitchen</strong>.
+            Verified hunger relief and meal distribution metrics for <strong>{user.organization ?? user.name}</strong>.
           </p>
         </div>
         <button
@@ -98,7 +100,7 @@ export default function NGOImpact() {
             <h3 className="font-bold text-base">Verified Community Kitchen Standards</h3>
           </div>
           <p className="text-xs text-emerald-200 leading-relaxed">
-            Helping Hands Community Kitchen operates in compliance with national community feeding protocols with clean water filtration, warm-reheating equipment, and rapid distribution queues.
+            {user.organization ?? 'This organisation'} operates in compliance with national community feeding protocols with clean water filtration, warm-reheating equipment, and rapid distribution queues.
           </p>
           <div className="pt-2 border-t border-emerald-800/80 grid grid-cols-2 gap-3 text-xs text-emerald-100">
             <div>

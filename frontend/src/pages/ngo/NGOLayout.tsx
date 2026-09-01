@@ -3,6 +3,8 @@ import { LayoutDashboard, Package, CheckSquare, ClipboardList, BarChart2, User, 
 import { useState } from 'react';
 import Sidebar from '../../components/Sidebar';
 import ToastContainer from '../../components/ToastContainer';
+import DataGate from '../../components/DataGate';
+import { useCurrentUser } from '../../context/AuthContext';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',          path: '/ngo',             icon: LayoutDashboard },
@@ -15,11 +17,12 @@ const NAV_ITEMS = [
 
 export default function NGOLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const user = useCurrentUser();
   const location = useLocation();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar items={NAV_ITEMS} userName="Helping Hands NGO" userRole="Recipient" userInitials="HH" basePath="/ngo" />
+      <Sidebar items={NAV_ITEMS} userName={user.organization ?? user.name} userRole="Recipient" userInitials={user.avatarInitials} basePath="/ngo" />
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
@@ -55,10 +58,12 @@ export default function NGOLayout() {
             <Menu size={20} />
           </button>
           <span className="font-display font-semibold text-gray-900">FoodLink AI</span>
-          <div className="w-8 h-8 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">HH</div>
+          <div className="w-8 h-8 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">{user.avatarInitials}</div>
         </div>
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-          <Outlet />
+          <DataGate>
+            <Outlet />
+          </DataGate>
         </main>
       </div>
       <ToastContainer />

@@ -1,5 +1,7 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Repeat } from 'lucide-react';
+import { LogOut } from 'lucide-react';
+import { useAuth, useCurrentUser } from '../context/AuthContext';
+import DataGate from '../components/DataGate';
 import type { RoleConfig } from './nav';
 
 /**
@@ -9,6 +11,13 @@ import type { RoleConfig } from './nav';
 export default function MobileShell({ config }: { config: RoleConfig }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const user = useCurrentUser();
+  const { signOut } = useAuth();
+
+  const handleSignOut = () => {
+    signOut();
+    navigate('/login', { replace: true });
+  };
 
   const active =
     config.tabs.find(t => t.to !== config.base && pathname.startsWith(t.to)) ??
@@ -29,20 +38,25 @@ export default function MobileShell({ config }: { config: RoleConfig }) {
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => navigate('/m')}
-            aria-label="Switch role"
+            onClick={handleSignOut}
+            aria-label="Sign out"
             className="w-9 h-9 rounded-full border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100"
           >
-            <Repeat size={15} />
+            <LogOut size={15} />
           </button>
-          <span className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
-            {config.initials}
+          <span
+            title={user.name}
+            className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold"
+          >
+            {user.avatarInitials}
           </span>
         </div>
       </header>
 
       <div className="m-body">
-        <Outlet />
+        <DataGate>
+          <Outlet />
+        </DataGate>
       </div>
 
       <nav className="m-tabs">

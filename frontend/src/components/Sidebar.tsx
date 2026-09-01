@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Leaf, LogOut, type LucideIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface NavItem {
   label: string;
@@ -17,6 +18,15 @@ interface SidebarProps {
 
 export default function Sidebar({ items, userName, userRole, userInitials, basePath }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  // Signing out has to actually drop the token, not just navigate to /login —
+  // otherwise the guard would send the still-authenticated user right back.
+  const handleSignOut = () => {
+    signOut();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <aside className="hidden lg:flex flex-col w-64 min-h-screen bg-white border-r border-gray-200 shrink-0">
@@ -60,13 +70,15 @@ export default function Sidebar({ items, userName, userRole, userInitials, baseP
             <p className="text-xs text-gray-500 capitalize">{userRole}</p>
           </div>
         </div>
-        <Link
-          to="/login"
-          className="mt-2 flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        <button
+          type="button"
+          id="btn-signout"
+          onClick={handleSignOut}
+          className="mt-2 w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
         >
           <LogOut size={16} />
           <span>Sign out</span>
-        </Link>
+        </button>
       </div>
     </aside>
   );
