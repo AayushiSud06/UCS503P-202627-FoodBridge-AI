@@ -1,0 +1,235 @@
+# ARCHITECTURE — FoodLink / FoodBridge-AI
+
+> Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
+> `PROJECT_STATE.md`. Verified against commit `5264fb3`.
+
+## Shape
+
+```
+React 18 SPA (Vite)                    FastAPI (uvicorn, ASGI)
+  AuthProvider  (identity)               CORSMiddleware
+  AppProvider   (domain state)           5 routers
+  BrowserRouter → ProtectedRoute         Depends(): get_db, get_current_user,
+       ↓                                           require_roles
+  lib/api.ts  ── the ONLY fetch ──HTTP──►  matching.py · serialize.py · security.py
+       Bearer token, ApiError,                     ↓
+       global 401 handler               SQLAlchemy 2.0 ORM (no raw SQL)
+                                                   ↓
+  dev:  Vite proxies /api → :8000       SQLite ./foodlink.db
+        (same origin, no CORS)          └─ Postgres via DATABASE_URL, no code change
+  prod: cross-origin, CORS applies
+```
+
+**External services: none.** No email, SMS, push, payments, maps, object storage, or
+any third-party API. The backend makes zero outbound HTTP requests.
+
+## Stack
+
+**Backend** — FastAPI ≥0.115 · SQLAlchemy 2.0 (typed `Mapped[...]`) · Pydantic 2.9 ·
+PyJWT · bcrypt · uvicorn · python-multipart (login is OAuth2 form-encoded).
+Tests: pytest ≥8.3 + httpx.
+**Frontend** — React 18.3 · TypeScript 5.5 · Vite 5.4 · React Router 6.26 ·
+Tailwind 3.4 · lucide-react. No Redux, no Axios, no form library, no test framework.
+**Python** — needs 3.10+ in practice (`X | None` syntax) despite `pyproject.toml`.
+
+## Backend layout — `code/foodlink/`
+
+| Module | Responsibility |
+|---|---|
+| `main.py` | App, CORS, mounts 5 routers, `/api/health`. Lifespan runs `create_all`. |
+| `config.py` | `Settings` from env, `@lru_cache`. All deployment variance lives here. |
+| `database.py` | Engine, `SessionLocal`, `Base`, `get_db` generator dependency. |
+| `models.py` | 6 tables + `UserRole` + `DonationStatus` + **`ALLOWED_TRANSITIONS`** + `SELF_SIGNUP_ROLES` + `UtcDateTime`. The most important file. |
+| `schemas.py` | All request/response shapes. `alias_generator=to_camel`. Field constraints. |
+| `security.py` | 73 lines: bcrypt, JWT mint/verify, `get_current_user`, `require_roles`. |
+| `matching.py` | Haversine + 5 scoring functions + `WEIGHTS` + `rank_recipients`. **Pure — no DB access**, so unit-testable. |
+| `serialize.py` | `donation_out()` — ORM row + relations → wire shape; computes `distanceKm` live. |
+| `routers/` | `auth` · `admin` · `donations` · `organisations` · `metrics` |
+| `cli.py` | `create-admin`, `promote`, `reset-password`, `list-admins`. Bootstrap path. |
+| `seed.py` | Demo data with deadlines relative to run time. |
+
+**Layering is 3-tier, not 4:** router (HTTP + validation + business logic + ORM
+calls) over shared domain modules. There is **no service layer and no repository
+layer** — deliberate, see D-07.
+
+## Frontend layout — `frontend/src/`
+
+| Path | Responsibility |
+|---|---|
+| `lib/api.ts` | Only `fetch` in the app. Token attach, `ApiError`/`NetworkError`, global 401, wire types mirroring Pydantic. |
+| `lib/adapters.ts` | Wire types → app domain types. The seam preventing backend shapes leaking into components. |
+| `lib/hooks.ts` | `useAction` (keyed in-flight state + toasts), `useMatchAnalysis`. |
+| `context/AuthContext.tsx` | Identity: boot token→user exchange, sign in/up/out, 401 handling with a `useRef` re-entrancy guard. |
+| `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. |
+| `components/ProtectedRoute.tsx` | Route guard. **UX affordance, not a security control.** |
+| `pages/` (29 files) | Desktop portals: `donor/`, `ngo/`, `volunteer/`, `admin/`. |
+| `mobile/` (26 files) | Phone layouts at `/m/*` with an inner `MobileRole` guard. |
+| `types/index.ts` | App-side domain types (`DonationStatus` union, etc.). |
+
+## Database — 6 tables
+
+```
+users ──1:1?── recipients ──1:N── requirements
+  │              │
+  │  1:1?        │ 1:N
+  ├── volunteers │
+  │      │ 1:N   │
+  └─1:N─ donations ──1:N── status_events   (append-only, server-stamped)
+     (as donor)   ▲              ▲
+                  └─ recipient_id (null until ACCEPTED)
+                  └─ volunteer_id (null until VOLUNTEER_ASSIGNED)
+```
+
+- `users` — **single-table inheritance**: all 4 roles, one `role` column. Auth is one
+  indexed query regardless of role.
+- `recipients` / `volunteers` — optional 1:1 satellites created as a side effect of
+  registration. Without them an NGO account could authenticate but not accept.
+- `donations` — central entity. Stores coordinates (not distance) and an **absolute**
+  `pickup_deadline`. `match_score` is frozen at acceptance.
+- `status_events` — **the key structure.** Append-only, `occurred_at` stamped by the
+  server, never from a client. Every metric derives from it.
+- `requirements` — standing needs, so demand is visible before supply.
+
+**No many-to-many relationships. No migrations.** Indexes cover the real access
+patterns: status, deadline, owner FKs, `status_events.donation_id`.
+
+**`UtcDateTime`** (`models.py`) is a `TypeDecorator` normalising every datetime to
+timezone-aware UTC in both directions. It exists because SQLite has no timezone type
+and would otherwise return naive wall-clock times that a browser reads as local —
+silently shifting every deadline. Postgres passes through unchanged.
+
+## Domain model: the lifecycle
+
+9 states: `AVAILABLE → MATCHED → ACCEPTED → VOLUNTEER_ASSIGNED → PICKED_UP →
+DELIVERED → COMPLETED`, plus `CANCELLED` / `EXPIRED`.
+Terminal states have an empty transition set.
+
+Rules are **data, not conditionals**, in two dicts:
+- `models.ALLOWED_TRANSITIONS` — legal state graph. Violation → **409**.
+- `donations.TRANSITION_ROLES` — which role may cause each target. Violation → **403**
+  (with a narrow exception: the owning donor may always `CANCELLED`).
+
+| Target | Roles |
+|---|---|
+| `MATCHED` / `EXPIRED` | admin |
+| `ACCEPTED` / `COMPLETED` | ngo, admin |
+| `VOLUNTEER_ASSIGNED` / `PICKED_UP` / `DELIVERED` | volunteer, admin |
+| `CANCELLED` | owning donor, admin |
+
+⚠️ **`MATCHED` assigns nobody** — `recipient_id` stays null. It records a suggestion.
+Only `ACCEPTED` binds a recipient.
+⚠️ `COMPLETED` is the **NGO's** action, not the courier's — the party receiving
+confirms, not the party delivering.
+
+## Auth & authorization
+
+```
+register → bcrypt(gensalt) → users row (+ satellite row for ngo/volunteer)
+login    → bcrypt.checkpw → is_active check → JWT HS256 {sub, role, exp:+720min}
+storage  → localStorage['foodlink.token']   (token only; user re-fetched on boot)
+request  → Authorization: Bearer
+verify   → jwt.decode(algorithms=["HS256"]) → db.get(User, sub) → is_active
+```
+
+**Central design point:** the token carries `role`, but `get_current_user` **ignores
+it** and re-reads the user row every request. Costs one indexed PK lookup; buys
+immediate mid-session suspension and immediate role changes.
+
+**Four authorization layers:** role (`require_roles`) → ownership (query scoping /
+explicit comparison) → lifecycle legality → trust (`is_verified`).
+
+**Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
+enforces it, so the restriction appears in the OpenAPI contract. The first admin can
+only come from `python -m foodlink.cli create-admin`; subsequent ones from
+`POST /api/admin/users`. The admin router is gated **once** at the router level, so a
+new admin endpoint cannot be added unprotected.
+
+**Not present:** refresh tokens, token revocation/blocklist, rate limiting, MFA,
+email verification. Logout is client-side only.
+
+## API surface
+
+Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
+
+| Group | Endpoints |
+|---|---|
+| auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
+| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`** |
+| organisations | `GET /recipients` · `GET|PATCH /recipients/me` · `GET|POST /requirements` · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
+| metrics | `GET /metrics` |
+| admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
+| meta | `GET /health` (does **not** touch the DB) |
+
+`POST /donations/{id}/status` is the system's core endpoint — every lifecycle rule
+converges there.
+
+## Matching engine
+
+Weighted sum over 5 normalised 0–100 criteria; `WEIGHTS` sum to exactly 1.0:
+`distance .25 · quantity-fit .25 · capacity .20 · deadline .15 · reliability .15`.
+
+Three **hard gates** return `None` rather than a low score: unverified organisation,
+missing coordinates, beyond `MAX_MATCH_RADIUS_KM` (default 8).
+`reliability_score` is a computed property: `85` if fewer than 3 accepted donations
+(cold-start prior), else `100 × completed/accepted`.
+Returns per-criterion sub-scores plus human-readable `reasons` — the score is never a
+bare number.
+
+**Swap point:** replacing `score_pair` alone would substitute a learned ranker; the
+router and response shape do not change.
+
+## Data flow
+
+**Reads** — `GET` → router → `_loaded()` query with `selectinload(donor, recipient,
+volunteer→user, events)` → `donation_out()` → camelCase JSON → `adapters.ts` → app
+types → Context → components.
+The eager loading is the N+1 fix: 100 donations = 5 queries, not 401.
+`selectinload` (not `joinedload`) because a join on one-to-many `events` multiplies rows.
+
+**Writes** — component → `useAction.run(key, …)` → `AppContext` mutation → `api.ts` →
+`POST` → router validates (schema → business → lifecycle → role) → side effects →
+append `StatusEvent` → **single `commit()`** → response → **client re-reads the
+affected slice from the server** (write-then-refetch) → re-render + toast.
+
+**Metrics** — every transition appends to `status_events`; `GET /api/metrics` derives
+time-to-claim (created→ACCEPTED), handover (ACCEPTED→DELIVERED), rescue rate
+(COMPLETED ≤ deadline) and expiry-loss rate. Returns `null`, not `0`, when history is
+insufficient.
+
+## Configuration
+
+| Env var | Default | Note |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./foodlink.db` | ⚠️ **relative path** — differs by cwd |
+| `FOODLINK_SECRET_KEY` | insecure in-code default | ⚠️ app starts anyway if unset |
+| `ACCESS_TOKEN_MINUTES` | `720` (12 h) | |
+| `CORS_ORIGINS` | the two localhost dev origins | comma-separated allowlist, not `*` |
+| `MAX_MATCH_RADIUS_KM` | `8` | |
+| `FOODLINK_ADMIN_PASSWORD` | unset | scripted CLI bootstrap only |
+
+Frontend build-time: `VITE_API_URL` (empty = same origin), `VITE_API_PROXY` (dev
+proxy target). `VITE_*` values are **inlined at build time** — never secrets.
+
+## Architectural constraints
+
+1. **SQLite has one writer.** Blocks multi-worker uvicorn. Postgres is prerequisite
+   for horizontal scaling; the code already supports it via `DATABASE_URL`.
+2. **No migrations.** Schema changes currently require dropping the database.
+3. **The API is stateless** (JWT, no server session store) — so it *would* scale
+   horizontally once the database does. This is a real property, not an aspiration.
+4. **Invariants live in application code**, not the schema. The state machine,
+   coordinate ranges, and counter consistency are unenforced at the DB level;
+   anything writing outside the ORM can violate them.
+5. **Frontend route guards are not security.** The server re-checks every request.
+6. **The mobile UI is a separate URL space** (`/m/*`), not a viewport branch.
+7. **No background execution of any kind** — no scheduler, queue, worker, or
+   WebSocket. Anything periodic (the expiry sweep) needs an external caller.
+
+## Testing architecture
+
+37 integration tests through FastAPI's `TestClient`, **no mocks**, full stack against
+in-memory SQLite. `conftest.py` uses `StaticPool` — required because in-memory SQLite
+exists per connection, so the default pool would give test and request different
+databases. `app.dependency_overrides[get_db]` swaps the session in without
+application code knowing.
+Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.
