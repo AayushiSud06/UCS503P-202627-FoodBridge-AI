@@ -25,8 +25,13 @@ develop-eggs/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Anchored to the repository root. Unanchored, `lib/` matches a directory of
+# that name at *any* depth, and it silently swallowed `frontend/src/lib/` —
+# five hand-written TypeScript modules that never reached a clean checkout, so
+# the frontend built locally and failed in CI with TS2307. This pattern is for
+# setuptools output at the project root; keep it anchored.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
