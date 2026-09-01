@@ -1,7 +1,6 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against commit `ea0f499` + the uncommitted CI workflow. Context:
-> `PROJECT_STATE.md`.
+> Verified against commit `8386371`, working tree clean. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog* is **recommended work
@@ -12,10 +11,10 @@
 
 ## Current
 
-**Nothing in progress.** The only uncommitted change is `.github/workflows/ci.yml`
-(see *Completed*); the signing-key hardening, Alembic and donation read scoping are
-committed (`3e1e168`, `ea0f499`). No feature branch, no partial implementation, no
-TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
+**Nothing in progress.** The working tree is clean; `e47bd86` (CI) and `8386371`
+(the `frontend/src/lib/` gitignore fix) are committed locally but **not pushed**, so
+the CI failure they fix is still the last run visible on GitHub. No feature branch, no
+partial implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
 
 The hardening phase is finished — *Next* is empty.
 
@@ -129,7 +128,7 @@ One item is *sequenced* rather than blocked:
 
 ## Completed (verified in the repository)
 
-### Continuous integration — *uncommitted working-tree change*
+### Continuous integration — `e47bd86`, `8386371`
 - [x] **`.github/workflows/ci.yml`** runs on push to `master`/`main` and on every pull
       request, in two parallel jobs.
 - [x] Backend job (Python 3.13): `pip install -r code/requirements-dev.txt`, then
@@ -143,6 +142,11 @@ One item is *sequenced* rather than blocked:
       type regression fails CI. pip and npm caches keyed off the lockfile/requirements.
 - [x] `.github/workflows/mkdocs.yml` left alone — documentation deployment stays
       separate from validation. No application code changed. See `DECISIONS.md` D-25.
+- [x] **First run caught a real defect** (`8386371`): the frontend job failed with
+      TS2307 for `frontend/src/lib/{api,adapters,hooks,time,geo}`, which the root
+      `.gitignore`'s unanchored `lib/` had been excluding from every clone since the
+      files were written. Pattern anchored to `/lib/`; the five modules committed.
+      Backend job passed on the same run.
 
 ### Donation read authorization — `ea0f499`
 - [x] **`GET /api/donations` is scoped server-side by role and ownership**, whatever
@@ -235,7 +239,9 @@ One item is *sequenced* rather than blocked:
 ### Infrastructure
 - [x] Vite dev proxy `/api → :8000`, eliminating CORS in development
 - [x] `.claude/launch.json` frontend dev-server config
-- [x] `.gitignore` covering `.env`, `node_modules`; no `.db` or `.env` tracked
+- [x] `.gitignore` covering `.env`, `node_modules`; no `.db` or `.env` tracked.
+      `lib/` anchored to `/lib/` (`8386371`) after it hid `frontend/src/lib/` — the
+      neighbouring `build/`, `dist/`, `var/`, `share/` are still unanchored
 - [x] mkdocs documentation workflow — `.github/workflows/mkdocs.yml` (docs only;
       validation lives in `ci.yml`)
 - [x] `ai/` context scaffolding — `5264fb3`

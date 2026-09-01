@@ -2,9 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-01, commit `ea0f499` + the
-> uncommitted CI workflow, branch `master`. The signing-key hardening, Alembic and
-> donation read scoping described below are now committed (`3e1e168`, `ea0f499`).
+> Last verified against the repository: 2026-09-01, commit `8386371`, branch
+> `master`, working tree clean. Not yet pushed: `e47bd86` (CI) and `8386371`
+> (the .gitignore fix below).
 
 ## What this project is
 
@@ -44,11 +44,23 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- *(uncommitted)* — **CI.** `.github/workflows/ci.yml` runs on every push to
+- `8386371` — **`frontend/src/lib/` was never in the repository.** The vendored
+  Python `.gitignore` template's unanchored `lib/` (under "Distribution / packaging")
+  matches a directory of that name at *any* depth, so it silently swallowed five
+  hand-written TypeScript modules — `api`, `adapters`, `hooks`, `time`, `geo`. They
+  never appeared as untracked, existed in every developer's working tree, and were
+  absent from every clone. CI's first run found it: TS2307 on all five. The pattern
+  is now `/lib/`, anchored to the root where setuptools output would be, and the
+  modules are committed. No application code or import changed.
+  ⚠️ **Lesson worth keeping:** an unanchored `.gitignore` pattern applies at every
+  depth. `build/`, `dist/`, `var/`, `share/` in the same block are still unanchored
+  and would do the same to a frontend directory of that name.
+- `e47bd86` — **CI.** `.github/workflows/ci.yml` runs on every push to
   `master`/`main` and every pull request: a backend job (`pytest code/tests`, then
   `alembic upgrade head` + `alembic check` against a throwaway SQLite file) and a
   frontend job (`npm ci` + `npm run build`, which is `tsc && vite build`). The
   mkdocs workflow is untouched. No application code changed. See `DECISIONS.md` D-25.
+  Its first run already paid for itself — see the entry above.
 - `ea0f499` — **Donation reads scoped by role and ownership.** `GET /api/donations`
   no longer returns every record to any authenticated account, and `GET /api/donations/{id}`
   (plus `/matches`) applies the same scope in the query — an unauthorised id returns the
