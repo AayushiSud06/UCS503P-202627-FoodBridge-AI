@@ -449,3 +449,44 @@ project runs more than one process against Postgres. Revisions render with
 later rename of that class cannot break migrations that already ran. Autogenerate still
 reads a column rename as a drop plus an add — revisions must be read before they are
 committed.
+
+---
+
+## D-24 · Donation read scope is a WHERE clause, and denial is a 404 **[documented]**
+
+**Decision.** `routers/donations._readable_by(db, user)` returns the set of donations a
+caller may read as a SQLAlchemy WHERE clause — or `None`, meaning unrestricted, for an
+administrator. `GET /donations`, `GET /donations/{id}` and `GET /donations/{id}/matches`
+all apply that one clause. An id outside the caller's scope is filtered in the query, so
+it returns the same `404 Donation not found` as an id that never existed.
+
+**Reasoning.**
+
+- **One clause, both endpoints.** The gap being closed was that list scoping and
+  id lookup disagreed — `mine=false` returned everything and `/{id}` checked nothing.
+  Deriving both from the same function is what makes "you cannot get round the list by
+  knowing an id" a property rather than a pair of checks that can drift apart.
+- **Scoping in SQL, not after the fetch.** The database never hands back rows the caller
+  may not see, so there is no unfiltered object to leak through a later code path, and
+  `limit` counts rows the caller can actually read.
+- **404, not 403.** A 403 on a real id and a 404 on a fake one together answer "does
+  donation 812 exist?" — which is part of what the scoping withholds (donations carry
+  exact coordinates and donor names). This follows D-18's reasoning for the login
+  message. Consequence: an authorisation failure is indistinguishable from a typo, which
+  is worse for debugging and accepted deliberately.
+- **`mine` stays a convenience filter.** It narrows within the scope; it is no longer
+  load-bearing for authorisation. The frontend asks for the whole list and filters
+  client-side (`AppContext.load`), so the server had to be the boundary regardless.
+- **The scope map fails closed.** A role with no branch returns `false()` and reads
+  nothing, rather than falling through to everyone's records.
+- **`/matches` follows the donation.** The ranking explains a specific donation, so
+  exposing it for an unreadable donation would leak the donation itself plus the
+  recipient names and distances around it.
+
+**Constraints.** The volunteer scope — unclaimed `ACCEPTED` pickups plus their own
+assignments — is what the data model can express: there is **no** volunteer/donation
+eligibility relationship in the schema, so "donations a courier is eligible for" can only
+mean "not yet claimed". A geographic or availability-based courier scope would need a new
+relationship. The write path is untouched: `update_status` still uses the unscoped
+`_get_or_404`, because its authorisation is `TRANSITION_ROLES` plus ownership, and the
+claim step legitimately acts on a donation before the courier is bound to it.

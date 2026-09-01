@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import and_, false, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
@@ -35,6 +35,11 @@ TRANSITION_ROLES: dict[DonationStatus, set[UserRole]] = {
     DonationStatus.EXPIRED: {UserRole.admin},
 }
 
+#: The states in which a donation is still up for grabs — no organisation is
+#: bound to it, so every organisation may see it. This is the pool an NGO
+#: browses; `MATCHED` is in it because a match is a suggestion, not a claim.
+OPEN_TO_RECIPIENTS: set[DonationStatus] = {DonationStatus.AVAILABLE, DonationStatus.MATCHED}
+
 
 def _loaded(db: Session):
     return select(Donation).options(
@@ -46,7 +51,76 @@ def _loaded(db: Session):
 
 
 def _get_or_404(db: Session, donation_id: int) -> Donation:
+    """Any donation by id, with no read scoping.
+
+    For paths that have already authorised the caller some other way — the
+    lifecycle endpoint, which is gated by `TRANSITION_ROLES` and by ownership,
+    and the response of a write. Read endpoints must use
+    `_get_readable_or_404` instead.
+    """
     donation = db.scalar(_loaded(db).where(Donation.id == donation_id))
+    if donation is None:
+        raise HTTPException(status_code=404, detail="Donation not found")
+    return donation
+
+
+def _readable_by(db: Session, user: User):
+    """The donations `user` may read, as a WHERE clause — or None for all of them.
+
+    Read scope follows the work each role actually does, so it is the same
+    clause for the list and for a lookup by id:
+
+    * donor — the donations they posted, and nothing else.
+    * ngo — the open pool every organisation is invited to consider, plus the
+      donations bound to their own organisation once they accept one.
+    * volunteer — pickups that are waiting for a courier, plus every donation
+      they are the courier for, whatever state it has reached (their history).
+    * admin — unrestricted.
+
+    A recipient/courier profile that does not exist yet narrows the clause
+    rather than widening it: such an account still sees the open pool, but has
+    nothing of its own to add.
+    """
+    if user.role is UserRole.admin:
+        return None
+
+    if user.role is UserRole.donor:
+        return Donation.donor_id == user.id
+
+    if user.role is UserRole.ngo:
+        clause = Donation.status.in_(OPEN_TO_RECIPIENTS)
+        recipient = db.scalar(select(Recipient).where(Recipient.user_id == user.id))
+        if recipient is not None:
+            clause = or_(clause, Donation.recipient_id == recipient.id)
+        return clause
+
+    if user.role is UserRole.volunteer:
+        clause = and_(
+            Donation.status == DonationStatus.ACCEPTED, Donation.volunteer_id.is_(None)
+        )
+        volunteer = db.scalar(select(Volunteer).where(Volunteer.user_id == user.id))
+        if volunteer is not None:
+            clause = or_(clause, Donation.volunteer_id == volunteer.id)
+        return clause
+
+    # Fail closed: a role added later reads nothing at all until it is given a
+    # scope here, rather than silently inheriting everyone else's records.
+    return false()
+
+
+def _get_readable_or_404(db: Session, donation_id: int, user: User) -> Donation:
+    """A donation the caller is allowed to read, or a 404.
+
+    The scope is applied in the query, so an unauthorised id is indistinguish-
+    able from one that does not exist. That is deliberate: a 403 here would
+    confirm the donation is real, which is part of what the scoping withholds.
+    """
+    stmt = _loaded(db).where(Donation.id == donation_id)
+    scope = _readable_by(db, user)
+    if scope is not None:
+        stmt = stmt.where(scope)
+
+    donation = db.scalar(stmt)
     if donation is None:
         raise HTTPException(status_code=404, detail="Donation not found")
     return donation
@@ -121,6 +195,13 @@ def list_donations(
 ) -> list[DonationOut]:
     stmt = _loaded(db).order_by(Donation.pickup_deadline)
 
+    # Scope first, and unconditionally: `mine` is a convenience filter the
+    # caller chooses, not the authorisation boundary. Leaving it out must
+    # narrow nothing away from what the caller is entitled to see.
+    scope = _readable_by(db, user)
+    if scope is not None:
+        stmt = stmt.where(scope)
+
     if status_filter:
         stmt = stmt.where(Donation.status.in_(status_filter))
 
@@ -143,7 +224,7 @@ def get_donation(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> DonationOut:
-    return donation_out(_get_or_404(db, donation_id))
+    return donation_out(_get_readable_or_404(db, donation_id, user))
 
 
 @router.get("/{donation_id}/matches", response_model=list[MatchOut])
@@ -154,7 +235,9 @@ def get_matches(
     user: User = Depends(get_current_user),
 ) -> list[MatchOut]:
     """Ranked recipients for this donation, with the reasoning for each."""
-    donation = _get_or_404(db, donation_id)
+    # Same read scope as the donation itself: the reasoning describes a
+    # donation, so seeing it is seeing the donation.
+    donation = _get_readable_or_404(db, donation_id, user)
     recipients = list(db.scalars(select(Recipient)))
     ranked = rank_recipients(
         donation, recipients, radius_km=settings.max_match_radius_km, limit=limit

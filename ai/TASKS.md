@@ -1,6 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against commit `5264fb3`. Context: `PROJECT_STATE.md`.
+> Verified against commit `b2e696b` + uncommitted working-tree changes. Context:
+> `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog* is **recommended work
@@ -11,27 +12,23 @@
 
 ## Current
 
-**Nothing in progress**, but the working tree is **not clean**: the signing-key
-hardening and the Alembic migration system are both complete and uncommitted (see
-*Completed*). No feature branch, no partial implementation, no TODO/FIXME markers in
-`code/foodlink/` or `frontend/src/`.
+**Nothing in progress**, but the working tree is **not clean**: donation read scoping is
+complete and uncommitted (see *Completed*), alongside the signing-key hardening and the
+Alembic migration system. No feature branch, no partial implementation, no TODO/FIXME
+markers in `code/foodlink/` or `frontend/src/`.
 
-Two of the three *Next* items are done. Hardening is the current phase.
+Hardening is the current phase; CI is the one *Next* item left.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-These two unblock everything else and are the stated immediate priorities.
-(Alembic, formerly first here, is done — see *Completed*.)
+Alembic and donation read scoping, formerly the other two items here, are both done —
+see *Completed*.
 
-- [ ] **Scope donation reads by role and ownership.** `GET /api/donations` defaults to
-      `mine=false`; `GET /api/donations/{id}` has no ownership check. Donors should see
-      their own, NGOs available + their accepted, volunteers assignable + their own.
-      Keep admin unrestricted. *~2 h. Largest authorization gap.*
 - [ ] **Add CI.** GitHub Actions running `pytest code/tests` and
       `npm run build --prefix frontend` (the build runs `tsc`, catching type
-      regressions). *~30 min. 67 tests currently exist and never run automatically.*
+      regressions). *~30 min. 80 tests currently exist and never run automatically.*
       Note: CI must export `FOODLINK_SECRET_KEY` or rely on `conftest.py`'s own key —
       the app is now fail-closed without one. Worth adding `alembic check` to catch a
       model change committed without a revision (`test_migrations.py` already does this
@@ -136,6 +133,22 @@ One item is *sequenced* rather than blocked:
 
 ## Completed (verified in the repository)
 
+### Donation read authorization — *uncommitted working-tree change*
+- [x] **`GET /api/donations` is scoped server-side by role and ownership**, whatever
+      `mine` is set to. `mine` remains a narrowing convenience filter only.
+- [x] **`GET /api/donations/{id}` applies the identical scope**, in the query, so an
+      unauthorised id returns the same 404 as a nonexistent one — no existence leak.
+      `GET /api/donations/{id}/matches` follows the same scope.
+- [x] Scope: donor → their own · ngo → `AVAILABLE`/`MATCHED` plus their organisation's
+      accepted · volunteer → unclaimed `ACCEPTED` plus their own assignments · admin →
+      unrestricted. One helper (`_readable_by`) serves all three endpoints, and fails
+      closed for a role it does not know. See `DECISIONS.md` D-24.
+- [x] Lifecycle, matching and authentication untouched — `update_status` still resolves
+      the donation unscoped, because its own role/ownership gates authorise it.
+- [x] 13 tests in `code/tests/test_donation_reads.py`, including a matrix asserting the
+      id lookup and the list agree for every role. Six of them fail against the previous
+      code; the full suite is 80 passing.
+
 ### Database migrations — *uncommitted working-tree change*
 - [x] **Alembic added** — `code/alembic.ini` + `code/migrations/`. `env.py` takes the
       URL from `Settings` rather than the ini, so no environment-specific value is
@@ -191,7 +204,8 @@ One item is *sequenced* rather than blocked:
       `getpass` prompting
 - [x] Seed script with deadlines relative to run time
 - [x] 37 integration tests, no mocks, in-memory SQLite via `StaticPool` +
-      `dependency_overrides` — **all passing** (59 total with the config tests above)
+      `dependency_overrides` — **all passing** (80 total today, with the config,
+      migration and read-scope tests above)
 
 ### Frontend
 - [x] Four role portals (donor, ngo, volunteer, admin) with nested layouts — `eaeb51d`

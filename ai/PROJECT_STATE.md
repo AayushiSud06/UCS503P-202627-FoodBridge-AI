@@ -2,8 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-01, commit `5264fb3` + uncommitted
-> working-tree changes (signing-key hardening, Alembic), branch `master`.
+> Last verified against the repository: 2026-09-01, commit `b2e696b` + uncommitted
+> working-tree changes (signing-key hardening, Alembic, donation read scoping),
+> branch `master`.
 
 ## What this project is
 
@@ -27,9 +28,9 @@ as ML.
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers |
+| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers, donation reads scoped by role/ownership |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
-| Backend tests | ✅ 67 tests passing (~21 s): 37 integration + 22 config + 8 migration |
+| Backend tests | ✅ 80 tests passing (~33 s): 37 integration + 13 read-scope + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ⚠️ Docs-only workflow; tests never run automatically |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -43,6 +44,11 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
+- *(uncommitted)* — **Donation reads scoped by role and ownership.** `GET /api/donations`
+  no longer returns every record to any authenticated account, and `GET /api/donations/{id}`
+  (plus `/matches`) applies the same scope in the query — an unauthorised id returns the
+  ordinary 404, so it does not confirm the donation exists. Admin stays unrestricted; the
+  lifecycle, matching and auth paths are untouched. 13 new tests. See `DECISIONS.md` D-24.
 - *(uncommitted)* — **Alembic migration system.** `code/alembic.ini` + `code/migrations/`;
   one revision (`ae4636b1e6d4`) representing the schema as it already was. All three
   `create_all` callers (`main.py` lifespan, `cli._session`, `seed`) now call
@@ -91,15 +97,18 @@ inside the app's lifespan, which is safe only because SQLite confines a deployme
 one process. Moving to Postgres with multiple uvicorn workers requires moving it to a
 deploy step first, or the workers race to migrate.
 
+✅ **Resolved:** donation reads were not scoped by ownership. `routers/donations._readable_by()`
+now returns the caller's read scope as a WHERE clause applied by the list, the id lookup
+and `/matches` alike, so knowing an id is not a way past the list (D-24). **Remaining
+read-exposure caveat, unchanged:** `GET /api/recipients` still returns every
+organisation's contact person and phone to any authenticated account, and
+`GET /api/metrics` is still platform-wide for everyone.
+
 ### High
-2. **Donation reads are not scoped by ownership.** `GET /api/donations` defaults to
-   `mine=false` and `GET /api/donations/{id}` has no ownership check, so any
-   authenticated account can read every donation including exact coordinates and
-   donor names. `GET /api/recipients` likewise exposes contact person and phone.
 3. **No rate limiting anywhere.** Login is brute-forceable; bcrypt cost is the only
    bound.
 4. **Tests never run in CI.** Only `.github/workflows/mkdocs.yml` exists and it
-   deploys documentation. A commit breaking all 67 tests merges with no signal.
+   deploys documentation. A commit breaking all 80 tests merges with no signal.
 
 ### Medium
 5. **Courier claim is a read-then-write race.** The guard in `update_status` reads
@@ -155,8 +164,8 @@ deploy step first, or the workers race to migrate.
 
 ## Immediate priorities
 
-1. Scope donation reads by role/ownership
-2. Add CI running `pytest` + `npm run build` (and `alembic check`)
+1. Add CI running `pytest` + `npm run build` (and `alembic check`)
+2. Scope `GET /api/recipients` — the remaining unscoped read of personal contact data
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

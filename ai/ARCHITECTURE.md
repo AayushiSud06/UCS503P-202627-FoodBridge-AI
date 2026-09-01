@@ -1,7 +1,8 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against commit `5264fb3`.
+> `PROJECT_STATE.md`. Verified against commit `b2e696b` + uncommitted working-tree
+> changes.
 
 ## Shape
 
@@ -150,6 +151,14 @@ immediate mid-session suspension and immediate role changes.
 **Four authorization layers:** role (`require_roles`) → ownership (query scoping /
 explicit comparison) → lifecycle legality → trust (`is_verified`).
 
+**Donation reads are scoped server-side** by `routers/donations._readable_by()`, which
+returns the caller's read scope as a SQLAlchemy WHERE clause (`None` for admin). The
+list, the lookup by id and `/matches` all apply the same clause, so an id the caller
+may not read returns the ordinary 404 rather than a 403 that would confirm it exists.
+Scope: donor → their own; ngo → `AVAILABLE`/`MATCHED` plus their own organisation's;
+volunteer → unclaimed `ACCEPTED` plus their own assignments; admin → everything.
+See `DECISIONS.md` D-24.
+
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
 only come from `python -m foodlink.cli create-admin`; subsequent ones from
@@ -166,7 +175,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 | Group | Endpoints |
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
-| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`** |
+| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`** |
 | organisations | `GET /recipients` · `GET|PATCH /recipients/me` · `GET|POST /requirements` · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
@@ -248,5 +257,6 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests and 8 migration tests (`test_migrations.py`, temp file
-databases, never `DATABASE_URL`) — 67 in total.
+databases, never `DATABASE_URL`) — 80 in total. `test_donation_reads.py` holds the
+read-scope tests: for every role, what the list withholds the id lookup withholds too.
 Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.
