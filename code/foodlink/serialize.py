@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from .matching import haversine_km
 from .models import Donation
-from .schemas import DonationOut, StatusEventOut
+from .schemas import DonationOut, MatchOut, StatusEventOut
 
 
-def donation_out(donation: Donation) -> DonationOut:
+def donation_out(donation: Donation, *, viewer_match: MatchOut | None = None) -> DonationOut:
     """Flatten a donation and its relations into the client-facing shape.
 
     `distanceKm` is computed against the matched recipient rather than stored,
     so it is always consistent with the two locations it describes.
+
+    `viewerMatch` is passed in rather than computed here: it depends on who is
+    asking, which is a router's knowledge, not a row's. It stays optional so a
+    caller with no organisation simply omits it.
     """
     recipient = donation.recipient
     distance_km = None
@@ -50,6 +54,7 @@ def donation_out(donation: Donation) -> DonationOut:
         volunteer_id=donation.volunteer_id,
         volunteer_name=volunteer_name,
         match_score=donation.match_score,
+        viewer_match=viewer_match,
         distance_km=distance_km,
         created_at=donation.created_at,
         events=[

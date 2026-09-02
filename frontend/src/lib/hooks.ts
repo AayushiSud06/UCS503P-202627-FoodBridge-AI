@@ -76,8 +76,15 @@ export function useAction() {
  * It has to come from the server now: the weights, the service radius and the
  * reliability history all live there, and a second implementation in the
  * client would drift from the one the decision is actually made on.
+ *
+ * This reports the *leading* match, which is a donor-side question: "did what I
+ * posted find a home". An organisation asking how a donation scores for *itself*
+ * must not use this — that number arrives on the donation as `viewerMatch`, so
+ * the list and the panel showing it are reading one value rather than two live
+ * calls that round apart. Answering an NGO with the leader's ranking under its
+ * own heading is the contradiction this area was rebuilt around.
  */
-export function useMatchAnalysis(donationId: string | null, preferRecipientId?: string) {
+export function useMatchAnalysis(donationId: string | null) {
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
   const [recipientName, setRecipientName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -96,20 +103,15 @@ export function useMatchAnalysis(donationId: string | null, preferRecipientId?: 
     setError(null);
 
     api
-      .getMatches(Number(donationId), 10)
+      .getMatches(Number(donationId), 1)
       .then(matches => {
+        const chosen = matches[0];
         if (cancelled) return;
-        if (matches.length === 0) {
+        if (!chosen) {
           setAnalysis(null);
           setRecipientName('');
           return;
         }
-        // Prefer this account's own organisation — an NGO wants to know how
-        // *it* scores, not how the leader does. Fall back to the top match.
-        const mine = preferRecipientId
-          ? matches.find(m => String(m.recipientId) === preferRecipientId)
-          : undefined;
-        const chosen = mine ?? matches[0];
         setAnalysis(toMatchAnalysis(chosen));
         setRecipientName(chosen.recipientName);
       })
@@ -123,7 +125,7 @@ export function useMatchAnalysis(donationId: string | null, preferRecipientId?: 
     return () => {
       cancelled = true;
     };
-  }, [donationId, preferRecipientId]);
+  }, [donationId]);
 
   return { analysis, recipientName, isLoading, error };
 }

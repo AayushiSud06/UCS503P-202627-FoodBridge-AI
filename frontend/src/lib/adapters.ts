@@ -75,6 +75,7 @@ export function toDonation(api: ApiDonation): Donation {
     volunteerId: api.volunteerId !== null ? String(api.volunteerId) : undefined,
     volunteerName: api.volunteerName ?? undefined,
     matchScore: api.matchScore ?? undefined,
+    viewerMatch: api.viewerMatch ? toMatchAnalysis(api.viewerMatch) : undefined,
     distanceKm: api.distanceKm ?? undefined,
     matchedAt: eventTime(events, 'MATCHED'),
     acceptedAt: eventTime(events, 'ACCEPTED'),
@@ -138,6 +139,8 @@ export function toRequirement(api: ApiRequirement): NGORequirement {
 
 export function toMatchAnalysis(api: ApiMatch): MatchAnalysis {
   return {
+    recipientName: api.recipientName,
+    distanceKm: api.distanceKm,
     overallScore: api.overallScore,
     distanceScore: api.distanceScore,
     quantityScore: api.quantityScore,

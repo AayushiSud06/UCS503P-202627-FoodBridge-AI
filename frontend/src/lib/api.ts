@@ -249,7 +249,13 @@ export interface ApiDonation {
   recipientName: string | null;
   volunteerId: number | null;
   volunteerName: string | null;
+  /** Frozen at posting (the top match) and again at acceptance. Same for every reader. */
   matchScore: number | null;
+  /** The reader's own organisation ranked against this donation, breakdown and
+   *  all. Null unless the caller is an NGO and the donation is still open to
+   *  acceptance. Carrying the whole ranking is what stops a list and a panel
+   *  fetching two live scores that round apart. */
+  viewerMatch: ApiMatch | null;
   distanceKm: number | null;
   createdAt: string;
   events: ApiStatusEvent[];

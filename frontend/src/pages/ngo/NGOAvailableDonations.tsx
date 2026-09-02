@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Package, AlertCircle } from 'lucide-react';
 import { useApp, useDonations, useMyRecipient } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
-import { useAction, useMatchAnalysis } from '../../lib/hooks';
+import { useAction } from '../../lib/hooks';
 import type { Donation } from '../../types';
 import DonationCard from '../../components/DonationCard';
 import EmptyState from '../../components/EmptyState';
@@ -20,11 +20,11 @@ export default function NGOAvailableDonations() {
   const available = donations.filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status));
   const selectedDonation = donations.find(d => d.id === selectedId);
 
-  // Scores come from the server's ranker, against this account's own kitchen.
-  const { analysis, recipientName, isLoading: analysisLoading } = useMatchAnalysis(
-    selectedId,
-    user.role === 'ngo' ? user.entityId : undefined,
-  );
+  // The ranking arrives with the donation, already scored by the server against
+  // this account's own kitchen. It is deliberately not fetched again here: the
+  // card in the list on the left and this panel have to be the same number, and
+  // a second live call would decay a point away from the first one.
+  const analysis = selectedDonation?.viewerMatch;
 
   // An unverified organisation may browse but cannot take custody; saying so
   // up front beats letting them click and collect a 403.
@@ -97,15 +97,10 @@ export default function NGOAvailableDonations() {
           <div className="lg:col-span-2 space-y-4">
             {selectedDonation ? (
               <>
-                {analysisLoading ? (
-                  <div className="card p-12 text-center text-gray-400">
-                    <span className="inline-block w-5 h-5 border-2 border-gray-200 border-t-emerald-500 rounded-full animate-spin" />
-                    <p className="text-sm mt-3">Scoring this donation…</p>
-                  </div>
-                ) : analysis ? (
+                {analysis ? (
                   <MatchAnalysisPanel
                     analysis={analysis}
-                    recipientName={recipientName}
+                    recipientName={analysis.recipientName}
                     foodName={selectedDonation.foodName}
                     quantity={selectedDonation.quantity}
                     unit={selectedDonation.unit}
@@ -113,7 +108,9 @@ export default function NGOAvailableDonations() {
                 ) : (
                   <div className="card p-6 text-center text-gray-500">
                     <p className="text-sm">
-                      No verified organisation is close enough to this pickup to be scored.
+                      {myRecipient?.name ?? 'Your organisation'} cannot be scored against this
+                      pickup — it is outside the collection radius, or still awaiting
+                      verification.
                     </p>
                   </div>
                 )}

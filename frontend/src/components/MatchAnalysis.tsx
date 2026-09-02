@@ -10,6 +10,14 @@ interface MatchAnalysisProps {
   unit?: string;
 }
 
+/** The same 90/75 boundaries `ScoreRow` colours by, said in words. */
+function compatibilityLabel(score: number): string {
+  if (score >= 90) return 'Excellent Compatibility';
+  if (score >= 75) return 'Good Compatibility';
+  if (score >= 50) return 'Fair Compatibility';
+  return 'Low Compatibility';
+}
+
 function ScoreRow({
   label,
   score,
@@ -80,7 +88,9 @@ export default function MatchAnalysisPanel({
         </div>
         <div className="text-right">
           <MatchScore score={analysis.overallScore} size="lg" />
-          <p className="text-[11px] font-semibold text-emerald-700 mt-1">High Compatibility</p>
+          <p className="text-[11px] font-semibold text-emerald-700 mt-1">
+            {compatibilityLabel(analysis.overallScore)}
+          </p>
         </div>
       </div>
 
@@ -123,9 +133,6 @@ export default function MatchAnalysisPanel({
             <p className="text-[11px] text-emerald-700">Historical intake reliability rating: {analysis.reliabilityScore}%</p>
           </div>
         </div>
-        <span className="text-xs font-extrabold text-emerald-800 bg-white px-2.5 py-1 rounded-lg shadow-sm border border-emerald-200">
-          95%+ Success Rate
-        </span>
       </div>
 
       {/* Why This Match Explanation */}

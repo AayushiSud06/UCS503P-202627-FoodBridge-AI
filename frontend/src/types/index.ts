@@ -62,7 +62,14 @@ export interface Donation {
   recipientName?: string;
   volunteerId?: string;
   volunteerName?: string;
-  matchScore?: number;      // 0-100, currently mock/rule-based
+  // Two different numbers, deliberately. `matchScore` is frozen and describes a
+  // decision — the top-ranked organisation when the donor posted, replaced by the
+  // accepting organisation's own score once one takes it — so it is the same for
+  // every reader. `viewerMatch` is the live ranking for *this* account's own
+  // kitchen, and is what an NGO deciding whether to accept is actually asking
+  // about. Anything labelled "your match" must use the second.
+  matchScore?: number;              // 0-100, server-side weighted heuristic
+  viewerMatch?: MatchAnalysis;      // only for an NGO reading an open donation
   distanceKm?: number;
   // Timeline timestamps
   matchedAt?: string;
@@ -120,6 +127,8 @@ export interface Delivery {
 }
 
 export interface MatchAnalysis {
+  recipientName: string;
+  distanceKm: number;
   overallScore: number;
   distanceScore: number;
   quantityScore: number;

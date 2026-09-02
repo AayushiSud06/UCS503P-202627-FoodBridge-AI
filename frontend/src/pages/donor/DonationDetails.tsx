@@ -92,7 +92,7 @@ export default function DonationDetails() {
             </div>
             {donation.matchScore !== undefined && (
               <span className="ml-auto text-sm font-bold text-purple-700 bg-purple-100 px-2 py-1 rounded-lg">
-                {donation.matchScore}% match
+                {donation.matchScore}% at acceptance
               </span>
             )}
           </div>

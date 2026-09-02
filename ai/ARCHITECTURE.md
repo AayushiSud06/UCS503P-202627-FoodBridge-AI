@@ -2,7 +2,7 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
 > `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
-> courier-claim concurrency commit (`e919f7b`), plus the requirement-lifecycle work
+> requirement-lifecycle commit (`1181adb`), plus the match-score consistency work
 > present in the working tree and uncommitted at the time of writing.
 
 ## Shape
@@ -207,7 +207,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 | Group | Endpoints |
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
-| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`** |
+| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30) |
 | organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
@@ -230,6 +230,21 @@ bare number.
 
 **Swap point:** replacing `score_pair` alone would substitute a learned ranker; the
 router and response shape do not change.
+
+⚠️ **Two scores reach the client, and they answer different questions** (D-30):
+
+| Field | What it is | Where it is shown |
+|---|---|---|
+| `DonationOut.matchScore` | The stored `Donation.match_score`. Frozen: the top match at posting, re-frozen as the accepting organisation's own score at acceptance. The same number for every reader. | Donor screens, admin screens, and the NGO's *accepted* screen — labelled "at acceptance" |
+| `DonationOut.viewerMatch` | The **calling** organisation's own ranking, computed per request by `routers/donations._viewer_match()` through the same `score_pair`. A full `MatchOut`, not just a total. Null unless the caller is an `ngo` with a profile **and** the donation is still in `OPEN_TO_RECIPIENTS`. | Every NGO surface that says "match": desktop and mobile available lists, the dashboard row, and the analysis panel |
+
+Confusing the two is what let one donation read 94% on an NGO's list and 64% in the
+panel beside it. The whole `MatchOut` travels rather than the total alone because every
+criterion moves with the clock, so two independent live calls round apart: the list and
+the panel now read **one object from one request**. The NGO screens therefore no longer
+call `GET /donations/{id}/matches` — `lib/hooks.useMatchAnalysis` is donor-side only and
+reports the leading match. `seed.py` ranks through `rank_recipients` like the API rather
+than writing a literal score.
 
 ## Data flow
 
@@ -299,7 +314,7 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 137 in total. `test_donation_reads.py` (13) and
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 148 in total. `test_donation_reads.py` (13) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.
@@ -313,6 +328,12 @@ fail against the pre-fix code with a `200` where a `409` belongs.
 `test_requirement_lifecycle.py` (15) covers the requirement lifecycle as an ownership
 boundary: who may revise, retire and reopen a requirement, that another organisation's id
 is a 404, and that a retired one leaves `GET /api/requirements` without being deleted.
+`test_match_score_consistency.py` (11) pins the frozen/live distinction: two kitchens at
+different distances read one donation, and what the list gives each of them has to equal
+what `/matches` gives the same organisation. It also asserts the frozen number is *not*
+the reader's own — the property that made the UI bug possible — that the breakdown
+reconciles to its headline by the published weights, and, as a unit test on `score_pair`
+with an injected `now`, that a stored score cannot track the deadline it scored.
 `test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the

@@ -59,12 +59,17 @@ export default function DonationCard({
         </span>
       </div>
 
-      {/* NGO match score */}
-      {viewAs === 'ngo' && donation.matchScore !== undefined && (
+      {/* NGO match score — this kitchen's own, not the leader's. `matchScore`
+          is the top match frozen at posting and belongs to whichever
+          organisation won it, so showing it here read as a promise to the
+          wrong reader. */}
+      {viewAs === 'ngo' && donation.viewerMatch && (
         <div className="flex items-center gap-2">
-          <MatchScore score={donation.matchScore} size="sm" showLabel={false} />
+          <MatchScore score={donation.viewerMatch.overallScore} size="sm" showLabel={false} />
           <div className="text-xs text-gray-500">
-            <span className="font-medium text-emerald-700">{donation.matchScore}% match</span>
+            <span className="font-medium text-emerald-700">
+              {donation.viewerMatch.overallScore}% match for you
+            </span>
             {donation.recipientName && <span> · {donation.recipientName}</span>}
           </div>
         </div>

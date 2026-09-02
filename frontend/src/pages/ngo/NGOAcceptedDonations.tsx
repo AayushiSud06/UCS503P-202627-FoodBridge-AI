@@ -107,9 +107,13 @@ export default function NGOAcceptedDonations() {
                     <p className="text-sm text-gray-500 mt-0.5">Origin: {selected.donorOrganization}</p>
                   </div>
 
+                  {/* Frozen at acceptance, deliberately: it is the number this
+                      organisation actually decided on. Re-scoring it now would
+                      slide as the pickup window closes and quietly rewrite the
+                      record of the decision. */}
                   {selected.matchScore && (
                     <div className="bg-purple-50 border border-purple-100 rounded-xl px-3 py-2 text-right">
-                      <p className="text-xs text-purple-600 font-semibold">AI Match Score</p>
+                      <p className="text-xs text-purple-600 font-semibold">Match score at acceptance</p>
                       <p className="text-xl font-extrabold text-purple-700">{selected.matchScore}%</p>
                     </div>
                   )}

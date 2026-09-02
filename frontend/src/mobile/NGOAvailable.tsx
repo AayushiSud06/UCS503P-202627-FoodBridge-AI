@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowRight, Check, Clock, MapPin, Package, Sparkles, X } from 'lucide-react';
 import { useDonations, useApp, useMyRecipient } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
-import { useAction, useMatchAnalysis } from '../lib/hooks';
+import { useAction } from '../lib/hooks';
 import { deadlineStatus, formatClock, URGENCY_STYLES, byUrgency } from '../lib/time';
 import type { Donation } from '../types';
 import { MEmpty, MSegmented, MMeter } from './parts';
@@ -23,12 +23,16 @@ export default function NGOAvailable() {
     .sort((a, b) => {
       if (sort === 'Nearest') return (a.distanceKm ?? 99) - (b.distanceKm ?? 99);
       if (sort === 'Closing soon') return byUrgency(a.pickupDeadline, b.pickupDeadline);
-      return (b.matchScore ?? 0) - (a.matchScore ?? 0);
+      // "Best match" means best *for this kitchen*, which is the same number
+      // the sheet below breaks down — not the frozen platform-wide top match.
+      return (b.viewerMatch?.overallScore ?? 0) - (a.viewerMatch?.overallScore ?? 0);
     });
 
   const selected = donations.find(d => d.id === openId) ?? null;
-  // Scored by the server, against this kitchen rather than a stand-in.
-  const { analysis } = useMatchAnalysis(openId, user.role === 'ngo' ? user.entityId : undefined);
+  // Scored by the server against this kitchen, and delivered with the donation
+  // — so the number on the card and the number in this sheet are one value,
+  // not two live calls a moment apart.
+  const analysis = selected?.viewerMatch;
 
   const awaitingVerification = myRecipient !== null && myRecipient.isVerified === false;
 
@@ -58,7 +62,7 @@ export default function NGOAvailable() {
         available.map(d => {
           const deadline = deadlineStatus(d.pickupDeadline);
           const urgency = URGENCY_STYLES[deadline.urgency];
-          const score = d.matchScore ?? 0;
+          const score = d.viewerMatch?.overallScore ?? 0;
           return (
             <button
               key={d.id}
@@ -72,7 +76,7 @@ export default function NGOAvailable() {
                     score >= 90 ? 'text-emerald-700' : 'text-gray-400'
                   }`}
                 >
-                  {d.matchScore ?? '–'}
+                  {d.viewerMatch?.overallScore ?? '–'}
                 </span>
                 <span className="block mt-1 text-[10px] font-semibold tracking-wider text-gray-400">
                   MATCH
@@ -172,7 +176,9 @@ export default function NGOAvailable() {
                 </>
               ) : (
                 <p className="px-5 py-8 text-sm text-gray-500 leading-relaxed">
-                  Scoring this donation…
+                  {myRecipient?.name ?? 'Your organisation'} cannot be scored against this
+                  pickup — it is outside the collection radius, or still awaiting
+                  verification.
                 </p>
               )}
             </div>

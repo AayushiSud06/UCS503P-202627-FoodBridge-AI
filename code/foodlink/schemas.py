@@ -179,6 +179,21 @@ class VolunteerUpdate(Schema):
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
+# ─── Matching ────────────────────────────────────────────────────────────────
+
+class MatchOut(Schema):
+    recipient_id: int
+    recipient_name: str
+    overall_score: int
+    distance_km: float
+    distance_score: int
+    quantity_score: int
+    capacity_score: int
+    deadline_score: int
+    reliability_score: int
+    reasons: list[str]
+
+
 # ─── Donations ───────────────────────────────────────────────────────────────
 
 class DonationCreate(Schema):
@@ -225,7 +240,26 @@ class DonationOut(Schema):
     recipient_name: str | None = None
     volunteer_id: int | None = None
     volunteer_name: str | None = None
+    #: Frozen, and about a *decision*: the top-ranked organisation's score when
+    #: the donor posted, replaced by the accepting organisation's own score when
+    #: one takes it. The same number for every reader.
     match_score: int | None = None
+    #: Live, and about the *reader*: this donation ranked against the calling
+    #: organisation, from the same `matching.score_pair` `/matches` reports.
+    #: Null unless the caller is an NGO with a profile and the donation is still
+    #: open to acceptance — outside that there is no offer on the table and
+    #: `match_score` is the number to show.
+    #:
+    #: The whole ranking travels rather than just its total, so that a screen
+    #: showing the headline and a screen showing the breakdown are reading one
+    #: object from one request. Two separate live calls would round differently
+    #: as the deadline decays between them, which is a smaller version of the
+    #: very inconsistency this field exists to remove.
+    #:
+    #: The two scores answer different questions and must never be relabelled as
+    #: each other: presenting `match_score` as the reader's own match is the
+    #: defect this field replaces.
+    viewer_match: MatchOut | None = None
     distance_km: float | None = None
     created_at: datetime
     events: list[StatusEventOut] = []
@@ -236,21 +270,6 @@ class StatusUpdate(Schema):
     #: Only meaningful on ACCEPTED — which recipient is taking it.
     recipient_id: int | None = None
     note: str | None = None
-
-
-# ─── Matching ────────────────────────────────────────────────────────────────
-
-class MatchOut(Schema):
-    recipient_id: int
-    recipient_name: str
-    overall_score: int
-    distance_km: float
-    distance_score: int
-    quantity_score: int
-    capacity_score: int
-    deadline_score: int
-    reliability_score: int
-    reasons: list[str]
 
 
 # ─── Requirements ────────────────────────────────────────────────────────────

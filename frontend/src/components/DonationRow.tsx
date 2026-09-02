@@ -80,16 +80,18 @@ export default function DonationRow({
         </div>
       </div>
 
-      {showMatch && donation.matchScore !== undefined && (
+      {/* `showMatch` is an NGO-side affordance, so it reports the reader's own
+          score rather than the frozen platform-wide top match. */}
+      {showMatch && donation.viewerMatch && (
         <div className="hidden md:block text-right shrink-0">
           <p
             className={`font-display text-lg font-semibold ${
-              donation.matchScore >= 90 ? 'text-emerald-700' : 'text-amber-700'
+              donation.viewerMatch.overallScore >= 90 ? 'text-emerald-700' : 'text-amber-700'
             }`}
           >
-            {donation.matchScore}%
+            {donation.viewerMatch.overallScore}%
           </p>
-          <p className="text-[11px] text-gray-400">match</p>
+          <p className="text-[11px] text-gray-400">your match</p>
         </div>
       )}
 

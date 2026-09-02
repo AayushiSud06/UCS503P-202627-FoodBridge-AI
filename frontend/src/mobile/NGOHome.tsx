@@ -20,7 +20,10 @@ export default function NGOHome() {
   const received = mine.filter(d => d.status === 'COMPLETED');
   const mealsReceived = received.reduce((s, d) => s + d.quantity, 0);
 
-  const topMatches = [...available].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)).slice(0, 3);
+  // Best *for this kitchen* — see the note on `viewerMatch` in `types`.
+  const topMatches = [...available]
+    .sort((a, b) => (b.viewerMatch?.overallScore ?? 0) - (a.viewerMatch?.overallScore ?? 0))
+    .slice(0, 3);
   const standing = requirements[0];
 
   return (
@@ -75,7 +78,7 @@ export default function NGOHome() {
               className="w-full text-left flex items-center gap-4 px-5 py-3.5 bg-white border-b border-gray-100 active:bg-gray-50"
             >
               <span className="shrink-0 font-display font-semibold text-2xl text-emerald-700">
-                {d.matchScore ?? '–'}
+                {d.viewerMatch?.overallScore ?? '–'}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block font-medium text-gray-900 truncate">{d.foodName}</span>

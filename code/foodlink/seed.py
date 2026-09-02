@@ -13,7 +13,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from .config import get_settings
 from .database import SessionLocal
+from .matching import rank_recipients
 from .migrate import ensure_schema_current
 from .models import (
     Donation, DonationStatus, Recipient, Requirement, StatusEvent, User, UserRole, Volunteer,
@@ -107,6 +109,8 @@ def seed() -> None:
              DonationStatus.COMPLETED),
         ]
 
+        radius_km = get_settings().max_match_radius_km
+
         for i, (food, cat, qty, unit, hours, storage, target) in enumerate(plan):
             created = now - timedelta(hours=2)
             donation = Donation(
@@ -135,9 +139,24 @@ def seed() -> None:
                                    occurred_at=created + timedelta(minutes=offset)))
                 donation.status = step
                 if step is DonationStatus.MATCHED:
-                    donation.match_score = 94 - i * 3
+                    # Ranked, not invented. This used to write a literal (94, 91,
+                    # 88, …), which then sat on screen beside the real ranking
+                    # and disagreed with it — demo data has to come from the same
+                    # matcher the API uses or the demo is showing a different
+                    # product.
+                    ranked = rank_recipients(
+                        donation, recipients, radius_km=radius_km, limit=1
+                    )
+                    if ranked:
+                        donation.match_score = ranked[0].overall_score
                 if step is DonationStatus.ACCEPTED:
-                    donation.recipient_id = recipients[i % len(recipients)].id
+                    taker = recipients[i % len(recipients)]
+                    donation.recipient_id = taker.id
+                    # Re-frozen against the organisation that actually took it,
+                    # exactly as `update_status` does.
+                    ranked = rank_recipients(donation, [taker], radius_km=radius_km, limit=1)
+                    if ranked:
+                        donation.match_score = ranked[0].overall_score
                 if step is DonationStatus.VOLUNTEER_ASSIGNED:
                     donation.volunteer_id = volunteers[i % len(volunteers)].id
                 if step is target:

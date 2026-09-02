@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..matching import rank_recipients
+from ..matching import rank_recipients, score_pair
 from ..models import (
     ALLOWED_TRANSITIONS, Donation, DonationStatus, Recipient, StatusEvent, User,
     UserRole, Volunteer,
@@ -126,6 +126,49 @@ def _get_readable_or_404(db: Session, donation_id: int, user: User) -> Donation:
     return donation
 
 
+def _viewer_recipient(db: Session, user: User) -> Recipient | None:
+    """The organisation the caller reads on behalf of, if there is one.
+
+    Only an NGO account has one. A donor, a courier and an administrator are
+    not a party to any pairing, so there is nothing viewer-specific to score
+    for them.
+    """
+    if user.role is not UserRole.ngo:
+        return None
+    return db.scalar(select(Recipient).where(Recipient.user_id == user.id))
+
+
+def _viewer_match(donation: Donation, recipient: Recipient | None) -> MatchOut | None:
+    """How this donation ranks for the reader's own organisation, right now.
+
+    This is what the *decision* surfaces are about: an organisation browsing the
+    open pool is asking "how well does this suit us", and `Donation.match_score`
+    answers a different question — it is the top match frozen at posting time,
+    about whichever organisation happened to rank first. Showing that under a
+    heading saying "match" is what let one donation read 94% on the list and 64%
+    in the analysis panel beside it.
+
+    It goes through `score_pair`, the same function `/matches` ranks with, so
+    there is still only one implementation of the scoring.
+
+    The whole `MatchOut` travels, not just `overall_score`, so the headline and
+    the breakdown are one object from one request. Every criterion moves with
+    the clock — `deadline_score` decays continuously — so two live calls a
+    minute apart legitimately round to different totals, and a list and a panel
+    that each fetched their own would disagree by a point for no reason a reader
+    could see.
+
+    Null once the donation is no longer open to acceptance: there is no offer
+    left to weigh, a live score would carry on decaying past the decision, and
+    the frozen `match_score` is by then the honest number — the one the
+    accepting organisation actually acted on.
+    """
+    if recipient is None or donation.status not in OPEN_TO_RECIPIENTS:
+        return None
+    result = score_pair(donation, recipient, radius_km=settings.max_match_radius_km)
+    return MatchOut(**result.__dict__) if result is not None else None
+
+
 def _claim_pickup(
     db: Session, donation_id: int, from_status: DonationStatus, volunteer_id: int
 ) -> bool:
@@ -221,7 +264,8 @@ def create_donation(
         _record(db, donation, DonationStatus.MATCHED, user, note=f"Top match: {ranked[0].recipient_name}")
 
     db.commit()
-    return donation_out(_get_or_404(db, donation.id))
+    fresh = _get_or_404(db, donation.id)
+    return donation_out(fresh, viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)))
 
 
 @router.get("", response_model=list[DonationOut])
@@ -254,7 +298,13 @@ def list_donations(
             volunteer = db.scalar(select(Volunteer).where(Volunteer.user_id == user.id))
             stmt = stmt.where(Donation.volunteer_id == (volunteer.id if volunteer else -1))
 
-    return [donation_out(d) for d in db.scalars(stmt.limit(limit))]
+    # One lookup of the caller's own organisation for the whole page; the
+    # scoring itself is pure arithmetic over rows already in memory.
+    viewer = _viewer_recipient(db, user)
+    return [
+        donation_out(d, viewer_match=_viewer_match(d, viewer))
+        for d in db.scalars(stmt.limit(limit))
+    ]
 
 
 @router.get("/{donation_id}", response_model=DonationOut)
@@ -263,7 +313,10 @@ def get_donation(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> DonationOut:
-    return donation_out(_get_readable_or_404(db, donation_id, user))
+    donation = _get_readable_or_404(db, donation_id, user)
+    return donation_out(
+        donation, viewer_match=_viewer_match(donation, _viewer_recipient(db, user))
+    )
 
 
 @router.get("/{donation_id}/matches", response_model=list[MatchOut])
@@ -382,4 +435,5 @@ def update_status(
 
     _record(db, donation, target, user, note=body.note)
     db.commit()
-    return donation_out(_get_or_404(db, donation_id))
+    fresh = _get_or_404(db, donation_id)
+    return donation_out(fresh, viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)))

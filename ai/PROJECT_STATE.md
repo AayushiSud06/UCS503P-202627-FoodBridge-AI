@@ -3,9 +3,9 @@
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-02, branch `master`. The most recent
-> implementation commit is `e919f7b` (courier-claim concurrency). The requirement
-> lifecycle was verified in the working tree, uncommitted at the time of writing; it is
-> the only source change outside that commit.
+> implementation commit is `1181adb` (requirement lifecycle). The match-score
+> consistency work was verified in the working tree, uncommitted at the time of writing;
+> it is the only source change outside that commit.
 
 ## What this project is
 
@@ -33,7 +33,7 @@ as ML.
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 137 tests passing (~80 s): 37 integration + 15 requirement-lifecycle + 13 donation-read-scope + 11 recipient-read-scope + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
+| Backend tests | ✅ 148 tests passing (~100 s): 37 integration + 15 requirement-lifecycle + 13 donation-read-scope + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -47,7 +47,26 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **working tree (uncommitted at verification)** — **Requirements have a lifecycle.**
+- **working tree (uncommitted at verification)** — **One donation, one kitchen, one
+  number.** The NGO's *Available Donations* list showed 94% for a donation whose analysis
+  panel, on the same screen, said 64%. Both were right and neither answered the label's
+  question: the list rendered `Donation.match_score`, which is **frozen at posting and
+  describes whichever organisation ranked first platform-wide**, while the panel scored
+  the reader's own pairing live. Two causes, both real — a different organisation, and a
+  different moment (`deadline_score` decays continuously). `seed.py` supplied a third: it
+  wrote a literal `94 - i*3` into the column, which is the exact 94 QA saw.
+  `DonationOut` now carries **`viewerMatch`**, the calling organisation's own ranking
+  computed per request through the same `score_pair`, and every NGO surface saying
+  "match" reads it. The frozen score keeps its place and its meaning, relabelled where it
+  shows ("Match score at acceptance"). The **whole** `MatchOut` travels, not just the
+  total, so the list and the panel are one object from one request — measured on the
+  running app, two independent live fetches disagreed by a point as the deadline decayed
+  between them. No new column, no migration, `alembic check` clean. 11 new tests, plus
+  manual verification through the running app on seeded data: Helping Hands reads 79% on
+  both surfaces, Umeed Shelter 77% on both, for the same donation. See `DECISIONS.md`
+  D-30.
+
+- `1181adb` — **Requirements have a lifecycle.**
   An NGO can now revise, retire and reopen its own standing needs, not only post them.
   One new operation, `PATCH /api/requirements/{id}`: partial update in the existing
   `exclude_unset` style, with ownership as a term in the query, so another organisation's
@@ -146,9 +165,11 @@ the existing screens did not need rewriting — only the data source changed.
 **Nothing is in progress, and `TASKS.md` → *Next* is empty.** The seven-step hardening
 sequence — signing-key configuration, migrations, donation read scoping, CI, recipient
 read scoping, authentication rate limiting, courier claim race — is complete, and the
-requirement lifecycle described above is the first item taken out of *Backlog → F*. Every unscoped read of personal contact data
-is closed, bcrypt is no longer the only bound on a credential-stuffing run, and the one
-correctness defect that had to be fixed before Postgres is fixed.
+requirement lifecycle was the first item taken out of *Backlog → F*. Every unscoped read
+of personal contact data is closed, bcrypt is no longer the only bound on a
+credential-stuffing run, and the one correctness defect that had to be fixed before
+Postgres is fixed. The match-score work above came in from QA rather than from this
+list, and is finished.
 
 **What follows is a Project Manager call**, deliberately not decided here. The
 consequence worth carrying into it: *Backlog → E* (Postgres, then deployment
@@ -223,6 +244,15 @@ on one donation can both succeed and append two events. Tracked in `TASKS.md` �
    work — it does not, as written.
 9. **SQLite foreign keys are not enforced** — `PRAGMA foreign_keys` is never issued.
 
+✅ **Resolved:** the same donation could show two contradictory match percentages to one
+NGO. `DonationOut.viewerMatch` now carries the reader's own ranking, computed through the
+same `score_pair` as `/matches` and delivered with the donation, so the list and the
+analysis panel are one value (D-30). **Remaining caveat — it is only as fresh as the
+donations list:** `AppContext` fetches once and the screens read from that, so a page
+left open shows a score computed when it loaded. That is deliberate (agreement between
+surfaces was the point) but the value is a *live* score, so nothing should cache it
+longer without saying so.
+
 ### Low / correctness oddities
 10. **A donation accepted but never delivered is stuck forever** — the sweep only
     touches `AVAILABLE` and `MATCHED`. Undecided whether intentional.
@@ -233,6 +263,17 @@ on one donation can both succeed and append two events. Tracked in `TASKS.md` �
     now stamped at head; only `code/foodlink.db` holds data (10 users, 6 donations).
 13. `image_url` has no length or format validation; frontend sends base64 data URLs
     into a `Text` column.
+15. **`serialize.donation_out()` computes `distanceKm` against the *matched* recipient,
+    so it is null for every donation an NGO is still deciding on** — the lists show
+    "– km", and mobile's *Nearest* sort is therefore a no-op on the available list. The
+    figure now exists per-viewer inside `viewerMatch.distanceKm`; wiring it up was left
+    out of the match-score fix as unrelated to the score.
+16. **A donation's `MATCHED` activity line reads the current `match_score`**
+    (`adapters.activityMessage`), which acceptance overwrites — so "Matched X at 94%"
+    silently becomes "at 79%" afterwards. Recording the score on the event would fix it;
+    the column cannot.
+17. **`/ngo/available/:id` renders `NGOAvailableDonations`, which never reads the
+    param** — a deep link from the dashboard row opens the list with nothing selected.
 14. An unhandled 500 reaches the user as "Cannot reach the FoodLink server" because
     `api.ts` maps a bodiless 5xx to `NetworkError` — a crash looks like an outage.
 

@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-02; the most recent implementation commit
-> is `e919f7b` (courier-claim concurrency), plus the requirement-lifecycle work described
+> is `1181adb` (requirement lifecycle), plus the match-score consistency work described
 > under *Completed*, which was verified in the working tree and uncommitted at the time of
 > writing. Context: `PROJECT_STATE.md`.
 >
@@ -24,13 +24,14 @@
 
 ## Current
 
-**Nothing in progress.** The requirement-lifecycle feature is finished and its tests
-pass; it is uncommitted in the working tree, awaiting review. No feature branch, no
-partial implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
+**Nothing in progress.** The match-score consistency fix is finished and its tests pass;
+it is uncommitted in the working tree, awaiting review. No feature branch, no partial
+implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
-CI → recipient read scope → auth rate limiting → courier claim race — is finished, and
-the first item out of *Backlog → F* (requirement `PATCH`) is done; see *Completed*.
+CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
+first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
+match-score discrepancy is closed; see *Completed*.
 
 ---
 
@@ -108,8 +109,10 @@ hardening** — work that makes the application that already exists safer or mor
 
 - [ ] Unit tests for `matching.py`'s scoring functions at their boundaries —
       `_quantity_score` at the overflow ratio, `_deadline_score` on negative slack, the
-      reliability cliff at 3 accepted donations. The module is pure and is currently only
-      exercised through the API. `[R-13]` — **M**
+      reliability cliff at 3 accepted donations. Partially started: one test in
+      `test_match_score_consistency.py` calls `score_pair` directly with an injected `now`
+      to pin the deadline decay, but the individual `_*_score` helpers are still reached
+      only through the API. `[R-13]` — **M**
 - [ ] Round-trip test for `UtcDateTime`. The decorator exists to prevent one specific
       timezone bug (D-09) and has no direct test. `[§14.4]` — **S**
 - [ ] Frontend tests (Vitest + Testing Library), starting with `ProtectedRoute`. 84 files
@@ -172,6 +175,21 @@ Places where a shipped feature is incomplete — not new ideas.
       Defined at `code/foodlink/matching.py:34`, referenced nowhere. Bound up with recipient
       food-category preferences (group G) — that is what would give it something to compare
       against. `[B-2 · R-22 · R-32]` — **S**
+
+- [ ] Show an NGO the distance to a donation it has not accepted yet.
+      `serialize.donation_out()` measures `distanceKm` against the **matched** recipient,
+      so it is null for everything in the open pool: the lists read "– km" and mobile's
+      *Nearest* sort is a no-op there. The figure already exists per-viewer as
+      `viewerMatch.distanceKm` (D-30); this is wiring, not computation. `[repo]` — **S**
+- [ ] Record the match score on the `MATCHED` event rather than reading the column later.
+      `adapters.activityMessage` renders "Matched … at {matchScore}%", and acceptance
+      overwrites `match_score`, so the line retroactively changes to the accepting
+      organisation's figure. The event ledger is the right home for a number that
+      describes a moment. `[repo]` — **S**
+- [ ] Make `/ngo/available/:id` open that donation. The route renders
+      `NGOAvailableDonations`, which tracks its selection in local state and never reads
+      the param, so the dashboard's *Open to claim* row deep-links to a list with nothing
+      selected. `[repo]` — **S**
 
 ### G. Future features — optional expansion, not hardening
 
@@ -242,7 +260,42 @@ external.
 
 ## Completed (verified in the repository)
 
-### Requirement lifecycle — working tree (uncommitted at verification) `[R-16]`
+### Match-score consistency — working tree (uncommitted at verification) `[QA]`
+- [x] **Root cause traced, not guessed.** The NGO list rendered the persisted
+      `Donation.match_score` — written at creation from `rank_recipients(…, limit=1)`, so
+      it is the *top-ranked organisation's* score, frozen — under a label reading
+      "% match", beside a panel that scored the reader's own pairing live through
+      `/matches`. Two independent divergences: a different organisation, and a different
+      moment (`deadline_score` decays continuously). `seed.py` wrote a literal
+      `94 - i * 3`, which is the exact 94 QA saw.
+- [x] **`DonationOut.viewerMatch`** (`routers/donations._viewer_match`) — the calling
+      organisation's own ranking, via the same `matching.score_pair` `/matches` uses.
+      Null for a non-NGO caller and once the donation leaves `OPEN_TO_RECIPIENTS`. The
+      whole `MatchOut` travels so the headline and its breakdown are one object from one
+      request. Additive contract change, no schema change, `alembic check` clean.
+      See `DECISIONS.md` D-30.
+- [x] **The frozen score kept, and labelled.** `matchScore` still shows on the donor and
+      admin screens and on the NGO's accepted screen, now as "Match score at acceptance"
+      / "at acceptance", so the two numbers cannot be read as each other.
+- [x] **NGO surfaces switched, desktop and mobile.** `DonationCard`, `DonationRow`,
+      `mobile/NGOAvailable` (list, sort and sheet) and `mobile/NGOHome` read
+      `viewerMatch`; the analysis panels render from it rather than fetching `/matches`
+      again. `useMatchAnalysis` is donor-side only now and lost its recipient parameter.
+- [x] **`seed.py` ranks through `rank_recipients`** at MATCHED and re-freezes against the
+      accepting organisation at ACCEPTED, the way the API does — no more invented score
+      in the demo data.
+- [x] **Two static claims removed from the analysis panel:** a hard-coded "95%+ Success
+      Rate" badge that contradicted the real reliability figure beside it, and a constant
+      "High Compatibility" caption under a variable score.
+- [x] 11 tests in `code/tests/test_match_score_consistency.py`, plus manual verification
+      through the running app on seeded data (Helping Hands 79% on both surfaces, Umeed
+      Shelter 77% on both, for the same donation).
+- [x] ⚠️ Three defects found while tracing and deliberately **not** fixed, as unrelated
+      to the score: the missing per-viewer `distanceKm`, the `MATCHED` activity line
+      reading a score that acceptance overwrites, and the unread `:id` route param — all
+      three are now in *Backlog → F*.
+
+### Requirement lifecycle — `1181adb` `[R-16]`
 - [x] **`PATCH /api/requirements/{id}`** (`routers/organisations.update_requirement`) —
       the one lifecycle operation. It revises fields, retires a requirement
       (`isActive: false`) and reopens one. No `DELETE`, no new column, no migration

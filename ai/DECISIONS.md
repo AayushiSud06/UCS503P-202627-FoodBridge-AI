@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository on 2026-09-02, through the courier-claim
-> concurrency commit (`e919f7b`), plus the requirement-lifecycle work present in the
-> working tree and uncommitted at the time of writing — D-01 to D-29.
+> Decisions evident in the repository on 2026-09-02, through the requirement-lifecycle
+> commit (`1181adb`), plus the match-score consistency work present in the working tree
+> and uncommitted at the time of writing — D-01 to D-30.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -275,7 +275,8 @@ with a single lucky completion."
 **Constraints.** The `85` prior and the 3-donation threshold are unjustified constants
 — judgement, not data. ⚠️ **Exception to the pattern:** `match_score` *is* stored, and
 deliberately — frozen at acceptance "so the number shown later is the one the decision
-was actually made on".
+was actually made on". The *reader's* own score stayed derived: it is computed per
+request as `DonationOut.viewerMatch` and never written (D-30).
 
 ---
 
@@ -767,3 +768,67 @@ organisation's id answers 404.
 - **No schema change:** `alembic check` reports no drift.
 - Requirements still do not influence matching — `rank_recipients` has never read them,
   and this did not change that.
+
+---
+
+## D-30 · Two match scores, named apart: one frozen decision, one live offer **[documented]**
+
+**Decision.** `DonationOut` carries **two** figures, and they answer different
+questions. `matchScore` is the existing persisted `Donation.match_score` — frozen, the
+same for every reader, about a *decision*: the top-ranked organisation at posting time,
+overwritten with the accepting organisation's own score at acceptance. `viewerMatch` is
+new, nullable, and about the *reader*: the calling organisation's own ranking against
+this donation, computed now through `matching.score_pair`, present only for an `ngo`
+caller with a recipient profile and only while the donation is still in
+`OPEN_TO_RECIPIENTS`. Every NGO-facing surface that says "match" reads `viewerMatch`;
+the frozen number stays, relabelled where it appears ("Match score at acceptance").
+
+**Reasoning.**
+
+- **The two were being shown as one.** The NGO list rendered `matchScore` under the
+  label "% match" while the analysis panel beside it scored the reader's own pairing
+  through `/matches`. Manual QA saw 94% and 64% for one donation and one kitchen. Both
+  numbers were correct; neither answered the question the label asked.
+- **Two independent causes, both real.** *Different subject* — `match_score` is written
+  at creation from `rank_recipients(..., limit=1)`, so it describes whichever
+  organisation ranked first, which is usually not the reader. *Different moment* —
+  `deadline_score` is 15% of the sum and decays continuously, so a figure frozen at
+  posting cannot track the pairing it described. `seed.py` added a third: it wrote a
+  literal `94 - i*3` into the column, so the demo data's headline was never computed at
+  all. That literal is gone; the seed now ranks through the same matcher the API uses.
+- **Neither concept could be deleted.** The frozen score is what the donor was told and
+  what the accepting kitchen decided on — re-scoring an accepted donation would slide as
+  its pickup window closed and quietly rewrite the record. The live score is the only
+  honest answer to "should we take this". So they are kept apart and named apart rather
+  than collapsed.
+- **Scored on the server, never in the browser.** `_viewer_match()` calls `score_pair`,
+  the same function `rank_recipients` and therefore `/matches` funnel through. There is
+  still exactly one implementation of the scoring, and D-05's swap point is unaffected.
+- **The whole ranking travels, not just the total.** The list and the panel used to
+  fetch two live scores independently; measured on the running app they disagreed by a
+  point, because the deadline decayed between the two requests. Delivering the breakdown
+  with the donation makes agreement a property of the payload rather than a coincidence
+  of timing — the same reasoning as D-24's "one clause, both endpoints". The NGO screens
+  no longer call `/matches` at all; `useMatchAnalysis` is now donor-side only and reports
+  the leading match.
+- **Null rather than a low number** when the reader is unverified, uncoordinated or out
+  of radius, following D-06: `score_pair` gates instead of scoring, and the UI says the
+  organisation cannot be scored rather than showing a stranger's ranking under its own
+  heading.
+
+**Constraints.**
+
+- **Additive contract change**, no schema change (`alembic check` clean): `viewerMatch`
+  is a new nullable field of the existing `MatchOut` shape, which had to move above
+  `DonationOut` in `schemas.py`. Existing consumers of `matchScore` are unaffected.
+- ⚠️ **`viewerMatch` is as fresh as the donation list.** `AppContext` fetches once and
+  the screens read from that, so a page left open for an hour shows an hour-old score.
+  That is the price of the two surfaces agreeing, and it is the right trade while
+  nothing refreshes automatically — but the value is a *live* score, so anything that
+  caches it for longer needs to say so.
+- **Ranking cost is per donation now.** `GET /donations` runs `score_pair` once per row
+  against the caller's own organisation — pure arithmetic on rows already loaded, plus
+  one lookup of the caller's recipient for the whole page.
+- The panel's static captions were removed alongside: "High Compatibility" is now derived
+  from the score, and a hard-coded "95%+ Success Rate" badge that contradicted the real
+  reliability figure beside it is gone.
