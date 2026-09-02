@@ -2,10 +2,10 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-02, branch `master`. The most recent
-> implementation commit is `1181adb` (requirement lifecycle). The match-score
-> consistency work was verified in the working tree, uncommitted at the time of writing;
-> it is the only source change outside that commit.
+> Last verified against the repository: 2026-09-02, branch `master`, working tree clean.
+> The most recent implementation commit is `23c27f4` (match-score consistency). A QA audit
+> was run against that commit on the same date; it changed no source and its conclusions
+> are in `TASKS.md`.
 
 ## What this project is
 
@@ -27,7 +27,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; ⚠️ several screens **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -47,8 +47,23 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **working tree (uncommitted at verification)** — **One donation, one kitchen, one
-  number.** The NGO's *Available Donations* list showed 94% for a donation whose analysis
+- **2026-09-02, documentation only** — **A QA audit, and what it found.** Twelve manual-QA
+  observations were traced through the stack and classified; no source changed and the 148
+  tests were re-run unchanged. The result is worth carrying forward as one sentence:
+  **the backend is broadly honest and the frontend is not.** Every server-computed figure
+  the audit followed comes from real rows — `/api/metrics` from the ledger, `viewerMatch`
+  live through `score_pair`, reliability from the recipient's own counters. Meanwhile the
+  interface claims requirement-aware matching that `matching.py` cannot do (it never
+  references `Requirement`), live GPS tracking that exists nowhere in the repository,
+  notification delivery through ten dead toggles, FSSAI verification of a donor the data
+  model has no verification concept for, and impact totals padded with literals — one real
+  meal count with `+ 1240` added to it, another with `+ 18`. Two "Download Impact Report"
+  buttons are an `alert()` and produce no file. Nine items in `TASKS.md` → *Backlog → I*,
+  four new questions in *Blocked*, and one new decision, `DECISIONS.md` D-31: a claim the
+  interface makes is a claim the system must be able to honour, and a roadmap claim is fine
+  **if it is labelled as one**. Three findings were classified acceptable on that basis.
+
+- `23c27f4` — **One donation, one kitchen, one number.** The NGO's *Available Donations* list showed 94% for a donation whose analysis
   panel, on the same screen, said 64%. Both were right and neither answered the label's
   question: the list rendered `Donation.match_score`, which is **frozen at posting and
   describes whichever organisation ranked first platform-wide**, while the panel scored
@@ -162,25 +177,34 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-**Nothing is in progress, and `TASKS.md` → *Next* is empty.** The seven-step hardening
-sequence — signing-key configuration, migrations, donation read scoping, CI, recipient
-read scoping, authentication rate limiting, courier claim race — is complete, and the
-requirement lifecycle was the first item taken out of *Backlog → F*. Every unscoped read
-of personal contact data is closed, bcrypt is no longer the only bound on a
-credential-stuffing run, and the one correctness defect that had to be fixed before
-Postgres is fixed. The match-score work above came in from QA rather than from this
-list, and is finished.
+**Nothing is in progress, and `TASKS.md` → *Next* is still empty** — but what would fill
+it has changed. The seven-step hardening sequence — signing-key configuration, migrations,
+donation read scoping, CI, recipient read scoping, authentication rate limiting, courier
+claim race — is complete, and the requirement lifecycle was the first item taken out of
+*Backlog → F*. Every unscoped read of personal contact data is closed, bcrypt is no longer
+the only bound on a credential-stuffing run, and the one correctness defect that had to be
+fixed before Postgres is fixed.
 
-**What follows is a Project Manager call**, deliberately not decided here. The
-consequence worth carrying into it: *Backlog → E* (Postgres, then deployment
-configuration) is no longer gated by anything in the codebase, and it is also the
-largest remaining block of work — while groups A and B hold several sub-hour items
-(SQLite foreign-key enforcement, an `image_url` cap, a readiness probe) that would not
-displace it.
+**The QA audit added a body of work that did not exist on the list before**, and it is not
+optional polish. `TASKS.md` → *Backlog → I* holds nine items, most of them **S**, covering
+interface claims the system cannot honour — invented impact figures, live-GPS text over a
+component with no GPS, matching promises the matcher does not keep, dead notification
+settings, unearned verification badges. D-31 explains why that ranks as hardening in this
+project specifically: the platform's argument is that its numbers are evidence, and
+fabricated ones sitting beside real ones cost more here than they would elsewhere.
 
-Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional
-expansion and cleanup) or *Blocked* (four open decisions). None of it has been
-committed to.
+**The order is still a Project Manager call.** Two things worth carrying into it. First,
+group I is cheap and demo-facing: it is what an evaluator sees in the first five minutes,
+and most of it is deletion and rewording rather than construction. Second, *Backlog → E*
+(Postgres, then deployment configuration) remains the largest block of unbuilt work and is
+no longer gated by anything in the codebase — while groups A and B still hold several
+sub-hour items (SQLite foreign-key enforcement, an `image_url` cap, a readiness probe)
+that would not displace it.
+
+Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional expansion
+and cleanup) or *Blocked*, which now holds **eight** open decisions: the original four,
+plus the four the audit opened — road distance, requirement-aware matching, a donor needs
+board, and a real impact report. None of it has been committed to.
 
 ## Known issues and blockers
 
@@ -277,6 +301,43 @@ longer without saying so.
 14. An unhandled 500 reaches the user as "Cannot reach the FoodLink server" because
     `api.ts` maps a bodiless 5xx to `NetworkError` — a crash looks like an outage.
 
+### Claims the interface makes that the code cannot honour (QA audit, 2026-09-02)
+
+Full evidence and per-item scope in `TASKS.md` → *Backlog → I*; the principle is
+`DECISIONS.md` D-31. Listed here because severity is a judgement about the project's
+credibility rather than about its correctness, and that judgement belongs in this file.
+
+18. **Impact figures are partly invented, and the worst of them are padded reals.**
+    `NGOImpact.tsx` adds `+ 1240` to a genuine completed-meal count and `VolunteerImpact.tsx`
+    adds `+ 18` to a genuine delivery count; six more cards are pure literals under
+    "real-time"/"verified" headings, the category and demographic charts ignore the data
+    entirely, and desktop and mobile disagree about the same donor's CO₂e (`×2.5` of
+    completed versus `×0.86` of all listed). Both "Download Impact Report" buttons are an
+    `alert()` that produces no file. **The ledger-derived `GET /api/metrics` is read by the
+    admin screens only** — no per-role Impact page calls it.
+19. **Requirements do not influence matching, and three UI strings say they do.**
+    Verified: `matching.py` never references `Requirement`. "AI Scanning Active",
+    "Auto-matching enabled" and "so FoodLink AI prioritizes donations matching your
+    requirements" are all false today. `daily_recurring` is stored and badged but acted on
+    by nothing.
+20. **"Live Corridor Tracking" / "Live GPS tracking active" over a component with no GPS.**
+    `navigator.geolocation` is called only to pin a donation at creation; a courier's
+    position is never read or stored, and there is no map or routing provider anywhere.
+    `MapPreview` also hard-codes a `0.8 km` first leg and estimates travel at 10 km/h,
+    contradicting the backend's own 20 km/h.
+21. **Verification and notification settings that are pure display.** Donor screens show an
+    unconditional "Verified Institutional Donor" and "FSSAI Hygiene Standards Compliant"
+    for a role the data model has **no** verification concept for (`is_verified` exists on
+    `Recipient` only); ten preference toggles across four profile screens are `useState`
+    and reach no server, one of them promising to "Auto-accept best match". Contrast
+    `NGOProfile`, which reads the real `me.isVerified` correctly.
+22. **Smaller, same family:** "En route on vehicle" renders on a `COMPLETED` donation
+    because the line ignores `status`; `StatusTimeline` shows "Matched · Current" with no
+    hint that the deadline passed, though `lib/time.ts` already computes "Overdue"; three
+    screens hard-code seeded identities ("College Central Mess", "Aarav") for every account;
+    the explainability panel mis-describes two of its five criteria; the donor profile's
+    "Email Address" input is bound to `operatingHours`.
+
 ## Technical debt
 
 **Dead code (verified unused):**
@@ -310,10 +371,17 @@ longer without saying so.
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it
-2. Decide whether the rate-limit counter has to be shared, when deployment is
+   promoted into it. The audit's own suggested order is **I-1** (impact figures) → **I-2**
+   (live-GPS and routing claims) → **I-3** (requirement matching claims) → the three
+   group-F match-score follow-ups in one sitting → group E.
+2. Answer at least the cheap half of the four decisions the audit opened
+   (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
+   real impact report — can be answered "not now" at zero cost, because group I removes the
+   claim either way. Only the donor needs board is a "yes/no build it" question, and it is
+   **S** if yes.
+3. Decide whether the rate-limit counter has to be shared, when deployment is
    designed — it is per-process today (`TASKS.md` → *Backlog → E*)
-3. Extend the claim's concurrency guard to the remaining lifecycle transitions before
+4. Extend the claim's concurrency guard to the remaining lifecycle transitions before
    Postgres lands, for the same reason the claim itself was fixed first
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**

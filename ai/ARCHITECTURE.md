@@ -2,8 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
 > `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
-> requirement-lifecycle commit (`1181adb`), plus the match-score consistency work
-> present in the working tree and uncommitted at the time of writing.
+> match-score consistency commit (`23c27f4`), and re-checked in the QA audit of the same
+> date — which changed no source and is recorded in `TASKS.md`.
 
 ## Shape
 
@@ -181,6 +181,15 @@ row only; donor and volunteer → none. `RecipientOut` carries a contact person 
 phone, so the list is a directory of people. Denial here is an empty list rather than a
 403 — unlike `GET /volunteers`, which role-gates. See `DECISIONS.md` D-26.
 
+⚠️ **`GET /api/requirements` is the one unscoped cross-organisation read left.** It takes
+`Depends(get_current_user)` with no role gate and no ownership clause, so every
+authenticated caller receives every organisation's active requirements including
+`recipientName` — and `AppContext.load()` fetches it for every role, so a donor's client
+already holds them. This is **consistent with D-26**, which scoped `RecipientOut` because
+it carries `contact_person` and `phone` and explicitly recorded that organisation *names*
+are already public here; `RequirementOut` carries no contact details. It is nonetheless
+unscoped by omission rather than by a recorded decision — see `TASKS.md` → *Blocked*.
+
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
 only come from `python -m foodlink.cli create-admin`; subsequent ones from
@@ -220,6 +229,22 @@ converges there.
 
 Weighted sum over 5 normalised 0–100 criteria; `WEIGHTS` sum to exactly 1.0:
 `distance .25 · quantity-fit .25 · capacity .20 · deadline .15 · reliability .15`.
+
+⚠️ **Distance is great-circle, never road distance.** `matching.haversine_km` on two
+coordinate pairs is the only distance function in the repository; there is no routing
+provider, no geocoder and no map, here or anywhere else (see *External services: none*).
+Travel time, which `_deadline_score` needs, is derived from it by a flat constant —
+`travel_minutes = (distance / 20) * 60`, i.e. 20 km/h assumed city traffic
+(`matching.py:132`). Both are deliberate and both are approximations the interface should
+not present as measured journeys; `TASKS.md` → I-2 covers the wording and *Blocked* covers
+whether to replace the model.
+
+⚠️ **Requirements are not an input.** `matching.py` neither imports nor references
+`Requirement`, and neither does `routers/donations.py`. The `requirements` table is a
+notice board read only by `routers/organisations.py` and `seed.py` — demand is *visible*
+before supply, but it does not influence any ranking. `Requirement.daily_recurring` is
+likewise stored and displayed but never acted on: nothing re-posts a requirement and
+there is no scheduler that could (constraint 7).
 
 Three **hard gates** return `None` rather than a low score: unverified organisation,
 missing coordinates, beyond `MAX_MATCH_RADIUS_KM` (default 8).
@@ -263,6 +288,16 @@ affected slice from the server** (write-then-refetch) → re-render + toast.
 time-to-claim (created→ACCEPTED), handover (ACCEPTED→DELIVERED), rescue rate
 (COMPLETED ≤ deadline) and expiry-loss rate. Returns `null`, not `0`, when history is
 insufficient.
+
+⚠️ **The Impact screens do not use it.** `useStats()` — the hook carrying those
+ledger-derived figures — is read by the **four admin screens only**. Every per-role
+*Impact* page (`pages/{donor,ngo,volunteer}/*Impact.tsx` and their mobile counterparts)
+computes in the browser from `useDonations()`, and the desktop three then mix those
+derived values with display literals and additive constants. So the platform has two
+unrelated reporting paths: an evidence-backed one nobody outside admin sees, and a
+client-side one that is what donors, kitchens and couriers actually read. That split is
+the substance of `TASKS.md` → I-1, and whether to close it by serving impact from the
+ledger is in *Blocked*.
 
 ## Configuration
 

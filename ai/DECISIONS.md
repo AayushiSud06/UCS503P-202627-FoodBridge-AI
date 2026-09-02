@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository on 2026-09-02, through the requirement-lifecycle
-> commit (`1181adb`), plus the match-score consistency work present in the working tree
-> and uncommitted at the time of writing — D-01 to D-30.
+> Decisions evident in the repository on 2026-09-02, through the match-score consistency
+> commit (`23c27f4`) — D-01 to D-31. D-31 is the one decision the QA audit of the same
+> date settled; the four questions it left open are in `TASKS.md` -> *Blocked*.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -832,3 +832,63 @@ the frozen number stays, relabelled where it appears ("Match score at acceptance
 - The panel's static captions were removed alongside: "High Compatibility" is now derived
   from the score, and a hard-coded "95%+ Success Rate" badge that contradicted the real
   reliability figure beside it is gone.
+
+---
+
+## D-31 · A claim the interface makes is a claim the system must be able to honour **[documented]**
+
+**Decision.** Interface text that states a present-tense capability is held to the same
+standard as an API response: it must be true of the running system. A forward-looking
+claim is allowed only when it is **labelled as one** at the point it appears. Where the
+two conflict, the text changes — the fix for an unbuildable claim is to stop making it,
+not to build it in a hurry. Established by the QA audit of 2026-09-02, which classified
+twelve findings against this line; the resulting work is `TASKS.md` → *Backlog → I*.
+
+**Reasoning.**
+
+- **This project's product is its evidence.** The append-only ledger exists so metrics are
+  attributable rather than self-reported (D-01); the matcher is a readable weighted sum so
+  a score can be taken apart by hand (D-05); ineligibility is a gate returning `None`
+  rather than a flattering low number (D-06); the frozen and live match scores were split
+  and separately labelled precisely because one label over two numbers was indefensible
+  (D-30). A screen reading "Live GPS tracking active" over a component with no GPS spends
+  the credibility all four of those decisions were built to earn — and it spends it in
+  front of exactly the audience they were built for.
+- **The failure is asymmetric.** An honest interface over a modest system reads as an
+  early-stage project. An interface that over-claims reads as one that cannot be trusted
+  about the parts that *are* real — and the audit found that most of the backend is real.
+  The invented numbers were doing active harm to true ones sitting beside them.
+- **The worst form is a literal wearing a measurement's clothes.** `+ 1240` added to a real
+  meal count, or `completed.length + 18`, is worse than a wholly fake number: it is
+  unfalsifiable from the outside and it corrupts a figure that was correct. Ranked below
+  those but still defects: standalone literals presented under a "real-time" or "verified"
+  heading, and settings that accept input and discard it.
+- **Labelling is a real remedy, not a loophole.** `components/FutureIntelligenceSection.tsx`
+  describes a neural ranker, route optimisation and vision models the project has not
+  built, and the audit passed it: every entry carries an explicit `phase` and `status`
+  badge, and the section is titled as future work. Likewise `MatchAnalysis`'s "Rule-Based
+  Model" chip beside its "AI Match Analysis" heading. The distinction that matters is not
+  ambition versus modesty — it is whether a reader can tell which of the two they are
+  looking at.
+- **It keeps D-05 enforceable at the edge.** D-05 forbids describing the matcher as
+  machine learning. That is a rule about the backend, and it held; the phrase "AI Scanning
+  Active" over a table nothing scans is the same violation one layer out, where nobody was
+  checking.
+
+**Constraints.**
+
+- **Scope: the interface, not the roadmap.** D-31 governs how a capability is described,
+  never whether to build it. Requirement-aware matching, road distance, notification
+  delivery and donor verification are all open questions in `TASKS.md` → *Blocked* and
+  this decision deliberately does not answer any of them.
+- ⚠️ **This is not a licence to delete features.** Where a real value exists and only the
+  label is wrong — the frozen match score before D-30, `distanceKm` in the open pool today
+  — the answer is to show the real value correctly, not to remove the surface.
+- **Nothing enforces it automatically.** There is no lint rule and no frontend test suite
+  to hold it (`TASKS.md` → *Backlog → D*), so it is a review habit: when a screen states a
+  fact, the reviewer asks which row or function produced it. The audit is what a manual
+  pass of that check looks like, and it took one sitting.
+- **The seed data is inside the boundary.** `seed.py` writing a literal `94 - i * 3` into
+  `match_score` is what put an invented number on screen next to a real one (D-30), and it
+  now ranks through `rank_recipients` like the API does. Demo data that does not come from
+  the real code path is a claim like any other.

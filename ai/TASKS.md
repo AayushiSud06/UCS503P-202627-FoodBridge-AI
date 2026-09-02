@@ -1,9 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-02; the most recent implementation commit
-> is `1181adb` (requirement lifecycle), plus the match-score consistency work described
-> under *Completed*, which was verified in the working tree and uncommitted at the time of
-> writing. Context: `PROJECT_STATE.md`.
+> is `23c27f4` (match-score consistency). Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -14,7 +12,9 @@
 > `R-n` = *Improvement Roadmap* item n · `B-n` = *Known bugs and questionable behaviour*
 > item n (both `PROJECT_KNOWLEDGE_GUIDE.md` §22) · `S-n` = §8.4 security recommendation n ·
 > `§x` = another section of that guide · `D-n` = `DECISIONS.md` · `repo` = a gap verified
-> directly in the source and not recorded anywhere else.
+> directly in the source and not recorded anywhere else · `QA-n` = finding *n* of the
+> manual QA audit of 2026-09-02, whose classifications are recorded in **Group I** and in
+> *Blocked*.
 >
 > **Estimates.** Hour figures are the roadmap's own (§22); where it gives none, the bucket
 > is **S** (under an hour), **M** (a few hours), **L** (a day or more). All are for
@@ -24,36 +24,56 @@
 
 ## Current
 
-**Nothing in progress.** The match-score consistency fix is finished and its tests pass;
-it is uncommitted in the working tree, awaiting review. No feature branch, no partial
-implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
+**Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
+markers in `code/foodlink/` or `frontend/src/`. 148 backend tests pass.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
-match-score discrepancy is closed; see *Completed*.
+match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
+
+**A manual QA audit was run on 2026-09-02** across twelve observations. It changed no
+source code — its output is this list. Its central result: **the backend is broadly
+honest and the frontend is not.** Every server-side number the audit traced is derived
+from real rows through code that says what it does; a large amount of interface text
+claims capability the system does not have — requirement-aware matching, live GPS
+tracking, notification delivery, FSSAI verification, and impact figures padded with
+literals. That body of work is now **Group I**, and the four questions it could not
+answer from the code are in *Blocked*. See *Completed → QA audit* for the classification
+of all twelve.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-**Empty.** The item that stood here is done, and nothing has been promoted from
-*Backlog* in its place — that is a Project Manager call, not one to make by writing it
-down here.
+**Empty — still a Project Manager call**, and the audit did not promote anything into it.
+What the audit did change is what the list looks like when that call is made:
 
-Two things are worth knowing when it is made. **Group E is no longer gated:** the
-courier claim was the one correctness defect that had to land before Postgres, and it
-has. And **group E is where the largest amount of unbuilt work sits**, while groups A
-and B hold several **S**-sized items (foreign-key enforcement, an `image_url` cap, a
-readiness probe) that are cheap enough to clear without displacing it.
+- **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
+  D-31 records why an interface claim the system cannot honour is a defect in a project
+  whose evaluation rests on evidence. Most of its items are **S**, and two of them
+  (I-1, I-2) are the two a demo audience sees first.
+- **Group E is still the largest block and is still ungated** — the courier claim was
+  the last correctness prerequisite for Postgres, and it landed in `e919f7b`.
+- **Group F is unchanged and confirmed.** QA independently re-observed all three
+  match-score follow-ups; they are real and they are still small.
+
+**The audit's own recommended order**, offered as analysis and not as a commitment:
+**I-1** (impact figures) → **I-2** (live-GPS and routing claims) → **I-3** (requirement
+matching claims) → **F** (the three match-score follow-ups, one sitting) → **E**
+(Postgres, once the demo-facing claims are true). The reasoning is in *Group I*'s header:
+the cheapest way to stop over-claiming is to stop printing the claims, and that has to
+happen before or alongside deciding which of them to actually build (*Blocked*).
 
 ---
 
 ## Backlog
 
-Grouped by kind; within a group, roughly by value over effort. **Groups A–F are
-hardening** — work that makes the application that already exists safer or more reliable.
-**Group G is optional product expansion** and should not compete with A–F for attention.
+Grouped by kind; within a group, roughly by value over effort. **Groups A–F and I are
+hardening** — work that makes the application that already exists safer, more reliable, or
+more honest about itself. **Group G is optional product expansion** and should not compete
+with them for attention. **Group I is placed last only so the existing letters keep their
+meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why.
 
 ### A. Security
 
@@ -176,20 +196,28 @@ Places where a shipped feature is incomplete — not new ideas.
       food-category preferences (group G) — that is what would give it something to compare
       against. `[B-2 · R-22 · R-32]` — **S**
 
+> The three below came out of the match-score fix (D-30) and were **re-confirmed
+> unchanged by the QA audit** against `23c27f4`. They are independent of each other and
+> small enough to take in one sitting.
+
 - [ ] Show an NGO the distance to a donation it has not accepted yet.
-      `serialize.donation_out()` measures `distanceKm` against the **matched** recipient,
-      so it is null for everything in the open pool: the lists read "– km" and mobile's
-      *Nearest* sort is a no-op there. The figure already exists per-viewer as
-      `viewerMatch.distanceKm` (D-30); this is wiring, not computation. `[repo]` — **S**
+      `serialize.donation_out()` measures `distanceKm` against the **matched** recipient
+      (`code/foodlink/serialize.py:21`), so it is null for everything in the open pool.
+      `mobile/NGOAvailable.tsx:100` therefore reads "– km" for every row and its *Nearest*
+      sort (`?? 99`, line 24) is a no-op; desktop `DonationCard.tsx:58` quietly falls back
+      to the location string instead. The figure already exists per-viewer as
+      `viewerMatch.distanceKm` (D-30); this is wiring, not computation.
+      `[repo · QA-8]` — **S**
 - [ ] Record the match score on the `MATCHED` event rather than reading the column later.
-      `adapters.activityMessage` renders "Matched … at {matchScore}%", and acceptance
-      overwrites `match_score`, so the line retroactively changes to the accepting
-      organisation's figure. The event ledger is the right home for a number that
-      describes a moment. `[repo]` — **S**
-- [ ] Make `/ngo/available/:id` open that donation. The route renders
-      `NGOAvailableDonations`, which tracks its selection in local state and never reads
-      the param, so the dashboard's *Open to claim* row deep-links to a list with nothing
-      selected. `[repo]` — **S**
+      `adapters.activityMessage` (`frontend/src/lib/adapters.ts:213`) renders
+      "Matched … at {matchScore}%", and acceptance overwrites `match_score`, so the line
+      retroactively changes to the accepting organisation's figure. The event ledger is the
+      right home for a number that describes a moment — and it is the same
+      frozen-versus-live confusion D-30 was about, one layer down. `[repo · QA-8]` — **S**
+- [ ] Make `/ngo/available/:id` open that donation. The route exists
+      (`frontend/src/App.tsx:81`) and renders `NGOAvailableDonations`, which tracks its
+      selection in `useState` (line 18) and never calls `useParams`, so the dashboard's
+      *Open to claim* row deep-links to a list with nothing selected. `[repo · QA-8]` — **S**
 
 ### G. Future features — optional expansion, not hardening
 
@@ -199,15 +227,28 @@ Places where a shipped feature is incomplete — not new ideas.
 - [ ] React Query for server state — keeps write-then-refetch correctness (D-11) while
       removing its chattiness. `[R-26]`
 - [ ] Notifications (email/SMS/push) on match and assignment. The system currently has zero
-      external service dependencies. `[R-28]`
+      external service dependencies — no SMTP, no provider SDK, no outbound HTTP anywhere in
+      `code/foodlink/`. ⚠️ **Ten preference toggles across four profile screens already
+      offer this to users** and none of them reach the server; until this is built, I-4
+      is what has to happen instead. `[R-28 · QA-5]`
 - [ ] WebSockets/SSE for a live donation feed. `[R-29]`
 - [ ] Real routing distance instead of haversine — which also retires the 20 km/h travel
-      constant in `score_pair`. `[R-30]`
+      constant in `matching.py:132`. ⚠️ **Blocked on a product decision, not on
+      effort:** the audit confirmed the matcher measures great-circle distance only
+      (`matching.haversine_km`) while the interface presents it as a road corridor with a
+      travel estimate. Deciding whether the number should *become* road distance is the
+      first *Blocked* entry; **I-2 is what makes the interface honest either way**, and
+      does not wait on it. `[R-30 · QA-1]`
 - [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
 - [ ] Tune the matching weights against real outcome data; revisit the 85 reliability
       prior. `[R-31]`
 - [ ] Recurring donation schedules. `Requirement.daily_recurring` exists on the recipient
-      side; donations have no equivalent. `[R-35]`
+      side; donations have no equivalent. ⚠️ **The recipient-side flag is storage only:**
+      `models.py:293` declares it, `RequirementOut` echoes it, and the NGO UI renders a
+      *Daily Recurring* badge from it — nothing reads it, nothing re-posts a requirement
+      daily, and there is no scheduler to do so (`ARCHITECTURE.md` constraint 7). So this
+      item is where recurrence would actually be *implemented*, on both sides; I-3 covers
+      the badge in the meantime. `[R-35 · QA-11]`
 - [ ] Postgres + PostGIS for spatial indexing — only once organisation count makes the
       bounding box in group C insufficient. Distinct from the Postgres *move* in group E,
       which is about deployment, not indexing. `[§16.3]`
@@ -229,6 +270,138 @@ Places where a shipped feature is incomplete — not new ideas.
       silently excluded. Nothing is hidden today; this is the same latent defect that cost
       the first CI run. `[repo]` — **S**
 
+### I. Claims the interface makes that the system does not implement
+
+> **This is hardening, not polish.** The project's whole argument is that its numbers are
+> evidence rather than self-report — the append-only ledger exists for that reason (D-01),
+> the matcher is a readable heuristic for that reason (D-05), and the score is never a bare
+> number for that reason (D-06). Interface text that claims a capability the code does not
+> have spends exactly the credibility those decisions were built to earn. `DECISIONS.md`
+> D-31 draws the line the audit used: a **labelled** roadmap claim is fine; an
+> **unlabelled** present-tense one is a defect.
+>
+> Every item below was verified against the source on 2026-09-02. None requires a schema
+> change, an API change, or a decision from *Blocked* — each is reachable by deleting or
+> rewording front-end text, or by reading a value the client already holds. The decisions
+> about which of these capabilities to actually *build* are separate and are in *Blocked*.
+
+- [ ] **I-1 · Stop printing impact figures that are not measurements.** `[QA-4 · repo]` — **M**
+      The three desktop impact pages mix three kinds of number under one heading and label
+      all of them as measured.
+      - *Padded reals:* `NGOImpact.tsx:10` computes real completed meals and adds `+ 1240`;
+        `VolunteerImpact.tsx:38` renders `completed.length + 18`. These are the worst of the
+        set — a literal wearing a derived number's clothes.
+      - *Pure literals under a "real-time"/"verified" heading:* `DonorImpact.tsx:71`
+        (`value={5}` shelters), `NGOImpact.tsx:43,53,63` (`850+`, `8`, `42`),
+        `VolunteerImpact.tsx:48,58` (`48.5` km, `4.9` rating — and `Volunteer.rating` is the
+        dead column already tracked in group F). Plus every `trend` and `equivalent` string:
+        "+18% this month", "+24% vs last month", "Certified SDG 12.3", "100% verified",
+        "Top 5% Volunteer", "Equal to 420 km car travel", "Equivalent to 550 showers".
+      - *Fabricated distributions:* the category breakdown in `DonorImpact.tsx` (68/18/10/4)
+        ignores `donation.category` entirely; `mobile/DonorImpact.tsx:6` charts a literal
+        `BARS` array under "Last six months"; `mobile/NGOImpact.tsx:6` charts literal
+        demographics.
+      - *A contradiction between two surfaces:* desktop CO₂e is `completedMeals × 2.5`,
+        mobile is `allListedMeals × 0.86`. One account, one question, two answers — the
+        shape of bug D-30 was written about.
+      - *Hard-coded identity:* `DonorImpact.tsx:26` names **"College Central Mess"** for
+        every donor; `DonorDashboard.tsx:61` and `VolunteerDashboard.tsx:61` do the same
+        with a seeded mess and a seeded courier's first name. Residue of `mockData.ts`
+        (`01a9861`) that its deletion missed.
+      The fix is subtraction plus honest subtitles, not new computation: what survives is
+      what `useDonations()` already supports. Note that `GET /api/metrics` — which *is*
+      ledger-derived — is read by the **admin screens only**; no per-role impact page calls
+      it. Wiring them to it is the larger, optional version of this item.
+
+- [ ] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **S**
+      There is no GPS tracking, no routing provider and no map in the repository.
+      `navigator.geolocation` is called in exactly two places (`lib/geo.ts` via
+      `CreateDonation.tsx:85` and `CreateDonationCamera.tsx:47`), both to pin a donation at
+      creation; a courier's position is never read, stored or transmitted. `components/MapPreview.tsx`
+      nonetheless renders a "Redistribution Route Corridor" with animated ping dots, a
+      hard-coded `~0.8 km` first leg, a default courier of `'Aarav Sharma (0.8 km away)'`,
+      an "Estimated Travel" of `distanceKm * 6 + 10` minutes — a 10 km/h assumption that
+      contradicts the backend's own 20 km/h in `matching.py:132` — and the footer
+      **"Live GPS tracking active in Phase 2"**, under a heading reading **"Live Corridor
+      Tracking"** (`NGOAcceptedDonations.tsx:143`). The distance it captions is
+      great-circle (`matching.haversine_km`), never road distance.
+      Wording, a deleted footer line and honest fallbacks; the component's structural
+      diagram is fine and worth keeping. Contrast `components/FutureIntelligenceSection.tsx`,
+      which the audit classified as **acceptable** because every entry carries an explicit
+      `phase` and `status` badge — that is the labelling D-31 asks for.
+
+- [ ] **I-3 · Stop claiming requirements drive matching.** `[QA-2 · QA-11 · repo]` — **S**
+      `matching.py` neither imports nor references `Requirement`, and neither does
+      `routers/donations.py`; the only readers of the table in the whole backend are
+      `routers/organisations.py` and `seed.py`. Requirements are a **notice board**, and a
+      genuinely useful one — they are the only place demand is visible before supply
+      exists. But `pages/ngo/NGORequirements.tsx` says *"so FoodLink AI prioritizes
+      donations matching your requirements"* (line 114), **"AI Scanning Active"** and
+      **"Auto-matching enabled"** (lines 172–174), and renders a **"Daily Recurring"** badge
+      (line 141) for a flag nothing acts on. Say what it is: a standing need other parties
+      can see. Building the claim instead is the first *Blocked* question and R-35.
+
+- [ ] **I-4 · Stop offering notification settings that reach nothing.** `[QA-5 · repo]` — **S**
+      Ten toggles across four screens (2 + 3 + 3 + 2), none of which is sent to the server or
+      anywhere — they are `useState` and reset on remount. `pages/donor/DonorProfile.tsx`
+      ("real-time email updates…", "SMS alerts…") is the worst case, because its submit
+      button then answers *"Profile saved — Your contact details have been updated."*
+      `mobile/DonorProfile.tsx:48` is the most misleading single one: **"Auto-accept best
+      match"** claims an automatic lifecycle transition, not just an alert. Also
+      `mobile/NGOProfile.tsx:66–74` and `mobile/VolunteerProfile.tsx:60–61`. The file
+      already carries an honest comment saying these are not saved; the UI does not repeat
+      it. Either mark them plainly as not yet active or remove them until R-28 exists.
+      ⚠️ Do **not** sweep up `VolunteerProfile.tsx`'s availability checkbox — `is_available`
+      is a real `VolunteerUpdate` field and that screen is correctly wired.
+
+- [ ] **I-5 · Remove or ground the donor verification badges.** `[QA-6 · repo]` — **S**
+      `is_verified` exists on `Recipient` only (`models.py:165`); there is **no donor
+      verification concept anywhere in the data model**, no FSSAI field, and no evidence
+      store. `pages/donor/DonorProfile.tsx:61` shows an unconditional *"Verified
+      Institutional Donor"* badge and line 140 an unconditional *"FSSAI Hygiene Standards
+      Compliant"* panel; `mobile/DonorProfile.tsx:37` repeats the first. A self-registered
+      account one minute old displays both. The correct model already exists next door:
+      `pages/ngo/NGOProfile.tsx:86` and `mobile/NGOProfile.tsx:33` read the real
+      `me.isVerified` and show *"Awaiting verification"* when it is false. Building donor
+      verification is a much larger piece of work and is not proposed here.
+
+- [ ] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **S**
+      `pages/ngo/NGOAcceptedDonations.tsx:136` prints *"En route on vehicle"* whenever
+      `volunteerName` is set, with no reference to `status` — and the same screen's list
+      includes `COMPLETED` (line 22). A finished delivery therefore shows a courier still
+      driving. This is a plain rendering defect, not a lifecycle problem: the server's state
+      is correct and `StatusTimeline` beside it renders correctly. The donor's equivalent
+      block (`DonationDetails.tsx:101`) is already status-neutral and right.
+
+- [ ] **I-7 · Surface "overdue" where the deadline has passed.** `[QA-7 · repo]` — **S**
+      `lib/time.ts` already computes it — `deadlineStatus()` returns the label *"Overdue"*
+      with `urgency: 'expired'` — and the list and card surfaces use it. `StatusTimeline`
+      does not: it is driven purely by `status`, so a donation whose deadline passed hours
+      ago shows *"Matched · Current"* with no warning. That reading is **not wrong** — the
+      row genuinely is still `MATCHED`, because the expiry sweep is manual (group E) — but
+      the detail view is the one surface that never says the deadline has gone. Pass the
+      deadline state into the timeline; do not invent a new lifecycle state, and do not
+      expire client-side.
+
+- [ ] **I-8 · Correct the explainability panel's criterion descriptions.** `[QA-12 · D-06]` — **S**
+      `components/MatchAnalysis.tsx:98–122` describes *Recipient Capacity* as "Cold storage
+      and immediate consumption bandwidth" — `matching._capacity_score` measures headroom
+      after the donation and nothing else, and `COLD_STORAGE` is the dead constant already
+      tracked in group F — and describes *Pickup Availability* as "Recipient intake
+      volunteers ready before deadline", where `_deadline_score` measures slack between now
+      and the deadline less assumed travel. Smaller than the rest of this group, but it is
+      the one panel whose entire purpose is to explain the score correctly (D-06), so a
+      wrong caption there costs more than it would anywhere else.
+
+- [ ] **I-9 · Fix the donor profile form's field wiring.** `[QA-12 · repo]` — **S**
+      `pages/donor/DonorProfile.tsx` binds the input labelled **"Email Address"** to
+      `profile.operatingHours` (line ~120), so the field renders empty and edits an
+      unrelated key; `profile.email` is initialised and never rendered. The same form
+      initialises `phone` and `location` to `''` instead of reading the signed-in account,
+      unlike `VolunteerProfile.tsx`, which syncs from `useMyVolunteer()` in a `useEffect`.
+      Grouped here rather than in B because it is the same screen as I-4 and I-5 and should
+      be opened once.
+
 ---
 
 ## Blocked — open decisions, not unbuilt work
@@ -236,10 +409,89 @@ Places where a shipped feature is incomplete — not new ideas.
 Each of these has a working implementation whose *intended* behaviour has never been
 settled. They sit here rather than in *Backlog* so that nobody implements one by guessing.
 
+### Opened by the QA audit of 2026-09-02
+
+> Three of these four are capabilities the interface currently claims and the code does
+> not have; Group I stops the claim (road distance → I-2, requirement matching → I-3, the
+> impact report → I-1), and these entries are the separate question of whether to **build**
+> them. Answering "no" to any of the three therefore costs nothing beyond the wording change
+> Group I already covers. The fourth — the donor needs board — is the opposite shape: a
+> capability the data supports and the UI never offers, so it is a straight yes/no.
+
+- **Should the match distance become real road/travel distance?** `[QA-1 · R-30]`
+  Today it is great-circle only: `matching.haversine_km` on two coordinate pairs, feeding
+  `_distance_score` (25% of the total weight) and a travel estimate of
+  `(distance / 20) * 60` minutes — a flat 20 km/h assumption, in a project whose subject
+  is urban logistics. The straight line under-states every real journey, and does so
+  unevenly: a river, a railway line or a one-way system distorts some pairs far more than
+  others, so it is not a constant the weights absorb. **What deciding "yes" costs, and why
+  it is a decision rather than a task:** it puts the first outbound HTTP dependency into a
+  backend that currently makes none (`ARCHITECTURE.md` — *External services: none*), and
+  with it an API key, a quota, a per-request failure mode and a latency budget on the
+  ranking path — which runs on every donation POST and now, since D-30, on every donation
+  read by an NGO. It needs a cache (recipient locations are near-static, so a
+  distance-matrix cache is natural) and a defined fallback for when the provider is
+  unreachable — presumably haversine, which means both numbers stay in the system anyway.
+  It also weakens D-17's no-mocks testing stance. A cheaper middle option exists and should
+  be considered first: keep haversine, apply a calibrated detour factor, and **say so** in
+  the UI. **Do not implement any of this before the decision.**
+
+- **Should requirements actually drive matching?** `[QA-2 · R-32]`
+  They do not today — `matching.py` never sees a `Requirement`. Making them count means
+  choosing what a requirement *is* to the matcher: a sixth weighted criterion (the
+  `WEIGHTS` dict must keep summing to 1.0, so every existing weight is re-tuned by the
+  choice), or a gate like verification and radius (D-06's shape — but a kitchen with no
+  posted requirement would then rank nowhere, which is worse than today), or a tie-break.
+  It also needs a matching rule between a donation's free-text `category` and a
+  requirement's free-text `food_type` — neither is a controlled vocabulary, so this
+  overlaps R-32 (recipient food-category preferences) and would give `COLD_STORAGE` its
+  purpose at last. **Scope if approved: M–L**, mostly in `matching.py` and its tests, and
+  it changes every score on every screen — which is a demo-visible event worth scheduling
+  deliberately.
+
+- **Should donors see a needs board?** `[QA-3 · §8.2]`
+  There is a real product gap here and **no authorization obstacle to close it.**
+  `GET /api/requirements` is already `Depends(get_current_user)` with no role gate and no
+  ownership scope, so every authenticated caller reads every organisation's active
+  requirements; `AppContext.load()` already fetches them for **every** role, so a donor's
+  browser holds this data today and simply never renders it — donor navigation
+  (`DonorLayout.tsx:11`) has no Needs entry, only the NGO's does. ⚠️ This is **not** a hole
+  in D-26: that decision scoped `RecipientOut` because it carries `contact_person` and
+  `phone`, and it explicitly recorded that "peer organisation *names* are already public
+  through `GET /api/requirements`". `RequirementOut` carries a name and a need, no contact
+  details. **So the question is product, not security:** does a donor deciding what to
+  cook or list benefit from seeing standing demand, and does showing it change how donors
+  behave in a way the project wants? If yes, it is a read-only page over data the client
+  already has — **S**, and no endpoint changes. Two things to settle alongside: whether the
+  board should be scoped by radius rather than shown platform-wide, and whether
+  `GET /api/requirements` should gain an explicit scope decision of its own now that it is
+  the one unscoped cross-organisation read left (it is defensible, but it is currently
+  unscoped by omission rather than by a recorded decision).
+
+- **Should there be a real, exportable impact report?** `[QA-4 · repo]`
+  Both export buttons are stubs: `DonorImpact.tsx:30` and `NGOImpact.tsx:22` call
+  `alert('Downloading Verified Impact Certificate (PDF)...')` and produce no file. The
+  audit's recommendation is that I-1 **delete or neutralise both buttons**, because the
+  alert claims a verified artefact was produced and nothing was. Whether a real one should
+  exist is the open question, and it is a larger one than it looks: a *verified* impact
+  certificate is a claim about evidence, so it should be generated server-side from
+  `status_events` — the ledger D-01 exists to make exactly this kind of statement
+  defensible — rather than assembled in the browser from whatever the client happens to
+  hold. That means a new endpoint and a rendering choice (CSV is trivial and honest;
+  PDF is a new dependency). Note `AdminDonations.tsx:55` already does a real client-side
+  CSV download, so the cheap honest version has a working precedent in the repository.
+  **Scope if approved: M for CSV, L for a server-rendered PDF.**
+
+### Older open decisions
+
 - **Should a donation stuck in `ACCEPTED` past its deadline expire?** The sweep only
   touches `AVAILABLE` and `MATCHED` (`code/foodlink/routers/admin.py:200`), so an
   accepted-but-never-delivered donation stays in that state forever and never counts as an
   expiry loss. Deliberate or oversight — undecided. `[B-1 · §14.4]`
+  ⚠️ **Not the same thing QA-7 saw.** QA found a **`MATCHED`** donation past its deadline,
+  which this sweep *does* cover — it had simply never been run, because nothing schedules
+  it (group E). The state machine is behaving correctly in that case; only the display is
+  silent about it (I-7). This entry remains open on its own terms.
 - **What should revoking an organisation's verification do to a donation it has already
   accepted?** Today, nothing: verification gates ranking and acceptance, not the lifecycle
   afterwards. Untested and undecided. `[B-4]`
@@ -260,7 +512,49 @@ external.
 
 ## Completed (verified in the repository)
 
-### Match-score consistency — working tree (uncommitted at verification) `[QA]`
+### QA audit and roadmap reconciliation — 2026-09-02 `[QA-1 … QA-12]`
+
+Documentation only. **No source file was changed**, no schema touched, no dependency added;
+148 backend tests pass unchanged. Twelve manual-QA observations were each traced
+frontend → API → router → matching/service → model before being classified, and the
+resulting work is *Backlog → I*, four new entries in *Blocked*, and reconciliation of
+existing items in F and G.
+
+| # | Observation | Classification | Where it now lives |
+|---|---|---|---|
+| 1 | Distance is straight-line, not road | **Intentional, but misleadingly presented** | Wording → I-2 · building it → *Blocked* · `R-30` |
+| 2 | Requirements do not drive matching | **Misleading UI claim** — verified: `matching.py` never references `Requirement` | Wording → I-3 · building it → *Blocked* |
+| 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint is already open and the client already fetches it | *Blocked* |
+| 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
+| 5 | Notification settings send nothing | **Misleading UI claim** — 11 dead toggles, 4 screens | I-4 · delivery itself is `R-28` |
+| 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | I-5 |
+| 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | I-7 · sweep → group E · `B-1` unchanged |
+| 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |
+| 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | I-6 |
+| 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | I-2 |
+| 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | I-3 · real recurrence → `R-35` |
+| 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1, I-8, I-9 |
+
+- [x] **The backend was checked and largely cleared.** Every server-computed number the
+      audit traced is derived from real rows: `/api/metrics` from `status_events` (D-01),
+      `reliability_score` from the recipient's own counters, `viewerMatch` live through
+      `score_pair` (D-30), `distanceKm` from two coordinate pairs. The invented figures are
+      all in the browser. The one substantive backend observation is that
+      `GET /api/requirements` is unscoped — recorded in *Blocked* as worth an explicit
+      decision, and **not** a contradiction of D-26, which already accounted for it.
+- [x] **A boundary was drawn rather than a blanket rule applied.**
+      `components/FutureIntelligenceSection.tsx` and `MatchAnalysis`'s "Rule-Based Model"
+      chip and roadmap note were classified **acceptable** — they carry explicit phase and
+      status labelling. `DECISIONS.md` D-31 records that distinction so this audit does not
+      have to be repeated by argument.
+- [x] Existing roadmap items reconciled instead of duplicated: `R-28`, `R-30`, `R-35` each
+      gained the audit's finding; the three group-F follow-ups gained file and line
+      references and confirmation against `23c27f4`; `B-1` gained a note distinguishing it
+      from QA-7.
+- [x] ⚠️ **Nothing was promoted into *Next*.** The audit recommends an order and says so as
+      a recommendation; the promotion is a Project Manager call.
+
+### Match-score consistency — `23c27f4` `[QA]`
 - [x] **Root cause traced, not guessed.** The NGO list rendered the persisted
       `Donation.match_score` — written at creation from `rank_recipients(…, limit=1)`, so
       it is the *top-ranked organisation's* score, frozen — under a label reading
