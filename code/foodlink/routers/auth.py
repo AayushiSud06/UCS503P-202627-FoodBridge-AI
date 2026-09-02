@@ -11,6 +11,10 @@ Three things about the account model are decided here:
   Without it the account would be authenticated but unable to accept anything.
 * A disabled account is turned away at login, not merely on its next request,
   so "your account has been suspended" is what the person actually sees.
+
+Registration and login are also the only two routes an anonymous caller can
+drive, so both are rate-limited per client address (`foodlink.ratelimit`).
+Nothing below the limit behaves differently.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Recipient, User, UserRole, Volunteer
+from ..ratelimit import login_rate_limit, register_rate_limit
 from ..schemas import PasswordChange, ProfileUpdate, RegisterRequest, TokenResponse, UserOut
 from ..security import create_access_token, get_current_user, hash_password, verify_password
 
@@ -28,7 +33,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 INACTIVE_DETAIL = "This account has been deactivated. Contact a platform administrator."
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(register_rate_limit)],
+)
 def register(body: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
     email = body.email.lower()
     if db.scalar(select(User).where(User.email == email)):
@@ -76,7 +86,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)) -> TokenRespo
     return TokenResponse(access_token=create_access_token(user), user=UserOut.model_validate(user))
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(login_rate_limit)])
 def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),

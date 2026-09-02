@@ -21,6 +21,20 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from foodlink.database import Base, get_db  # noqa: E402
 from foodlink.main import app  # noqa: E402
+from foodlink.ratelimit import reset_rate_limits  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Start every test with empty rate-limit counters.
+
+    They live in the process rather than the database (see
+    `foodlink.ratelimit`), so without this they would carry over from one test
+    to the next the way the throwaway database does not, and a suite that
+    registers a few dozen accounts would eventually rate-limit itself.
+    """
+    reset_rate_limits()
+    yield
 
 
 @pytest.fixture

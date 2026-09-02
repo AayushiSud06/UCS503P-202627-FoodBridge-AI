@@ -44,6 +44,18 @@ DEV_SIGNING_KEY = "foodlink-development-signing-key-not-for-any-deployment"
 #: being used well under its intended margin.
 MIN_SECRET_KEY_LENGTH = 32
 
+#: Authentication rate-limit policy. Conservative but not hostile: a person
+#: signing in mistypes a password a handful of times, and several people can
+#: share one address behind a NAT, so the ceiling has to clear ordinary use
+#: while still cutting an automated run from bcrypt-bound (hundreds a minute)
+#: to single figures. Registration is a rare act, so its ceiling is lower and
+#: its window much longer. Both are overridable per deployment because "how
+#: many people share one address" is a property of the network, not the code.
+DEFAULT_LOGIN_RATE_LIMIT = 30
+DEFAULT_LOGIN_RATE_WINDOW_SECONDS = 300  # 5 minutes
+DEFAULT_REGISTER_RATE_LIMIT = 10
+DEFAULT_REGISTER_RATE_WINDOW_SECONDS = 3600  # 1 hour
+
 _MISSING_KEY_MESSAGE = f"""\
 FOODLINK_SECRET_KEY is not set.
 
@@ -101,6 +113,31 @@ def _resolve_secret_key() -> tuple[str, bool]:
     raise ConfigurationError(_MISSING_KEY_MESSAGE)
 
 
+def _positive_int(name: str, default: int) -> int:
+    """Read a positive whole number from the environment.
+
+    A limit of `0` would refuse every request and a negative one would refuse
+    none, so neither is treated as a configuration a deployment could have
+    meant. Unlike the signing key these values are not secret, so the error is
+    free to quote what was configured.
+    """
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ConfigurationError(f"{name} must be a whole number of at least 1.") from None
+
+    if value < 1:
+        raise ConfigurationError(
+            f"{name} must be at least 1; it was set to {value}. A limit of 0 "
+            f"would refuse every request and a negative one would refuse none."
+        )
+    return value
+
+
 class Settings:
     def __init__(self) -> None:
         # SQLite by default so the project runs with no database server.
@@ -115,6 +152,22 @@ class Settings:
         self.secret_key, self.using_dev_secret = _resolve_secret_key()
 
         self.access_token_minutes: int = int(os.getenv("ACCESS_TOKEN_MINUTES", "720"))
+
+        # Rate limits for the two endpoints an anonymous caller can drive:
+        # `POST /api/auth/login` and `POST /api/auth/register`. Counted per
+        # client address over a sliding window — see `foodlink.ratelimit`.
+        self.login_rate_limit: int = _positive_int(
+            "LOGIN_RATE_LIMIT", DEFAULT_LOGIN_RATE_LIMIT
+        )
+        self.login_rate_window_seconds: int = _positive_int(
+            "LOGIN_RATE_WINDOW_SECONDS", DEFAULT_LOGIN_RATE_WINDOW_SECONDS
+        )
+        self.register_rate_limit: int = _positive_int(
+            "REGISTER_RATE_LIMIT", DEFAULT_REGISTER_RATE_LIMIT
+        )
+        self.register_rate_window_seconds: int = _positive_int(
+            "REGISTER_RATE_WINDOW_SECONDS", DEFAULT_REGISTER_RATE_WINDOW_SECONDS
+        )
 
         # Browser origins allowed to call the API.
         self.cors_origins: list[str] = [

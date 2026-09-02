@@ -1,7 +1,9 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-02; the most recent implementation commit
-> is `16497ea`. Context: `PROJECT_STATE.md`.
+> is `16497ea`, plus the authentication rate-limiting work described under *Completed*,
+> which was verified in the working tree and uncommitted at the time of writing.
+> Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -22,27 +24,22 @@
 
 ## Current
 
-**Nothing in progress.** The recipient read-scope fix is committed (`16497ea`) and its
+**Nothing in progress.** The authentication rate-limiting work is finished and its
 tests pass. No feature branch, no partial implementation, no TODO/FIXME markers in
 `code/foodlink/` or `frontend/src/`.
 
-The five-item hardening sequence — signing key → migrations → donation read scope → CI →
-recipient read scope — is finished; see *Completed*. *Next* item 1, rate limiting, is the
-task that follows.
+The six-item hardening sequence — signing key → migrations → donation read scope → CI →
+recipient read scope → auth rate limiting — is finished; see *Completed*. *Next* item 1,
+the courier claim race, is the task that follows.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-Two items. Each is a verified gap, each is small, and the second has to land before the
-deployment work in *Backlog → E*.
+One item. It is a verified gap, it is small, and it has to land before the deployment
+work in *Backlog → E*.
 
-- [ ] **1 · Rate-limit `POST /api/auth/login` and `/register`** `[R-6 · S-3]` — ~1 h
-      No limiting exists anywhere in the application (`slowapi`/`limiter` → no matches).
-      bcrypt's cost is the only bound on a credential-stuffing run today. **Now the
-      highest-severity open item**, with every unscoped personal-data read closed.
-
-- [ ] **2 · Fix the courier claim race** `[R-7 · repo]` — ~1 h
+- [ ] **1 · Fix the courier claim race** `[R-7 · repo]` — ~1 h
       `update_status` reads `donation.volunteer_id`, compares, then assigns
       (`code/foodlink/routers/donations.py:318`) with no row lock or unique constraint.
       SQLite serialises writes so it holds today; **it becomes a genuine TOCTOU the moment
@@ -139,6 +136,12 @@ hardening** — work that makes the application that already exists safer or mor
       no Procfile, no proxy config, no SPA rewrite for the built frontend, no TLS
       termination. §15.5 holds the checklist. Depends on the Postgres item above.
       `[§1.5 · §15.5]` — **L**
+- [ ] **Decide whether the rate-limit counter has to be shared.** `foodlink/ratelimit.py`
+      counts in the worker's own memory, which is exact while SQLite confines the app to one
+      process and becomes an `n`-fold weaker limit across `n` workers (D-27). Deployment also
+      has to run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy>`, or every
+      request arrives from the proxy and shares a single budget. Both are decisions for the
+      two items above, not standalone work. `[D-27 · repo]` — **M** if a shared store is chosen
 - [ ] **Schedule the expiry sweep.** `POST /api/admin/maintenance/expire` exists and must be
       called by hand; there is no scheduler, queue or worker anywhere (`ARCHITECTURE.md`
       constraint 7). Until it runs, the expiry-loss metric **understates** reality. It needs
@@ -232,6 +235,31 @@ external.
 ---
 
 ## Completed (verified in the repository)
+
+### Authentication rate limiting — working tree (uncommitted at verification) `[R-6 · S-3]`
+- [x] **`POST /api/auth/login` and `POST /api/auth/register` are rate limited**, the two
+      routes an anonymous caller can drive. `code/foodlink/ratelimit.py` holds a
+      sliding-window counter per client address; both routes carry it as a
+      `dependencies=[Depends(...)]` entry, so a request over the ceiling never reaches the
+      handler. No new dependency was added — see `DECISIONS.md` D-27.
+- [x] Policy: **30 logins per 5 minutes** and **10 registrations per hour**, per address.
+      All four values are read from the environment (`LOGIN_RATE_LIMIT`,
+      `LOGIN_RATE_WINDOW_SECONDS`, `REGISTER_RATE_LIMIT`, `REGISTER_RATE_WINDOW_SECONDS`)
+      through `config._positive_int`, which refuses a value that would refuse every
+      request (`0`) or none (negative).
+- [x] Over the ceiling: `429` with `{"detail": "Too many attempts from this network.
+      Please wait and try again."}` and a `Retry-After` header. The message names the
+      network, never the account, so the response is identical for a real address and an
+      unknown one (D-18's reasoning). Below the ceiling authentication is byte-for-byte
+      unchanged.
+- [x] Keyed on `request.client.host` only. `X-Forwarded-For` is deliberately not read —
+      trusting it would let any caller switch the limiter off.
+- [x] 22 tests in `code/tests/test_rate_limit.py`: the limiter (window slide, key
+      isolation, refusals not extending the lockout, key sweeping), both endpoints either
+      side of the threshold, address and endpoint isolation, recovery after the window,
+      and the configured policy. `conftest.py` clears the counters per test, since they
+      outlive the throwaway database.
+- [x] ⚠️ **The counter is process-local** — see *Backlog → E*.
 
 ### Recipient read authorization — `16497ea` `[S-2 (recipients half) · repo]`
 - [x] **`GET /api/recipients` is scoped server-side by role and ownership.** It returned

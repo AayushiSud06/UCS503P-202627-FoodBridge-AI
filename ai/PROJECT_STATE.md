@@ -3,8 +3,9 @@
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-02, branch `master`. The most recent
-> implementation commit is `16497ea` (recipient read scoping); no source change sits
-> outside it.
+> implementation commit is `16497ea` (recipient read scoping). Authentication rate
+> limiting was verified in the working tree, uncommitted at the time of writing; it is
+> the only source change outside that commit.
 
 ## What this project is
 
@@ -29,8 +30,9 @@ as ML.
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
+| Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
-| Backend tests | ✅ 91 tests passing (~48 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 22 config + 8 migration |
+| Backend tests | ✅ 113 tests passing (~53 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -43,6 +45,15 @@ the same `Settings` object. The error message states both options. Tests supply 
 own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
+
+- **working tree (uncommitted at verification)** — **`POST /api/auth/login` and `POST /api/auth/register` are rate
+  limited.** A sliding-window counter per client address in `foodlink/ratelimit.py`,
+  attached as a route dependency; over the ceiling the request never reaches the
+  handler and gets `429` + `Retry-After`. Default policy: **30 logins per 5 minutes**
+  and **10 registrations per hour**, per address, all four values tunable from the
+  environment. Below the limit nothing about authentication changed. The counter lives
+  in the process, which matches the one-worker deployment SQLite already forces — see
+  `DECISIONS.md` D-27 for what that does and does not buy.
 
 - `16497ea` — **`GET /api/recipients` scoped by role and ownership.** It returned
   every organisation, `contact_person` and `phone` included, to any authenticated
@@ -107,16 +118,15 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-**Next task: rate-limit `POST /api/auth/login` and `POST /api/auth/register`.** Nothing
-is in progress yet. The five-step hardening sequence — signing-key configuration,
-migrations, donation read scoping, CI, recipient read scoping — is complete and
-committed, and with it every unscoped read of personal contact data is closed. That makes
-brute-forceable authentication the highest-severity open item: no limiting of any kind
-exists in the application, so bcrypt's cost is the only bound on a credential-stuffing
-run.
+**Next task: fix the courier claim race** (`TASKS.md` → *Next* item 1). Nothing is in
+progress.
 
-After it, `TASKS.md` → *Next* holds one more item: the courier claim race — inert on
-SQLite, a real TOCTOU once Postgres lands.
+The six-step hardening sequence — signing-key configuration, migrations, donation read
+scoping, CI, recipient read scoping, authentication rate limiting — is complete, the
+last of those being the work described above. Every unscoped read of personal
+contact data is closed, and bcrypt is no longer the only bound on a credential-stuffing
+run. What remains of that sequence is the courier claim race: inert on SQLite, a real
+TOCTOU once Postgres lands, which is why it has to land before the deployment work.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional
 expansion and cleanup) or *Blocked* (four open decisions). None of it has been
@@ -155,9 +165,16 @@ suite, the frontend build and `alembic check` on push and pull request (D-25).
 **Remaining caveat:** there are still no frontend tests, so `tsc` is the only frontend
 gate — a type-correct behavioural regression passes CI.
 
-### High
-3. **No rate limiting anywhere.** Login is brute-forceable; bcrypt cost is the only
-   bound.
+✅ **Resolved:** there was no rate limiting anywhere, so bcrypt's cost was the only
+bound on a credential-stuffing run. `POST /api/auth/login` and `POST /api/auth/register`
+now count requests per client address over a sliding window and answer `429` above the
+ceiling (D-27). **Remaining caveat — the counter is process-local:** it is a dict in
+the worker, so two uvicorn workers would each keep their own and the effective limit
+would double, and two hosts would multiply it again. That is honest for the deployment
+the project has (SQLite confines it to one process), and it is a real constraint the
+moment that changes. Behind a reverse proxy the limiter also needs
+`uvicorn --proxy-headers --forwarded-allow-ips=<proxy>`, or every request arrives from
+the proxy's address and shares one budget.
 
 ### Medium
 5. **Courier claim is a read-then-write race.** The guard in `update_status` reads
@@ -213,8 +230,9 @@ gate — a type-correct behavioural regression passes CI.
 
 ## Immediate priorities
 
-1. Rate-limit `POST /api/auth/login` and `/register`
-2. Fix the courier claim race, before the Postgres work makes it exploitable
+1. Fix the courier claim race, before the Postgres work makes it exploitable
+2. Decide whether the rate-limit counter has to be shared, when deployment is
+   designed — it is per-process today (`TASKS.md` → *Backlog → E*)
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

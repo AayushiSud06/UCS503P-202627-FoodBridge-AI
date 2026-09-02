@@ -1,7 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
 > Decisions evident in the repository on 2026-09-02, through the recipient read-scope
-> commit (`16497ea`) — D-01 to D-26.
+> commit (`16497ea`) plus the authentication rate-limiting change in the working tree,
+> uncommitted at the time of writing — D-01 to D-27.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -572,3 +573,73 @@ resolves the caller's organisation out of the list rather than from `/me`. No in
 it must apply this same clause and 404, per D-24. Admin verification
 (`POST|DELETE /api/admin/recipients/{id}/verify`) is untouched and stays unrestricted
 behind the admin router gate.
+
+---
+
+## D-27 · Rate limiting is a per-process sliding window, written here rather than installed **[documented]**
+
+**Decision.** `foodlink/ratelimit.py` holds a `RateLimiter` — a deque of request
+timestamps per key, in this worker's memory — and exposes two route dependencies that
+`POST /api/auth/login` and `POST /api/auth/register` carry in
+`dependencies=[Depends(...)]`. The key is `request.client.host`. The default policy is
+**30 logins per 5 minutes** and **10 registrations per hour** per address, all four
+numbers settable from the environment. Over the ceiling: `429` with a `Retry-After`
+header and one human sentence. No dependency was added.
+
+**Reasoning.**
+
+- **No library, because the library is bigger than the problem.** `slowapi` (over
+  `limits`) is the obvious candidate and would have brought the `limits` package and its
+  own transitive dependencies, a global limiter object, an exception handler registered
+  on the app, and a `Request` parameter added to both handler signatures — to obtain a
+  counter in process memory, which is what the 75 lines of code here already are. The project has no
+  service layer, no middleware but CORS, and a deliberately short `requirements.txt`
+  (D-07); a dependency earns its place by doing something the codebase cannot.
+- **A route dependency, not middleware.** Middleware would have to re-derive which paths
+  to limit from the URL, and a renamed route would silently lose its limit. On the route,
+  the limit is part of the route definition and visible in the same three lines as the
+  response model.
+- **Keyed on the address, never the account.** Counting by submitted email would let
+  anyone lock a person out of their own account by failing logins for them, and the
+  response would differ between an address that has an account and one that does not —
+  which is exactly what login's single error message withholds (D-18). The 429 message
+  names the network for the same reason.
+- **Every request counts, not just the failures.** The limiter runs before the handler
+  and never learns the outcome, so authentication below the ceiling is unchanged. The
+  cost is that a burst of *successful* logins from one address counts too, which the
+  ceilings are set high enough to absorb.
+- **A sliding window, not a fixed one.** A fixed window lets through twice the limit
+  around its boundary. A deque of at most `limit` floats per active key is cheap enough
+  that the exact answer was not worth trading away; a sweep drops keys whose window has
+  passed so the dict cannot grow with every address ever seen.
+- **A refused request is not counted.** Otherwise retrying pushes the window out ahead of
+  the caller and `Retry-After` stops being true.
+- **Conservative, not hostile.** The ceilings have to clear a person mistyping a password
+  and a lecture theatre behind one NAT, while cutting an automated run from bcrypt-bound
+  (hundreds a minute) to single figures. Because "how many people share one address" is a
+  property of the network and not of the code, all four values are environment settings —
+  and `config._positive_int` refuses `0` (which would refuse every request) and negatives
+  (which would refuse none), in the same fail-closed spirit as the signing key (D-22).
+
+**Constraints.**
+
+- ⚠️ **The counter is process-local.** It is exact for the deployment the project has —
+  SQLite confines it to one writer, and migrations already run in the app's own lifespan
+  (D-23) — but `n` uvicorn workers would keep `n` independent counters and the effective
+  limit would be `n` times the configured one. Multi-worker or multi-host deployment
+  needs a shared store (Redis) or a limiter at the proxy; that is a deployment decision,
+  tracked in `TASKS.md` → *Backlog → E*, not something this control pretends to solve.
+- ⚠️ **Behind a reverse proxy, every request arrives from the proxy** and shares one
+  budget unless uvicorn runs with `--proxy-headers --forwarded-allow-ips=<the proxy>`.
+  `X-Forwarded-For` is not read in application code on purpose: any client can send it,
+  so trusting it there would hand every caller a switch to turn the limiter off. The
+  trust decision belongs to the deployment, which is the only place that can make it.
+- **Distributed credential stuffing is not addressed.** One password tried against many
+  accounts from many addresses stays under a per-address ceiling. Account lockout and MFA
+  are the answers to that, and both remain unbuilt (`TASKS.md` → *Backlog → A*).
+- **The 429 is not declared in the OpenAPI schema**, consistent with the rest of the API,
+  where no error response is declared anywhere.
+- **A restart forgets every counter**, which is the intended trade: no persistence, no
+  storage, and the worst case is one extra window's worth of attempts. The clock is
+  `time.monotonic`, so a system clock adjustment cannot widen or collapse a window
+  either.

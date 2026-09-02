@@ -2,7 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
 > `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
-> recipient read-scope commit (`16497ea`).
+> recipient read-scope commit (`16497ea`) plus the authentication rate-limiting change
+> in the working tree, uncommitted at the time of writing.
 
 ## Shape
 
@@ -44,6 +45,7 @@ Tailwind 3.4 · lucide-react. No Redux, no Axios, no form library, no test frame
 | `models.py` | 6 tables + `UserRole` + `DonationStatus` + **`ALLOWED_TRANSITIONS`** + `SELF_SIGNUP_ROLES` + `UtcDateTime`. The most important file. |
 | `schemas.py` | All request/response shapes. `alias_generator=to_camel`. Field constraints. |
 | `security.py` | 73 lines: bcrypt, JWT mint/verify, `get_current_user`, `require_roles`. |
+| `ratelimit.py` | `RateLimiter` (sliding window, per key, in this process) + the two route dependencies guarding login and registration. No new dependency; see D-27. |
 | `matching.py` | Haversine + 5 scoring functions + `WEIGHTS` + `rank_recipients`. **Pure — no DB access**, so unit-testable. |
 | `serialize.py` | `donation_out()` — ORM row + relations → wire shape; computes `distanceKm` live. |
 | `routers/` | `auth` · `admin` · `donations` · `organisations` · `metrics` |
@@ -171,8 +173,18 @@ only come from `python -m foodlink.cli create-admin`; subsequent ones from
 `POST /api/admin/users`. The admin router is gated **once** at the router level, so a
 new admin endpoint cannot be added unprotected.
 
-**Not present:** refresh tokens, token revocation/blocklist, rate limiting, MFA,
-email verification. Logout is client-side only.
+**Login and registration are rate limited** — the only two routes an anonymous caller
+can drive. `routers/auth` attaches `ratelimit.login_rate_limit` / `register_rate_limit`
+as route dependencies, so a request over the ceiling is refused before the handler runs.
+Default policy: 30 logins per 5 minutes and 10 registrations per hour, **per client
+address** (`request.client.host`; `X-Forwarded-For` is deliberately not trusted), all
+four values settable from the environment. Over the limit: `429` + `Retry-After`, with a
+message naming the network rather than the account so it says nothing about which
+addresses have accounts. **The counter is a dict in the worker process**, so it is exact
+only while the deployment is one process — see constraint 3 and `DECISIONS.md` D-27.
+
+**Not present:** refresh tokens, token revocation/blocklist, MFA, email verification,
+any limiting of authenticated endpoints. Logout is client-side only.
 
 ## API surface
 
@@ -231,6 +243,10 @@ insufficient.
 | `FOODLINK_SECRET_KEY` | **none — required** | Missing → `ConfigurationError` at import. Must be ≥32 chars; the retired public key is refused. |
 | `FOODLINK_DEV_INSECURE_SECRET` | unset | Dev-only opt-in (`1/true/yes/on`) enabling a known development signing key. Warns loudly at startup. |
 | `ACCESS_TOKEN_MINUTES` | `720` (12 h) | |
+| `LOGIN_RATE_LIMIT` | `30` | per client address, per window |
+| `LOGIN_RATE_WINDOW_SECONDS` | `300` (5 min) | |
+| `REGISTER_RATE_LIMIT` | `10` | per client address, per window |
+| `REGISTER_RATE_WINDOW_SECONDS` | `3600` (1 h) | |
 | `CORS_ORIGINS` | the two localhost dev origins | comma-separated allowlist, not `*` |
 | `MAX_MATCH_RADIUS_KM` | `8` | |
 | `FOODLINK_ADMIN_PASSWORD` | unset | scripted CLI bootstrap only |
@@ -245,8 +261,11 @@ proxy target). `VITE_*` values are **inlined at build time** — never secrets.
 2. **Migrations run in the app's own startup.** Safe only while constraint 1 holds a
    deployment to one process; multiple workers against Postgres would race. At that
    point `ensure_schema_current()` leaves the lifespan and becomes a deploy step.
-3. **The API is stateless** (JWT, no server session store) — so it *would* scale
-   horizontally once the database does. This is a real property, not an aspiration.
+3. **The API holds no session state** (JWT, no server session store), so it *would*
+   scale horizontally once the database does. The one piece of in-process state is the
+   rate-limit counter (`ratelimit.py`), and it is deliberately not authoritative:
+   restarting loses it and a second worker would not share it, which weakens the limit
+   by a factor of `n` but breaks nothing. Correctness never depends on it.
 4. **Invariants live in application code**, not the schema. The state machine,
    coordinate ranges, and counter consistency are unenforced at the DB level;
    anything writing outside the ORM can violate them.
@@ -262,11 +281,15 @@ in-memory SQLite. `conftest.py` uses `StaticPool` — required because in-memory
 exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
-Plus 22 config unit tests and 8 migration tests (`test_migrations.py`, temp file
-databases, never `DATABASE_URL`) — 91 in total. `test_donation_reads.py` (13) and
+Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 113 in total. `test_donation_reads.py` (13) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.
+`test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
+and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
+budget; `conftest.py` clears the counters before every test, because they live in the
+process rather than the per-test database.
 Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.
 
 ## Continuous integration — `.github/workflows/ci.yml`
