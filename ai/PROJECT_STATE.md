@@ -2,9 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-01, commit `8386371`, branch
-> `master`, working tree clean. Not yet pushed: `e47bd86` (CI) and `8386371`
-> (the .gitignore fix below).
+> Last verified against the repository: 2026-09-02, commit `f8a7297`, branch
+> `master`, working tree clean and level with `origin/master` — nothing is
+> waiting to be pushed.
 
 ## What this project is
 
@@ -44,6 +44,13 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
+- `f8a7297` — **`TASKS.md` reconciled** against the repository and the Project Knowledge
+  Guide's improvement roadmap. Documentation only, no code touched. The four completed
+  hardening items were confirmed and removed from the open list; roadmap work that had
+  never been transcribed was recovered (Postgres-for-deployment, deployment
+  configuration, dependency auditing in CI, object storage, and others); the open list
+  is now tagged back to its source (`R-n`/`B-n`/`S-n`) so it can be re-audited
+  mechanically. *Next* is no longer empty — see **Current development focus** below.
 - `8386371` — **`frontend/src/lib/` was never in the repository.** The vendored
   Python `.gitignore` template's unanchored `lib/` (under "Distribution / packaging")
   matches a directory of that name at *any* depth, so it silently swallowed five
@@ -91,11 +98,18 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-No feature work is in progress. The prioritised hardening list is now **empty** —
-signing-key configuration, migrations, donation read scoping and CI are all done, and
-`TASKS.md` → *Next* has nothing in it. Remaining work is in `TASKS.md` → *Backlog*,
-where rate limiting and scoping `GET /api/recipients` are the highest-value items;
-none has been committed to.
+No feature work is in progress. The first hardening sequence — signing-key
+configuration, migrations, donation read scoping, CI — is complete. `TASKS.md` was then
+reconciled against the repository and the improvement roadmap (`f8a7297`), which refilled
+*Next* with three ordered items:
+
+1. Scope `GET /api/recipients` — the last unscoped read of personal contact data
+2. Rate-limit `POST /api/auth/login` and `/register`
+3. Fix the courier claim race — inert on SQLite, a real TOCTOU once Postgres lands
+
+Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional
+expansion and cleanup) or *Blocked* (four open decisions). None of it has been
+committed to.
 
 ## Known issues and blockers
 
@@ -187,6 +201,7 @@ gate — a type-correct behavioural regression passes CI.
 
 1. Scope `GET /api/recipients` — the remaining unscoped read of personal contact data
 2. Rate-limit `POST /api/auth/login` and `/register`
+3. Fix the courier claim race, before the Postgres work makes it exploitable
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there
