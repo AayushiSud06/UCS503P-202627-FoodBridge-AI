@@ -366,6 +366,37 @@ Do not automatically modify all four files.
 
 ---
 
+---
+
+# 15A. AI DOCUMENTATION AND COMMIT PROVENANCE
+
+AI documentation must remain accurate across the implementation → review → commit workflow.
+
+Claude Code may update AI documentation before the human commits the implementation.
+
+Therefore:
+
+- Do NOT record a specific future commit hash for changes that are currently uncommitted.
+- If implementation changes are uncommitted, describe them as uncommitted repository changes when necessary.
+- Do NOT claim that an uncommitted change exists in a commit that does not yet contain it.
+- Do NOT perform a second documentation-only update solely because the human later committed the already-reviewed changes and the commit hash changed.
+- If an existing provenance field uses a commit hash, only update it when that hash is actually verified to contain the documented state.
+- Prefer describing the verified repository state over hard-coding commit hashes when the final commit cannot yet be known.
+
+The normal workflow is:
+
+1. Inspect repository.
+2. Implement task.
+3. Validate implementation.
+4. Update relevant AI documentation.
+5. Verify source changes and documentation.
+6. Report completion.
+7. Human reviews and commits the changes.
+
+The AI documentation should remain substantively correct after step 7 without requiring a documentation-only commit merely to replace a stale pre-commit hash.
+
+If a commit hash is genuinely important for historical provenance, it may be added or corrected during a later meaningful documentation update, but this should not be required for every implementation task.
+
 # 16. DOCUMENTATION ACCURACY
 
 Before updating AI documentation, verify the implementation.
