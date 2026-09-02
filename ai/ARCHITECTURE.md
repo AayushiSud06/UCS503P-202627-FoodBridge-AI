@@ -159,6 +159,12 @@ Scope: donor → their own; ngo → `AVAILABLE`/`MATCHED` plus their own organis
 volunteer → unclaimed `ACCEPTED` plus their own assignments; admin → everything.
 See `DECISIONS.md` D-24.
 
+**Recipient reads are scoped the same way** by
+`routers/organisations._visible_recipients()`: admin → every organisation; ngo → its own
+row only; donor and volunteer → none. `RecipientOut` carries a contact person and a
+phone, so the list is a directory of people. Denial here is an empty list rather than a
+403 — unlike `GET /volunteers`, which role-gates. See `DECISIONS.md` D-26.
+
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
 only come from `python -m foodlink.cli create-admin`; subsequent ones from
@@ -176,7 +182,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
 | donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`** |
-| organisations | `GET /recipients` · `GET|PATCH /recipients/me` · `GET|POST /requirements` · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
+| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
 | meta | `GET /health` (does **not** touch the DB) |

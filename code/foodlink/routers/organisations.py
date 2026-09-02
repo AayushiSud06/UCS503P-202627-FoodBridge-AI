@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
@@ -17,12 +17,48 @@ from ..security import get_current_user, require_roles
 router = APIRouter(prefix="/api", tags=["organisations"])
 
 
+def _visible_recipients(user: User):
+    """The organisations `user` may read, as a WHERE clause — or None for all.
+
+    `RecipientOut` carries a named contact and a phone number, so this list is
+    a directory of people as much as of places. Its scope therefore follows the
+    same rule as `donations._readable_by`: what each role's own work needs, and
+    nothing past it.
+
+    * admin — unrestricted; vouching for organisations is the job.
+    * ngo — their own organisation only. Two kitchens have no workflow with
+      each other, and the portal resolves its own profile out of this list.
+    * donor / volunteer — nothing. Neither acts on an organisation record, and
+      the organisation bound to a donation already reaches them as
+      `recipientName` on the donation itself, without a contact or a phone.
+
+    Fail closed: a role added later reads nothing until it is given a scope
+    here, rather than silently inheriting everyone else's records.
+    """
+    if user.role is UserRole.admin:
+        return None
+
+    if user.role is UserRole.ngo:
+        return Recipient.user_id == user.id
+
+    return false()
+
+
 @router.get("/recipients", response_model=list[RecipientOut])
 def list_recipients(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[RecipientOut]:
-    return [RecipientOut.model_validate(r) for r in db.scalars(select(Recipient))]
+    """Recipient organisations, scoped to the caller.
+
+    The scope is applied in the query, so the database never hands back a row
+    the caller may not see and there is no unfiltered list to leak later.
+    """
+    stmt = select(Recipient)
+    scope = _visible_recipients(user)
+    if scope is not None:
+        stmt = stmt.where(scope)
+    return [RecipientOut.model_validate(r) for r in db.scalars(stmt)]
 
 
 def _own_recipient(db: Session, user: User) -> Recipient:

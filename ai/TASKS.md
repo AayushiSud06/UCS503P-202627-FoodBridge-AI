@@ -1,6 +1,6 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against commit `54ee62f` (identical to `origin/master`), 2026-09-02.
+> Verified against the working tree on 2026-09-02, one commit past `8abc666`.
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -22,36 +22,27 @@
 
 ## Current
 
-**Nothing in progress.** HEAD is `54ee62f` and equals `origin/master` — the CI workflow
-(`e47bd86`), the `frontend/src/lib/` gitignore fix (`8386371`) and the state write-up
-(`54ee62f`) are all pushed. The only untracked path is `AGENTS.md`. No feature branch, no
-partial implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
+**Nothing in progress.** The recipient read-scope fix is implemented and its tests pass;
+it is the working tree's only change over `8abc666` and is not yet committed. No feature
+branch, no partial implementation, no TODO/FIXME markers in `code/foodlink/` or
+`frontend/src/`.
 
-The four-item hardening sequence — signing key → migrations → donation read scope → CI —
-is finished; see *Completed*.
+The five-item hardening sequence — signing key → migrations → donation read scope → CI →
+recipient read scope — is finished; see *Completed*.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-Three items only. Each is a verified gap, each is small, and the third has to land before
-the deployment work in *Backlog → E*.
+Two items. Each is a verified gap, each is small, and the second has to land before the
+deployment work in *Backlog → E*.
 
-- [ ] **1 · Scope `GET /api/recipients`** `[S-2 · repo]` — **M**
-      The last unscoped read of personal data. `RecipientOut` carries `contact_person`
-      and `phone`, and `list_recipients` (`code/foodlink/routers/organisations.py:20`)
-      returns every organisation to any authenticated account. This is the same defect
-      `ea0f499` fixed on donations, on the neighbouring table; `_readable_by` (D-24) is
-      the obvious template. `GET /api/volunteers` is already restricted to admin/ngo, so
-      this is the one that remains.
-      *(`GET /api/metrics` is also platform-wide, but that is a product question rather
-      than a defect — see* Blocked*.)*
-
-- [ ] **2 · Rate-limit `POST /api/auth/login` and `/register`** `[R-6 · S-3]` — ~1 h
+- [ ] **1 · Rate-limit `POST /api/auth/login` and `/register`** `[R-6 · S-3]` — ~1 h
       No limiting exists anywhere in the application (`slowapi`/`limiter` → no matches).
-      bcrypt's cost is the only bound on a credential-stuffing run today.
+      bcrypt's cost is the only bound on a credential-stuffing run today. **Now the
+      highest-severity open item**, with every unscoped personal-data read closed.
 
-- [ ] **3 · Fix the courier claim race** `[R-7 · repo]` — ~1 h
+- [ ] **2 · Fix the courier claim race** `[R-7 · repo]` — ~1 h
       `update_status` reads `donation.volunteer_id`, compares, then assigns
       (`code/foodlink/routers/donations.py:318`) with no row lock or unique constraint.
       SQLite serialises writes so it holds today; **it becomes a genuine TOCTOU the moment
@@ -241,6 +232,29 @@ external.
 ---
 
 ## Completed (verified in the repository)
+
+### Recipient read authorization — working tree `[S-2 (recipients half) · repo]`
+- [x] **`GET /api/recipients` is scoped server-side by role and ownership.** It returned
+      every organisation — `contact_person` and `phone` included — to any authenticated
+      account. `_visible_recipients(user)`
+      (`code/foodlink/routers/organisations.py`) now returns the caller's scope as a
+      WHERE clause applied in the query, the same shape as `_readable_by` (D-24).
+- [x] Scope: admin → every organisation · ngo → its own row only · donor → none ·
+      volunteer → none · unknown role → none (`false()`, fails closed). Denial is an
+      empty list, not a 403 — deliberately unlike `GET /api/volunteers`. See
+      `DECISIONS.md` D-26.
+- [x] **No individual-recipient read endpoint exists** to scope alongside it.
+      `GET|PATCH /recipients/me` was already `require_roles(ngo)` plus a `user_id` lookup;
+      `POST|DELETE /admin/recipients/{id}/verify` sits behind the admin router gate. Both
+      untouched, so every path returning `RecipientOut` is now scoped.
+- [x] Frontend untouched and unbroken: the only consumers of the collection are the two
+      admin organisation screens (admin keeps everything) and `useMyRecipient`, which
+      resolves the caller's own row out of the list — which the ngo scope keeps. A donor
+      or courier receiving `[]` is already indistinguishable from the 403 that
+      `AppContext.optional` swallows today.
+- [x] 11 tests in `code/tests/test_recipient_reads.py`, including a role matrix and
+      negative tests asserting another organisation's phone number appears nowhere in the
+      response body. Nine of them fail against the previous code.
 
 ### Continuous integration — `e47bd86`, `8386371` `[R-5]`
 - [x] **`.github/workflows/ci.yml`** runs on push to `master`/`main` and on every pull

@@ -529,3 +529,45 @@ Alembic step is given a literal placeholder `FOODLINK_SECRET_KEY`, not a reposit
 there are no frontend tests, so `tsc` passing is the whole frontend signal. The workflow
 deliberately contains no deployment: the project has no deployment configuration, and
 inventing one in CI would be the wrong place to start.
+
+---
+
+## D-26 · Recipient reads are scoped by ownership, and denial is an empty list **[documented]**
+
+**Decision.** `routers/organisations._visible_recipients(user)` returns the organisations
+a caller may read as a WHERE clause — `None` (unrestricted) for an administrator,
+`Recipient.user_id == user.id` for an `ngo`, and `false()` for everyone else. `GET
+/api/recipients` applies it in the query. A donor or a courier therefore receives `200 []`
+rather than a 403.
+
+**Reasoning.**
+
+- **It is a directory of people, not of places.** `RecipientOut` carries
+  `contact_person` and `phone`. That is the same objection the `GET /api/volunteers`
+  docstring already raises about the courier roster, on the neighbouring table.
+- **A kitchen sees only itself.** There is no workflow between two recipient
+  organisations anywhere in the model — a donation binds a donor, one recipient and one
+  courier. Peer organisation *names* are already public through `GET /api/requirements`
+  and through `/matches`; their contact details had no reader.
+- **Donors and couriers read nothing here.** Both learn which organisation a donation
+  went to from `recipientName` on the donation itself, which carries no contact person
+  and no phone. Giving them the row would be widening, not preserving.
+- **A clause, not `require_roles`.** The `ngo` scope is per-row, so a role gate cannot
+  express it; using one mechanism for all four roles is what keeps the boundary in one
+  place. This is D-24's shape applied to the neighbouring table.
+- **An empty list, not a 403.** ⚠️ **Deliberately unlike `GET /api/volunteers`**, which
+  role-gates and returns 403. Nothing here is worth withholding by status code — the
+  endpoint's existence is public in `/docs` and the response reveals nothing either way —
+  and a single code path that always returns `list[RecipientOut]` keeps the contract
+  intact for the client, which already treats a 403 and an empty list identically
+  (`AppContext.optional`). Consequence, accepted: a misconfigured account sees an empty
+  directory rather than an error explaining why.
+- **The scope map fails closed.** A role with no branch reads nothing.
+
+**Constraints.** `GET /api/recipients/me` remains the NGO portal's own-profile route and
+is unchanged; the scoped list also still contains that row, because `useMyRecipient`
+resolves the caller's organisation out of the list rather than from `/me`. No individual
+`GET /api/recipients/{id}` exists, so there is no id path to scope — should one be added,
+it must apply this same clause and 404, per D-24. Admin verification
+(`POST|DELETE /api/admin/recipients/{id}/verify`) is untouched and stays unrestricted
+behind the admin router gate.

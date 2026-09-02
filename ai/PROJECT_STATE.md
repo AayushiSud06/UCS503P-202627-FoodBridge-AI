@@ -2,9 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-02, commit `f8a7297`, branch
-> `master`, working tree clean and level with `origin/master` — nothing is
-> waiting to be pushed.
+> Last verified against the repository: 2026-09-02, one commit past `8abc666` on
+> branch `master`. ⚠️ The recipient read-scope fix below is **in the working tree,
+> not yet committed** — it is the only difference from `origin/master`.
 
 ## What this project is
 
@@ -28,9 +28,9 @@ as ML.
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers, donation reads scoped by role/ownership |
+| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
-| Backend tests | ✅ 80 tests passing (~33 s): 37 integration + 13 read-scope + 22 config + 8 migration |
+| Backend tests | ✅ 91 tests passing (~54 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -44,6 +44,15 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
+- *(uncommitted)* — **`GET /api/recipients` scoped by role and ownership.** It returned
+  every organisation, `contact_person` and `phone` included, to any authenticated
+  account. `_visible_recipients(user)` now returns the caller's scope as a WHERE clause
+  applied in the query: admin → everything · ngo → its own row · donor and volunteer →
+  nothing · unknown role → nothing. Denial is an empty list rather than a 403,
+  deliberately unlike `GET /api/volunteers`; the frontend already treats the two
+  identically. No individual-recipient read endpoint existed to scope alongside it, and
+  the frontend, the lifecycle and the auth paths are untouched. 11 new tests, nine of
+  which fail against the previous code. See `DECISIONS.md` D-26.
 - `f8a7297` — **`TASKS.md` reconciled** against the repository and the Project Knowledge
   Guide's improvement roadmap. Documentation only, no code touched. The four completed
   hardening items were confirmed and removed from the open list; roadmap work that had
@@ -98,14 +107,13 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-No feature work is in progress. The first hardening sequence — signing-key
-configuration, migrations, donation read scoping, CI — is complete. `TASKS.md` was then
-reconciled against the repository and the improvement roadmap (`f8a7297`), which refilled
-*Next* with three ordered items:
+No feature work is in progress. The hardening sequence — signing-key configuration,
+migrations, donation read scoping, CI, recipient read scoping — is complete, and with it
+every unscoped read of personal contact data is closed. `TASKS.md` → *Next* now holds two
+ordered items:
 
-1. Scope `GET /api/recipients` — the last unscoped read of personal contact data
-2. Rate-limit `POST /api/auth/login` and `/register`
-3. Fix the courier claim race — inert on SQLite, a real TOCTOU once Postgres lands
+1. Rate-limit `POST /api/auth/login` and `/register` — now the highest-severity open item
+2. Fix the courier claim race — inert on SQLite, a real TOCTOU once Postgres lands
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional
 expansion and cleanup) or *Blocked* (four open decisions). None of it has been
@@ -131,10 +139,13 @@ deploy step first, or the workers race to migrate.
 
 ✅ **Resolved:** donation reads were not scoped by ownership. `routers/donations._readable_by()`
 now returns the caller's read scope as a WHERE clause applied by the list, the id lookup
-and `/matches` alike, so knowing an id is not a way past the list (D-24). **Remaining
-read-exposure caveat, unchanged:** `GET /api/recipients` still returns every
-organisation's contact person and phone to any authenticated account, and
-`GET /api/metrics` is still platform-wide for everyone.
+and `/matches` alike, so knowing an id is not a way past the list (D-24).
+
+✅ **Resolved:** `GET /api/recipients` returned every organisation's contact person and
+phone to any authenticated account. `routers/organisations._visible_recipients()` now
+scopes it in the query the same way (D-26). **Remaining read-exposure caveat:**
+`GET /api/metrics` is still platform-wide for everyone — a product question rather than a
+defect, tracked in `TASKS.md` → *Blocked*.
 
 ✅ **Resolved:** tests never ran in CI. `.github/workflows/ci.yml` runs the backend
 suite, the frontend build and `alembic check` on push and pull request (D-25).
@@ -199,7 +210,7 @@ gate — a type-correct behavioural regression passes CI.
 
 ## Immediate priorities
 
-1. Scope `GET /api/recipients` — the remaining unscoped read of personal contact data
+1. Commit the recipient read-scope change sitting in the working tree
 2. Rate-limit `POST /api/auth/login` and `/register`
 3. Fix the courier claim race, before the Postgres work makes it exploitable
 
