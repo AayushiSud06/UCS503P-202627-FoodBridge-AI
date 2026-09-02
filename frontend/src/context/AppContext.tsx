@@ -83,6 +83,13 @@ interface AppContextValue {
   refresh: () => Promise<void>;
   createDonation: (draft: DonationDraft) => Promise<Donation>;
   createRequirement: (draft: RequirementDraft) => Promise<NGORequirement>;
+  /** Revise one of your own requirements; only the given fields change. */
+  updateRequirement: (id: string, patch: Partial<RequirementDraft>) => Promise<NGORequirement>;
+  /**
+   * Take one of your own requirements off the board — met, or no longer
+   * needed. The record is kept, not deleted, and stops being listed.
+   */
+  retireRequirement: (id: string) => Promise<void>;
   updateDonationStatus: (
     id: string,
     status: DonationStatus,
@@ -208,6 +215,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [load],
   );
 
+  const updateRequirement = useCallback(
+    async (id: string, patch: Partial<RequirementDraft>) => {
+      const updated = await api.updateRequirement(Number(id), patch);
+      await load();
+      return toRequirement(updated);
+    },
+    [load],
+  );
+
+  // Retiring is `isActive: false` on the same endpoint: the server has one
+  // lifecycle flag, so a need that has been met and one that no longer applies
+  // are the same state. The row stays; only the listing drops it.
+  const retireRequirement = useCallback(
+    async (id: string) => {
+      await api.updateRequirement(Number(id), { isActive: false });
+      await load();
+    },
+    [load],
+  );
+
   const updateDonationStatus = useCallback(
     async (
       id: string,
@@ -247,6 +274,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh: load,
       createDonation,
       createRequirement,
+      updateRequirement,
+      retireRequirement,
       updateDonationStatus,
       setRecipientVerified,
       setAvailability,
@@ -254,8 +283,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dismissToast,
     }),
     [
-      state, load, createDonation, createRequirement, updateDonationStatus,
-      setRecipientVerified, setAvailability, showToast, dismissToast,
+      state, load, createDonation, createRequirement, updateRequirement, retireRequirement,
+      updateDonationStatus, setRecipientVerified, setAvailability, showToast, dismissToast,
     ],
   );
 

@@ -1,67 +1,109 @@
 import { useState } from 'react';
-import { PlusCircle, ClipboardList, AlertCircle, Users, Check, Clock } from 'lucide-react';
+import {
+  PlusCircle, ClipboardList, AlertCircle, Users, Check, Clock, Pencil, CheckCircle2,
+} from 'lucide-react';
 import { useRequirements, useApp, useMyRecipient } from '../../context/AppContext';
 import { useAction } from '../../lib/hooks';
+import type { NGORequirement } from '../../types';
+
+const BLANK_FORM = {
+  foodType: '',
+  quantityNeeded: '',
+  unit: 'Meals',
+  beneficiaryCount: '',
+  urgency: 'High' as 'High' | 'Medium' | 'Low',
+  dailyRecurring: true,
+  notes: '',
+};
 
 export default function NGORequirements() {
   const allRequirements = useRequirements();
-  const { createRequirement } = useApp();
+  const { createRequirement, updateRequirement, retireRequirement } = useApp();
   const myRecipient = useMyRecipient();
-  const { run, isBusy } = useAction();
+  const { run, isBusy, isPending } = useAction();
   const [showModal, setShowModal] = useState(false);
+  // Null while posting something new; the requirement being revised otherwise.
+  // The same modal serves both, so an edit is a filled-in version of the form
+  // that posted it.
+  const [editing, setEditing] = useState<NGORequirement | null>(null);
 
   // Every kitchen posts to the same board; this page is about your own needs.
   const requirements = myRecipient
     ? allRequirements.filter(r => r.ngoId === myRecipient.id)
     : allRequirements;
 
-  const [form, setForm] = useState({
-    foodType: '',
-    quantityNeeded: '',
-    unit: 'Meals',
-    beneficiaryCount: '',
-    urgency: 'High' as 'High' | 'Medium' | 'Low',
-    dailyRecurring: true,
-    notes: '',
-  });
+  const [form, setForm] = useState(BLANK_FORM);
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditing(null);
+    setForm(BLANK_FORM);
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(BLANK_FORM);
+    setShowModal(true);
+  };
+
+  const openEdit = (req: NGORequirement) => {
+    setEditing(req);
+    setForm({
+      foodType: req.foodType,
+      quantityNeeded: String(req.quantityNeeded),
+      unit: req.unit,
+      beneficiaryCount: String(req.beneficiaryCount),
+      urgency: req.urgency,
+      dailyRecurring: req.dailyRecurring,
+      notes: req.notes,
+    });
+    setShowModal(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.foodType || !form.quantityNeeded) return;
 
-    const created = await run(
-      'create-requirement',
-      () =>
-        createRequirement({
-          foodType: form.foodType,
-          quantityNeeded: Number(form.quantityNeeded),
-          unit: form.unit,
-          beneficiaryCount: Number(form.beneficiaryCount) || 0,
-          urgency: form.urgency,
-          dailyRecurring: form.dailyRecurring,
-          notes: form.notes,
-        }),
-      {
-        success: {
-          message: 'Requirement posted',
-          subtitle: 'Donors can now see what your kitchen needs.',
-        },
-        errorTitle: 'Could not post this requirement',
-      },
-    );
-    if (!created) return;
+    const draft = {
+      foodType: form.foodType,
+      quantityNeeded: Number(form.quantityNeeded),
+      unit: form.unit,
+      beneficiaryCount: Number(form.beneficiaryCount) || 0,
+      urgency: form.urgency,
+      dailyRecurring: form.dailyRecurring,
+      notes: form.notes,
+    };
 
-    setShowModal(false);
-    setForm({
-      foodType: '',
-      quantityNeeded: '',
-      unit: 'Meals',
-      beneficiaryCount: '',
-      urgency: 'High',
-      dailyRecurring: true,
-      notes: '',
-    });
+    const saved = editing
+      ? await run('save-requirement', () => updateRequirement(editing.id, draft), {
+          success: {
+            message: 'Requirement updated',
+            subtitle: 'Donors now see the revised need.',
+          },
+          errorTitle: 'Could not update this requirement',
+        })
+      : await run('save-requirement', () => createRequirement(draft), {
+          success: {
+            message: 'Requirement posted',
+            subtitle: 'Donors can now see what your kitchen needs.',
+          },
+          errorTitle: 'Could not post this requirement',
+        });
+    if (!saved) return;
+
+    closeModal();
   };
+
+  // Fulfilled and no-longer-needed are the same state on the server: the
+  // requirement comes off the board and the record is kept. Nothing is deleted.
+  const handleFulfil = (req: NGORequirement) =>
+    run(`retire-${req.id}`, () => retireRequirement(req.id), {
+      success: {
+        message: 'Requirement closed',
+        subtitle: 'It has left the board; the record is kept.',
+      },
+      errorTitle: 'Could not close this requirement',
+    });
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -73,7 +115,7 @@ export default function NGORequirements() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openCreate}
           className="btn-primary shrink-0"
         >
           <PlusCircle size={18} /> Post New Requirement
@@ -131,6 +173,29 @@ export default function NGORequirements() {
               </span>
               <span className="text-gray-400 font-normal">Auto-matching enabled</span>
             </div>
+
+            <div className="pt-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => openEdit(req)}
+                disabled={isBusy}
+                className="btn-secondary text-xs px-3.5 py-1.5 disabled:opacity-60"
+              >
+                <Pencil size={13} /> Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFulfil(req)}
+                disabled={isBusy}
+                className="btn-outline-primary text-xs px-3.5 py-1.5 disabled:opacity-60"
+              >
+                <CheckCircle2 size={13} />
+                {isPending(`retire-${req.id}`) ? 'Closing…' : 'Mark fulfilled'}
+              </button>
+              <span className="ml-auto text-[11px] text-gray-400">
+                Closing keeps the record
+              </span>
+            </div>
           </div>
         ))}
       </div>
@@ -139,7 +204,9 @@ export default function NGORequirements() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="card w-full max-w-lg p-6 space-y-4 bg-white shadow-2xl">
-            <h2 className="text-lg font-bold text-gray-900">Post Food Requirement / Demand</h2>
+            <h2 className="text-lg font-bold text-gray-900">
+              {editing ? 'Edit Food Requirement / Demand' : 'Post Food Requirement / Demand'}
+            </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="label">Food Type Needed *</label>
@@ -233,16 +300,17 @@ export default function NGORequirements() {
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="btn-secondary text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary text-xs"
+                  disabled={isBusy}
+                  className="btn-primary text-xs disabled:opacity-60"
                 >
-                  Broadcast Requirement
+                  {editing ? 'Save Changes' : 'Broadcast Requirement'}
                 </button>
               </div>
             </form>

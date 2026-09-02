@@ -1,9 +1,9 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-02; the most recent implementation commit
-> is `91544e3`, plus the courier-claim concurrency work described under *Completed*,
-> which was verified in the working tree and uncommitted at the time of writing.
-> Context: `PROJECT_STATE.md`.
+> is `e919f7b` (courier-claim concurrency), plus the requirement-lifecycle work described
+> under *Completed*, which was verified in the working tree and uncommitted at the time of
+> writing. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -24,13 +24,13 @@
 
 ## Current
 
-**Nothing in progress.** The courier-claim concurrency fix is finished and its tests
+**Nothing in progress.** The requirement-lifecycle feature is finished and its tests
 pass; it is uncommitted in the working tree, awaiting review. No feature branch, no
 partial implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
-CI → recipient read scope → auth rate limiting → courier claim race — is finished; see
-*Completed*.
+CI → recipient read scope → auth rate limiting → courier claim race — is finished, and
+the first item out of *Backlog → F* (requirement `PATCH`) is done; see *Completed*.
 
 ---
 
@@ -157,10 +157,11 @@ hardening** — work that makes the application that already exists safer or mor
 
 Places where a shipped feature is incomplete — not new ideas.
 
-- [ ] `PATCH` / `DELETE` for requirements. They can be created and listed
-      (`code/foodlink/routers/organisations.py:83,95`) but never edited or deactivated,
-      even though `is_active` exists on the model and the list already filters on it.
-      `[R-16]` — **M**
+- [ ] Let an organisation see its own retired requirements. `PATCH /api/requirements/{id}`
+      can reopen one, but `GET /api/requirements` returns active rows only and gained no
+      parameter, so a retired requirement has no reader and the UI cannot list or reopen
+      it. The shape: an `includeInactive` flag widening the caller's view of **its own**
+      organisation's rows only, never anyone else's. `[D-29 · repo]` — **S**
 - [ ] Courier rating flow, **or** drop `Volunteer.rating`. The column is written by nothing
       but `seed.py`; `VolunteerUpdate` excludes it deliberately, so every courier created
       through the app is permanently 5.0. `[B-3 · R-33]` — **M**
@@ -241,7 +242,33 @@ external.
 
 ## Completed (verified in the repository)
 
-### Courier claim race — working tree (uncommitted at verification) `[R-7 · repo]`
+### Requirement lifecycle — working tree (uncommitted at verification) `[R-16]`
+- [x] **`PATCH /api/requirements/{id}`** (`routers/organisations.update_requirement`) —
+      the one lifecycle operation. It revises fields, retires a requirement
+      (`isActive: false`) and reopens one. No `DELETE`, no new column, no migration
+      (`alembic check` clean). See `DECISIONS.md` D-29.
+- [x] **Fulfilment is retirement.** The model has one flag, `is_active`, and
+      `GET /api/requirements` already filtered on it, so "mark fulfilled" and "no longer
+      needed" write the same row and the record is kept rather than deleted. The API and
+      the UI say so in those words rather than implying a stored distinction.
+- [x] **Ownership is enforced in the query.** `_own_requirement_or_404()` matches the
+      caller's own `recipient_id`; another organisation's id is a 404, per D-24. Holding
+      the `ngo` role only passes `require_roles`. `RequirementUpdate` repeats
+      `RequirementCreate`'s constraints, so a quantity that cannot be posted cannot be
+      edited in either, and an explicit `null` is skipped rather than written to a
+      non-nullable column.
+- [x] **NGO UI, desktop and mobile.** `pages/ngo/NGORequirements.tsx` and
+      `mobile/NGORequirements.tsx` reuse their existing modal/sheet for editing and add
+      *Edit* / *Mark fulfilled* per card; `AppContext` gains `updateRequirement` and
+      `retireRequirement` on the existing write-then-refetch path. Neither page was
+      redesigned.
+- [x] 15 tests in `code/tests/test_requirement_lifecycle.py`, plus manual verification
+      through the running app (edit and retire as a seeded NGO, against a copy of the dev
+      database).
+- [x] ⚠️ A retired requirement has no reader: the list stayed active-only, so reopening is
+      API-only — see the new *Backlog → F* item.
+
+### Courier claim race — `e919f7b` `[R-7 · repo]`
 - [x] **The claim is atomic.** `routers/donations._claim_pickup()` assigns the courier
       with one conditional `UPDATE … WHERE id = :id AND status = :from_status AND
       (volunteer_id IS NULL OR volunteer_id = :courier)`, and `rowcount != 1` means the

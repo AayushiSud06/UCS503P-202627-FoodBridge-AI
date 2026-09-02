@@ -3,9 +3,9 @@
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-02, branch `master`. The most recent
-> implementation commit is `91544e3` (authentication rate limiting). The courier-claim
-> concurrency fix was verified in the working tree, uncommitted at the time of writing;
-> it is the only source change outside that commit.
+> implementation commit is `e919f7b` (courier-claim concurrency). The requirement
+> lifecycle was verified in the working tree, uncommitted at the time of writing; it is
+> the only source change outside that commit.
 
 ## What this project is
 
@@ -33,7 +33,7 @@ as ML.
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 122 tests passing (~60 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
+| Backend tests | ✅ 137 tests passing (~80 s): 37 integration + 15 requirement-lifecycle + 13 donation-read-scope + 11 recipient-read-scope + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -47,7 +47,19 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **working tree (uncommitted at verification)** — **The courier claim is atomic.**
+- **working tree (uncommitted at verification)** — **Requirements have a lifecycle.**
+  An NGO can now revise, retire and reopen its own standing needs, not only post them.
+  One new operation, `PATCH /api/requirements/{id}`: partial update in the existing
+  `exclude_unset` style, with ownership as a term in the query, so another organisation's
+  requirement is a 404 rather than a 403 and holding the `ngo` role alone is not enough.
+  **Fulfilment is retirement** — the model carries one flag, `is_active`, and the list
+  already filtered on it, so "mark fulfilled" and "no longer needed" write the same row
+  and neither deletes it. No new column, no migration, `alembic check` clean. The NGO
+  portal (desktop and mobile) reuses its existing modal for editing and adds *Edit* /
+  *Mark fulfilled* per card. 15 new tests, plus manual verification through the running
+  app against a copy of the dev database. See `DECISIONS.md` D-29.
+
+- `e919f7b` — **The courier claim is atomic.**
   `donations._claim_pickup()` binds a courier with one conditional
   `UPDATE … WHERE id = :id AND status = :from_status AND (volunteer_id IS NULL OR
   volunteer_id = :courier)`; a `rowcount` of 0 means the claim was lost and becomes the
@@ -133,8 +145,8 @@ the existing screens did not need rewriting — only the data source changed.
 
 **Nothing is in progress, and `TASKS.md` → *Next* is empty.** The seven-step hardening
 sequence — signing-key configuration, migrations, donation read scoping, CI, recipient
-read scoping, authentication rate limiting, courier claim race — is complete, the last
-of those being the work described above. Every unscoped read of personal contact data
+read scoping, authentication rate limiting, courier claim race — is complete, and the
+requirement lifecycle described above is the first item taken out of *Backlog → F*. Every unscoped read of personal contact data
 is closed, bcrypt is no longer the only bound on a credential-stuffing run, and the one
 correctness defect that had to be fixed before Postgres is fixed.
 
@@ -247,8 +259,12 @@ on one donation can both succeed and append two events. Tracked in `TASKS.md` �
 - TypeScript wire types in `lib/api.ts` mirror the Pydantic schemas **by hand**. A
   backend rename is a silent runtime break, not a compile error.
 - No structured logging anywhere; no `logging` configuration in the app.
-- Requirements can be created and listed but never edited or deactivated — no
-  `PATCH`/`DELETE` endpoints exist.
+- A retired requirement has no reader: `GET /api/requirements` is active-only, so
+  reopening one is possible through the API but not through the UI (`TASKS.md` → *Backlog
+  → F*).
+- `PATCH /recipients/me` and `PATCH /volunteers/me` assign an explicit `null` straight to
+  a non-nullable column, so `{"name": null}` is a 500 rather than a 422. The requirement
+  PATCH skips nulls; the two older routes were left alone as out of scope.
 
 ## Immediate priorities
 

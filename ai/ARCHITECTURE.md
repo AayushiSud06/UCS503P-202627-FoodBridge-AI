@@ -2,8 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
 > `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
-> authentication rate-limiting commit (`91544e3`), plus the courier-claim concurrency
-> fix present in the working tree and uncommitted at the time of writing.
+> courier-claim concurrency commit (`e919f7b`), plus the requirement-lifecycle work
+> present in the working tree and uncommitted at the time of writing.
 
 ## Shape
 
@@ -92,7 +92,9 @@ users ──1:1?── recipients ──1:N── requirements
   `pickup_deadline`. `match_score` is frozen at acceptance.
 - `status_events` — **the key structure.** Append-only, `occurred_at` stamped by the
   server, never from a client. Every metric derives from it.
-- `requirements` — standing needs, so demand is visible before supply.
+- `requirements` — standing needs, so demand is visible before supply. `is_active` is
+  the whole lifecycle: retiring one (met, or no longer needed) clears the flag and keeps
+  the row; the list filters on it. No fulfilled/withdrawn distinction is stored (D-29).
 
 **No many-to-many relationships.** Indexes cover the real access patterns: status,
 deadline, owner FKs, `status_events.donation_id`.
@@ -167,6 +169,12 @@ Scope: donor → their own; ngo → `AVAILABLE`/`MATCHED` plus their own organis
 volunteer → unclaimed `ACCEPTED` plus their own assignments; admin → everything.
 See `DECISIONS.md` D-24.
 
+**A requirement may only be changed by the organisation that posted it.**
+`routers/organisations._own_requirement_or_404()` matches on the caller's own
+`recipient_id` in the query, so `PATCH /api/requirements/{id}` answers 404 — not 403 —
+for anyone else's requirement. Holding the `ngo` role passes the route's `require_roles`
+gate and nothing more. See `DECISIONS.md` D-29.
+
 **Recipient reads are scoped the same way** by
 `routers/organisations._visible_recipients()`: admin → every organisation; ngo → its own
 row only; donor and volunteer → none. `RecipientOut` carries a contact person and a
@@ -200,7 +208,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
 | donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`** |
-| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
+| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
 | meta | `GET /health` (does **not** touch the DB) |
@@ -291,7 +299,7 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 122 in total. `test_donation_reads.py` (13) and
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 137 in total. `test_donation_reads.py` (13) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.
@@ -302,6 +310,9 @@ cannot commit independently. They build a file-backed SQLite database instead, g
 two real connections, and interleave by hand rather than with threads or sleeps: a
 competitor commits at the exact point the handler has finished reading. Two of them
 fail against the pre-fix code with a `200` where a `409` belongs.
+`test_requirement_lifecycle.py` (15) covers the requirement lifecycle as an ownership
+boundary: who may revise, retire and reopen a requirement, that another organisation's id
+is a 404, and that a retired one leaves `GET /api/requirements` without being deleted.
 `test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the

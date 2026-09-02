@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 from ..database import get_db
 from ..models import Recipient, Requirement, User, UserRole, Volunteer
 from ..schemas import (
-    RecipientOut, RecipientUpdate, RequirementCreate, RequirementOut, VolunteerOut,
-    VolunteerUpdate,
+    RecipientOut, RecipientUpdate, RequirementCreate, RequirementOut, RequirementUpdate,
+    VolunteerOut, VolunteerUpdate,
 )
 from ..security import get_current_user, require_roles
 
@@ -141,6 +141,51 @@ def create_requirement(
     recipient = _own_recipient(db, user)
     requirement = Requirement(recipient_id=recipient.id, **body.model_dump())
     db.add(requirement)
+    db.commit()
+    db.refresh(requirement)
+    return _requirement_out(requirement)
+
+
+def _own_requirement_or_404(db: Session, recipient: Recipient, requirement_id: int) -> Requirement:
+    """One of this organisation's own requirements, or a 404.
+
+    Ownership is a term in the query rather than a check after it, so another
+    kitchen's id is indistinguishable from one that was never posted — the rule
+    `donations._get_readable_or_404` already follows. Being an `ngo` is not on
+    its own permission to touch a requirement; belonging to it is.
+    """
+    requirement = db.scalar(
+        select(Requirement)
+        .options(selectinload(Requirement.recipient))
+        .where(Requirement.id == requirement_id, Requirement.recipient_id == recipient.id)
+    )
+    if requirement is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return requirement
+
+
+@router.patch("/requirements/{requirement_id}", response_model=RequirementOut)
+def update_requirement(
+    requirement_id: int,
+    body: RequirementUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ngo, UserRole.admin)),
+) -> RequirementOut:
+    """Revise, retire or reopen one of your own standing needs.
+
+    Retiring is `isActive: false`, and that is also what fulfilment means here:
+    the model carries one lifecycle flag, and a need that has been met and a
+    need that no longer applies are both simply off the board. The row is kept
+    either way, so the demand history survives. `GET /api/requirements` already
+    filters on the same flag, so a retired requirement leaves the board without
+    anything else changing — and `isActive: true` puts it back.
+    """
+    requirement = _own_requirement_or_404(db, _own_recipient(db, user), requirement_id)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        # No requirement column is nullable, so an explicit null cannot mean
+        # "clear this field" — it can only mean "leave it alone".
+        if value is not None:
+            setattr(requirement, field, value)
     db.commit()
     db.refresh(requirement)
     return _requirement_out(requirement)

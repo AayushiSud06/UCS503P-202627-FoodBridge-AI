@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository on 2026-09-02, through the authentication
-> rate-limiting commit (`91544e3`), plus the courier-claim concurrency fix present in
-> the working tree and uncommitted at the time of writing — D-01 to D-28.
+> Decisions evident in the repository on 2026-09-02, through the courier-claim
+> concurrency commit (`e919f7b`), plus the requirement-lifecycle work present in the
+> working tree and uncommitted at the time of writing — D-01 to D-29.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -714,3 +714,56 @@ on SQLite and PostgreSQL.
   append two events. Generalising the guard to `update_status` as a whole is real
   remaining work, tracked in `TASKS.md`, and was kept out of this change because it
   touches every lifecycle path rather than the one with a known defect.
+
+---
+
+## D-29 · Fulfilment is `is_active`, and the whole lifecycle is one PATCH **[documented]**
+
+**Decision.** `PATCH /api/requirements/{id}` (`routers/organisations.update_requirement`)
+is the only requirement-lifecycle operation. It revises fields, retires a requirement
+(`isActive: false`) and reopens one (`isActive: true`). **There is no separate fulfilled
+state and no `DELETE`.** Ownership is a term in the query — `_own_requirement_or_404`
+matches on `Requirement.recipient_id == <caller's own recipient>.id` — so another
+organisation's id answers 404.
+
+**Reasoning.**
+
+- **The model already had exactly one lifecycle flag**, `Requirement.is_active`, and
+  `GET /api/requirements` already filtered on it. A `status` column distinguishing
+  *fulfilled* from *withdrawn* would have meant a migration, a second state machine
+  beside the donation one, and a second thing for the list filter to consider — to
+  record a distinction nothing in the product reads. What both actions need is the same:
+  the need leaves the board.
+- **Retiring, not deleting.** The row is kept, so the demand a kitchen posted survives
+  its own housekeeping and stays available to anything later derived from it. Deleting
+  would also make the operation irreversible, and reopening is free once the flag is the
+  only state.
+- **One endpoint rather than PATCH + DELETE.** `is_active` is a field like the others,
+  so a second route would be a second way to write the same column — the "competing
+  lifecycle system" worth avoiding. `PATCH` also already matches `/recipients/me` and
+  `/volunteers/me`, including their `model_dump(exclude_unset=True)` partial-update
+  convention.
+- **Role is not ownership.** `require_roles(ngo, admin)` mirrors `POST /requirements`,
+  but passing it is not enough: the caller's own recipient row is resolved first and the
+  requirement must belong to it. An administrator therefore reaches the same 422 on both
+  routes — no admin account is linked to an organisation — which is existing behaviour,
+  not new.
+- **404, not 403,** for another organisation's requirement, following D-24: a status code
+  that confirmed the id exists would leak what the scoping withholds.
+- **`null` means "leave it alone".** No requirement column is nullable, so an explicit
+  null cannot mean "clear this field"; it is skipped rather than written, which would
+  otherwise be an IntegrityError surfacing as a 500.
+
+**Constraints.**
+
+- ⚠️ **A retired requirement has no reader.** `GET /api/requirements` returns active rows
+  only and gained no `includeInactive` parameter, so the UI cannot list or reopen one —
+  reopening is API-only. Preserving the read contract was the smaller change; a scoped
+  parameter (an organisation's *own* inactive rows) is the shape to add if the history is
+  ever wanted on screen.
+- **Fulfilment is a UI word, not a stored one.** The NGO portal's "Mark fulfilled" and a
+  need that simply lapsed produce the identical row. Anything that later needs to tell
+  them apart needs a schema change, and this decision is what it would be revisiting.
+- **No schema change:** `alembic check` reports no drift.
+- Requirements still do not influence matching — `rank_recipients` has never read them,
+  and this did not change that.

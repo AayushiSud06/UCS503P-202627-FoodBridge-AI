@@ -265,6 +265,30 @@ class RequirementCreate(Schema):
     notes: str = ""
 
 
+class RequirementUpdate(Schema):
+    """An organisation revising, retiring or reopening one of its own needs.
+
+    Every field is optional and the constraints are exactly
+    `RequirementCreate`'s, so a quantity that could not be posted cannot be
+    edited in either.
+
+    `is_active` is the whole lifecycle. Setting it to `false` takes the
+    requirement off the board — whether because the need was met or because it
+    no longer applies — and keeps the row, so a kitchen tidying up does not
+    destroy the demand history. The model has no separate fulfilled state and
+    this does not invent one; see `DECISIONS.md` D-29.
+    """
+
+    food_type: str | None = Field(default=None, min_length=1, max_length=160)
+    quantity_needed: int | None = Field(default=None, gt=0)
+    unit: str | None = None
+    beneficiary_count: int | None = None
+    urgency: str | None = None
+    daily_recurring: bool | None = None
+    notes: str | None = None
+    is_active: bool | None = None
+
+
 class RequirementOut(RequirementCreate):
     id: int
     recipient_id: int

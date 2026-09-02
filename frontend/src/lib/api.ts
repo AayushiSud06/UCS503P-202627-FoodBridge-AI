@@ -422,6 +422,27 @@ export const api = {
     notes: string;
   }) => request<ApiRequirement>('/api/requirements', { method: 'POST', body }),
 
+  /**
+   * Revise, retire or reopen one of your own requirements.
+   *
+   * `isActive: false` is how a requirement is both retired and marked
+   * fulfilled — the server keeps one lifecycle flag and the row survives
+   * either way. A retired requirement drops out of `listRequirements`.
+   */
+  updateRequirement: (
+    id: number,
+    body: Partial<{
+      foodType: string;
+      quantityNeeded: number;
+      unit: string;
+      beneficiaryCount: number;
+      urgency: string;
+      dailyRecurring: boolean;
+      notes: string;
+      isActive: boolean;
+    }>,
+  ) => request<ApiRequirement>(`/api/requirements/${id}`, { method: 'PATCH', body }),
+
   listVolunteers: () => request<ApiVolunteer[]>('/api/volunteers'),
   myVolunteer: () => request<ApiVolunteer>('/api/volunteers/me'),
   updateMyVolunteer: (body: {

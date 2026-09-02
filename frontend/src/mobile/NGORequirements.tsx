@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardList, Plus, X } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Pencil, Plus, X } from 'lucide-react';
 import { useRequirements, useApp, useMyRecipient } from '../context/AppContext';
 import { useAction } from '../lib/hooks';
 import type { NGORequirement } from '../types';
@@ -15,10 +15,12 @@ const URGENCY_CHIP: Record<NGORequirement['urgency'], string> = {
 
 export default function NGORequirements() {
   const requirements = useRequirements();
-  const { createRequirement } = useApp();
+  const { createRequirement, updateRequirement, retireRequirement } = useApp();
   const myRecipient = useMyRecipient();
-  const { run, isBusy } = useAction();
+  const { run, isBusy, isPending } = useAction();
   const [open, setOpen] = useState(false);
+  // Null while posting something new; the requirement being revised otherwise.
+  const [editing, setEditing] = useState<NGORequirement | null>(null);
 
   const [foodType, setFoodType] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -32,35 +34,72 @@ export default function NGORequirements() {
     : requirements;
   const valid = foodType.trim() !== '' && Number(quantity) > 0;
 
+  const reset = () => {
+    setEditing(null);
+    setFoodType('');
+    setQuantity('');
+    setBeneficiaries('');
+    setUrgency('High');
+    setRecurring(true);
+    setNotes('');
+  };
+
+  const openCreate = () => {
+    reset();
+    setOpen(true);
+  };
+
+  const openEdit = (r: NGORequirement) => {
+    setEditing(r);
+    setFoodType(r.foodType);
+    setQuantity(String(r.quantityNeeded));
+    setBeneficiaries(String(r.beneficiaryCount));
+    setUrgency(r.urgency);
+    setRecurring(r.dailyRecurring);
+    setNotes(r.notes);
+    setOpen(true);
+  };
+
+  const close = () => {
+    setOpen(false);
+    reset();
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
 
-    const created = await run(
-      'create-requirement',
-      () =>
-        createRequirement({
-          foodType: foodType.trim(),
-          quantityNeeded: Number(quantity),
-          unit: 'Meals',
-          beneficiaryCount: Number(beneficiaries) || 0,
-          urgency,
-          dailyRecurring: recurring,
-          notes: notes.trim(),
-        }),
-      {
-        success: { message: 'Requirement posted', subtitle: 'Donors can now see what you need.' },
-        errorTitle: 'Could not post this requirement',
-      },
-    );
-    if (!created) return;
+    const draft = {
+      foodType: foodType.trim(),
+      quantityNeeded: Number(quantity),
+      unit: editing?.unit ?? 'Meals',
+      beneficiaryCount: Number(beneficiaries) || 0,
+      urgency,
+      dailyRecurring: recurring,
+      notes: notes.trim(),
+    };
 
-    setFoodType('');
-    setQuantity('');
-    setBeneficiaries('');
-    setNotes('');
-    setOpen(false);
+    const saved = editing
+      ? await run('save-requirement', () => updateRequirement(editing.id, draft), {
+          success: { message: 'Requirement updated', subtitle: 'Donors see the revised need.' },
+          errorTitle: 'Could not update this requirement',
+        })
+      : await run('save-requirement', () => createRequirement(draft), {
+          success: { message: 'Requirement posted', subtitle: 'Donors can now see what you need.' },
+          errorTitle: 'Could not post this requirement',
+        });
+    if (!saved) return;
+
+    close();
   };
+
+  // Met or no longer needed are one state on the server: off the board, record
+  // kept. Nothing is deleted.
+  const fulfil = (r: NGORequirement) =>
+    run(`retire-${r.id}`, () => retireRequirement(r.id), {
+      success: { message: 'Requirement closed', subtitle: 'Off the board; the record is kept.' },
+      errorTitle: 'Could not close this requirement',
+    });
 
   return (
     <>
@@ -93,6 +132,28 @@ export default function NGORequirements() {
                 <span className={`m-chip shrink-0 ${URGENCY_CHIP[r.urgency]}`}>{r.urgency}</span>
               </div>
               {r.notes && <p className="mt-2 text-sm text-gray-600 leading-relaxed">{r.notes}</p>}
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEdit(r)}
+                  disabled={isBusy}
+                  className="m-btn-secondary flex-1 text-xs"
+                  style={{ minHeight: '2.5rem' }}
+                >
+                  <Pencil size={14} /> Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fulfil(r)}
+                  disabled={isBusy}
+                  className="m-btn-secondary flex-1 text-xs"
+                  style={{ minHeight: '2.5rem' }}
+                >
+                  <CheckCircle2 size={14} />
+                  {isPending(`retire-${r.id}`) ? 'Closing…' : 'Mark fulfilled'}
+                </button>
+              </div>
             </article>
           ))}
         </>
@@ -100,19 +161,21 @@ export default function NGORequirements() {
 
       <div className="h-24" />
 
-      <button type="button" className="m-fab" onClick={() => setOpen(true)} aria-label="Post requirement">
+      <button type="button" className="m-fab" onClick={openCreate} aria-label="Post requirement">
         <Plus size={26} />
       </button>
 
       {open && (
         <>
-          <button type="button" className="m-backdrop" onClick={() => setOpen(false)} aria-label="Close" />
+          <button type="button" className="m-backdrop" onClick={close} aria-label="Close" />
           <form className="m-sheet" onSubmit={submit}>
             <div className="flex items-center justify-between gap-3 px-5 py-4 bg-white border-b border-gray-200">
-              <h2 className="font-display font-semibold text-lg text-gray-900">Post a requirement</h2>
+              <h2 className="font-display font-semibold text-lg text-gray-900">
+                {editing ? 'Edit requirement' : 'Post a requirement'}
+              </h2>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={close}
                 aria-label="Close"
                 className="w-9 h-9 shrink-0 rounded-full border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100"
               >
@@ -210,7 +273,7 @@ export default function NGORequirements() {
 
             <div className="m-actions">
               <button type="submit" className="m-btn-primary disabled:opacity-60" disabled={!valid || isBusy}>
-                Post requirement
+                {editing ? 'Save changes' : 'Post requirement'}
               </button>
             </div>
           </form>
