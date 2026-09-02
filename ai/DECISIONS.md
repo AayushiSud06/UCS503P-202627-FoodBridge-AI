@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository on 2026-09-02, through the recipient read-scope
-> commit (`16497ea`) plus the authentication rate-limiting change in the working tree,
-> uncommitted at the time of writing — D-01 to D-27.
+> Decisions evident in the repository on 2026-09-02, through the authentication
+> rate-limiting commit (`91544e3`), plus the courier-claim concurrency fix present in
+> the working tree and uncommitted at the time of writing — D-01 to D-28.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -643,3 +643,74 @@ header and one human sentence. No dependency was added.
   storage, and the worst case is one extra window's worth of attempts. The clock is
   `time.monotonic`, so a system clock adjustment cannot widen or collapse a window
   either.
+
+---
+
+## D-28 · The courier claim is a conditional UPDATE, not a checked assignment **[documented]**
+
+**Decision.** `routers/donations._claim_pickup()` binds a courier to a pickup with one
+statement — `UPDATE donations SET volunteer_id = :courier WHERE id = :id AND status =
+:from_status AND (volunteer_id IS NULL OR volunteer_id = :courier)` — and reads
+`rowcount != 1` as having lost the claim. The Python comparison it replaces is gone. No
+lock hint, no schema change, no new dependency, and the compiled SQL is byte-identical
+on SQLite and PostgreSQL.
+
+**Reasoning.**
+
+- **The check and the write had to become one operation.** The previous code read
+  `donation.volunteer_id`, compared it in Python, then assigned. Two couriers can both
+  read `NULL` and both conclude they may have it; the value that authorised the write
+  was fetched before the write, so nothing stopped the second from overwriting the
+  first. Moving the condition into the WHERE clause means the database evaluates it
+  against the row *as it applies the update*, which is the only moment at which the
+  answer is still true.
+- **`SELECT … FOR UPDATE` was rejected because SQLite discards it.** SQLAlchemy compiles
+  `with_for_update()` to a plain `SELECT` on SQLite — verified against both dialects —
+  so the lock would silently not exist on the engine the project develops and tests
+  against. A fix that is inert exactly where it is exercised is worse than none: the
+  suite would go green without ever having held a lock. The conditional UPDATE needs no
+  dialect-specific support, so what the tests run is what a deployment runs.
+- **The state is in the condition, not only the courier.** `status = :from_status` is
+  the second half of "still claimable" and is what makes one courier's duplicate
+  requests safe: by the time the second arrives, `volunteer_id` *is* the caller, so the
+  courier half admits it. The state half refuses it, and the pickup does not transition
+  or record an event twice.
+- **Losing returns the answer arriving a moment later would have got.** On `rowcount`
+  0 the row is re-read and the request is told either "Another courier has already
+  claimed this pickup" or the transition table's own
+  `Cannot move a donation from X to Y` — both pre-existing strings, chosen by what the
+  row now says. So the concurrent outcome and the sequential outcome are the same
+  response, and neither invents a message for a race the person cannot see (D-18).
+- **No constraint, and no migration.** `volunteer_id` is a single nullable column on
+  the donation row, so "one courier per pickup" is already structural — there is no
+  second row a unique index could forbid, and a unique index on `volunteer_id` would be
+  actively wrong, since a courier holds many pickups. The defect was a lost update, not
+  a missing constraint. `alembic check` reports no drift.
+- **The winner's row lock covers the rest of the transition.** A successful UPDATE
+  holds the row's write lock until commit, so the `status` write and the appended
+  `StatusEvent` that follow it cannot be interleaved with another claim. The guard did
+  not need to be repeated on them.
+
+**Constraints.**
+
+- ⚠️ **This depends on READ COMMITTED**, which is PostgreSQL's default and which
+  nothing in the project overrides — `create_engine` sets no `isolation_level` anywhere
+  (verified). There, a second transaction's identical UPDATE blocks on the winner's row
+  lock and re-evaluates its WHERE clause against the committed row, matching nothing.
+  Under REPEATABLE READ or SERIALIZABLE it would instead raise a serialization failure,
+  which without a retry or an exception handler would reach the caller as a 500 rather
+  than the 409. Changing the isolation level is therefore not a free change.
+- **On SQLite the property holds for a different reason:** writes serialise, so the
+  loser's UPDATE runs after the winner's commit and matches nothing. Concurrency is
+  still bounded by `SQLITE_BUSY` under contention, which is unchanged and not what this
+  addresses.
+- **The session's copy of the row is deliberately stale** after the UPDATE
+  (`synchronize_session=False`, so no extra SELECT is issued), which is why the caller
+  expires `volunteer_id`/`volunteer` rather than assigning them — assigning would make
+  the ORM re-write the value it just wrote, unguarded.
+- ⚠️ **Only the claim is protected this way.** Every other transition still reads
+  `donation.status`, checks it in Python and writes. SQLite serialises those today; on
+  PostgreSQL two concurrent transitions on one donation can still both succeed and
+  append two events. Generalising the guard to `update_status` as a whole is real
+  remaining work, tracked in `TASKS.md`, and was kept out of this change because it
+  touches every lifecycle path rather than the one with a known defect.

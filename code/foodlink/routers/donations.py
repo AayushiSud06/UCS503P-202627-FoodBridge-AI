@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, false, or_, select
+from sqlalchemy import and_, false, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
@@ -124,6 +124,45 @@ def _get_readable_or_404(db: Session, donation_id: int, user: User) -> Donation:
     if donation is None:
         raise HTTPException(status_code=404, detail="Donation not found")
     return donation
+
+
+def _claim_pickup(
+    db: Session, donation_id: int, from_status: DonationStatus, volunteer_id: int
+) -> bool:
+    """Bind a courier to a pickup, only if it is still claimable. Did it work?
+
+    The claim is one conditional UPDATE rather than a Python check followed by
+    an assignment, because the check and the write have to be the same
+    operation. Two couriers can both read `volunteer_id IS NULL` and both
+    decide they may have it; only one of them can satisfy that condition *as
+    the database applies the write*, which is where this puts it.
+
+    Both halves of "still claimable" are in the WHERE clause:
+
+    * `status == from_status` — the state the caller's transition was
+      authorised against is still the state the row is in. This is also what
+      stops the same courier's duplicate request from claiming twice and
+      appending a second event.
+    * `volunteer_id IS NULL OR volunteer_id == the caller` — unclaimed, or
+      already theirs, which is the readmission the previous code allowed and
+      that a released pickup depends on.
+
+    Winning also takes the row's write lock until this transaction commits, so
+    the status write that follows cannot be interleaved with another claim.
+    `synchronize_session=False` because the session's copy of the row is
+    deliberately not updated here — see the caller, which expires it.
+    """
+    result = db.execute(
+        update(Donation)
+        .where(
+            Donation.id == donation_id,
+            Donation.status == from_status,
+            or_(Donation.volunteer_id.is_(None), Donation.volunteer_id == volunteer_id),
+        )
+        .values(volunteer_id=volunteer_id)
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount == 1
 
 
 def _record(db: Session, donation: Donation, to: DonationStatus, actor: User, note: str | None = None) -> None:
@@ -315,9 +354,25 @@ def update_status(
         volunteer = db.scalar(select(Volunteer).where(Volunteer.user_id == user.id))
         if volunteer is None:
             raise HTTPException(status_code=422, detail="No courier profile for this account")
-        if donation.volunteer_id not in (None, volunteer.id):
-            raise HTTPException(status_code=409, detail="Another courier has already claimed this pickup")
-        donation.volunteer_id = volunteer.id
+
+        if not _claim_pickup(db, donation.id, donation.status, volunteer.id):
+            # Somebody else got there between this request's read and its
+            # write. Answer with whatever a request arriving a moment later
+            # would have been told, read from the row as it now stands rather
+            # than from the copy this request started with.
+            db.expire(donation)
+            if donation.volunteer_id not in (None, volunteer.id):
+                raise HTTPException(
+                    status_code=409, detail="Another courier has already claimed this pickup"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot move a donation from {donation.status.value} to {target.value}",
+            )
+
+        # The row now holds the assignment; this session's copy does not, and
+        # the status write below must not carry a stale value back over it.
+        db.expire(donation, ["volunteer_id", "volunteer"])
 
     elif target is DonationStatus.COMPLETED:
         if donation.recipient is not None:

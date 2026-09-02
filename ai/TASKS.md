@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-02; the most recent implementation commit
-> is `16497ea`, plus the authentication rate-limiting work described under *Completed*,
+> is `91544e3`, plus the courier-claim concurrency work described under *Completed*,
 > which was verified in the working tree and uncommitted at the time of writing.
 > Context: `PROJECT_STATE.md`.
 >
@@ -24,30 +24,27 @@
 
 ## Current
 
-**Nothing in progress.** The authentication rate-limiting work is finished and its
-tests pass. No feature branch, no partial implementation, no TODO/FIXME markers in
-`code/foodlink/` or `frontend/src/`.
+**Nothing in progress.** The courier-claim concurrency fix is finished and its tests
+pass; it is uncommitted in the working tree, awaiting review. No feature branch, no
+partial implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
 
-The six-item hardening sequence — signing key → migrations → donation read scope → CI →
-recipient read scope → auth rate limiting — is finished; see *Completed*. *Next* item 1,
-the courier claim race, is the task that follows.
+The seven-item hardening sequence — signing key → migrations → donation read scope →
+CI → recipient read scope → auth rate limiting → courier claim race — is finished; see
+*Completed*.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-One item. It is a verified gap, it is small, and it has to land before the deployment
-work in *Backlog → E*.
+**Empty.** The item that stood here is done, and nothing has been promoted from
+*Backlog* in its place — that is a Project Manager call, not one to make by writing it
+down here.
 
-- [ ] **1 · Fix the courier claim race** `[R-7 · repo]` — ~1 h
-      `update_status` reads `donation.volunteer_id`, compares, then assigns
-      (`code/foodlink/routers/donations.py:318`) with no row lock or unique constraint.
-      SQLite serialises writes so it holds today; **it becomes a genuine TOCTOU the moment
-      Postgres lands**, which is why it sits here rather than in the backlog. Fix as a
-      conditional `UPDATE … WHERE volunteer_id IS NULL` with a row-count check, or
-      `SELECT … FOR UPDATE`.
-
-Nothing is promoted from *Backlog* until one of these is done.
+Two things are worth knowing when it is made. **Group E is no longer gated:** the
+courier claim was the one correctness defect that had to land before Postgres, and it
+has. And **group E is where the largest amount of unbuilt work sits**, while groups A
+and B hold several **S**-sized items (foreign-key enforcement, an `image_url` cap, a
+readiness probe) that are cheap enough to clear without displacing it.
 
 ---
 
@@ -118,8 +115,16 @@ hardening** — work that makes the application that already exists safer or mor
 - [ ] Frontend tests (Vitest + Testing Library), starting with `ProtectedRoute`. 84 files
       under `frontend/src`, zero tests — `tsc` in `npm run build` is the only frontend gate
       in CI, so a type-correct behavioural regression passes. `[R-14]` — **L**
-- [ ] Concurrency test for the courier claim. It is currently exercised sequentially,
-      which never opens the TOCTOU window. Pairs with *Next* item 2. `[§14.4]` — **S**
+- [x] ~~Concurrency test for the courier claim.~~ Done with the fix — see *Completed*.
+      `test_courier_claim.py` opens the window deterministically against a file-backed
+      database. `[§14.4]`
+- [ ] **Generalise the claim's concurrency guard to the rest of `update_status`.** The
+      courier claim now carries its condition in the UPDATE (D-28); every other
+      transition still reads `donation.status`, checks it in Python and writes. SQLite
+      serialises them today, so this is inert — on Postgres two concurrent transitions
+      on one donation can both succeed and append two events. Deliberately out of scope
+      of the claim fix, which touched the one path with a demonstrated defect.
+      `[D-28 · repo]` — **M**
 
 ### E. Operability & deployment
 
@@ -236,7 +241,34 @@ external.
 
 ## Completed (verified in the repository)
 
-### Authentication rate limiting — working tree (uncommitted at verification) `[R-6 · S-3]`
+### Courier claim race — working tree (uncommitted at verification) `[R-7 · repo]`
+- [x] **The claim is atomic.** `routers/donations._claim_pickup()` assigns the courier
+      with one conditional `UPDATE … WHERE id = :id AND status = :from_status AND
+      (volunteer_id IS NULL OR volunteer_id = :courier)`, and `rowcount != 1` means the
+      claim was lost. The Python read-compare-assign it replaces is gone, so the value
+      that authorises the write is the one the database holds *at* the write.
+- [x] `SELECT … FOR UPDATE` was rejected: SQLAlchemy compiles `with_for_update()` to a
+      plain `SELECT` on SQLite, so the lock would silently not exist on the engine the
+      project tests against. The conditional UPDATE compiles identically on both
+      dialects. See `DECISIONS.md` D-28.
+- [x] **No schema change and no constraint.** One nullable column on the donation row
+      already makes "one courier per pickup" structural; the defect was a lost update.
+      `alembic check` reports no drift.
+- [x] Behaviour preserved: role, lifecycle and verification gates run first and are
+      untouched; the same courier may still reclaim a pickup released back to them; a
+      loser is told either *"Another courier has already claimed this pickup"* or the
+      transition table's own message, whichever the row now warrants — both existing
+      strings. Concurrent duplicates from **one** courier are refused too, by the
+      `status` half of the condition.
+- [x] 9 tests in `code/tests/test_courier_claim.py`. Six are sequential; three build a
+      file-backed SQLite database so two real transactions exist and interleave them by
+      hand rather than with threads or sleeps. **Two fail against the pre-fix code with
+      a `200` where a `409` belongs** — the overwrite itself, reproduced through the
+      HTTP endpoint.
+- [x] ⚠️ Only the claim is guarded — see the new *Backlog → D* item for the rest of
+      `update_status`.
+
+### Authentication rate limiting — `91544e3` `[R-6 · S-3]`
 - [x] **`POST /api/auth/login` and `POST /api/auth/register` are rate limited**, the two
       routes an anonymous caller can drive. `code/foodlink/ratelimit.py` holds a
       sliding-window counter per client address; both routes carry it as a
@@ -377,8 +409,9 @@ external.
       `getpass` prompting
 - [x] Seed script with deadlines relative to run time
 - [x] 37 integration tests, no mocks, in-memory SQLite via `StaticPool` +
-      `dependency_overrides`. **91 tests pass today** (~48 s) — 37 integration + 13
-      donation-read-scope + 11 recipient-read-scope + 22 config + 8 migration.
+      `dependency_overrides`. **122 tests pass today** (~60 s) — 37 integration + 13
+      donation-read-scope + 11 recipient-read-scope + 9 courier-claim + 22 rate-limit +
+      22 config + 8 migration.
 
 ### Frontend
 - [x] Four role portals (donor, ngo, volunteer, admin) with nested layouts — `eaeb51d`

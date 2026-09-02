@@ -3,9 +3,9 @@
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-02, branch `master`. The most recent
-> implementation commit is `16497ea` (recipient read scoping). Authentication rate
-> limiting was verified in the working tree, uncommitted at the time of writing; it is
-> the only source change outside that commit.
+> implementation commit is `91544e3` (authentication rate limiting). The courier-claim
+> concurrency fix was verified in the working tree, uncommitted at the time of writing;
+> it is the only source change outside that commit.
 
 ## What this project is
 
@@ -32,7 +32,8 @@ as ML.
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
-| Backend tests | ✅ 113 tests passing (~53 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 22 rate-limit + 22 config + 8 migration |
+| Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
+| Backend tests | ✅ 122 tests passing (~60 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -46,7 +47,19 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **working tree (uncommitted at verification)** — **`POST /api/auth/login` and `POST /api/auth/register` are rate
+- **working tree (uncommitted at verification)** — **The courier claim is atomic.**
+  `donations._claim_pickup()` binds a courier with one conditional
+  `UPDATE … WHERE id = :id AND status = :from_status AND (volunteer_id IS NULL OR
+  volunteer_id = :courier)`; a `rowcount` of 0 means the claim was lost and becomes the
+  409. The read-compare-assign it replaces let two couriers who both read an unclaimed
+  pickup both assign themselves — reproduced through the HTTP endpoint, where the
+  pre-fix code answers the loser `200` and overwrites the winner. `SELECT … FOR UPDATE`
+  was rejected because SQLAlchemy compiles it away on SQLite, so the lock would not have
+  existed on the engine the project tests against. No schema change; `alembic check`
+  clean. 9 new tests, three of them driving two real transactions against a file-backed
+  database. See `DECISIONS.md` D-28.
+
+- `91544e3` — **`POST /api/auth/login` and `POST /api/auth/register` are rate
   limited.** A sliding-window counter per client address in `foodlink/ratelimit.py`,
   attached as a route dependency; over the ceiling the request never reaches the
   handler and gets `429` + `Retry-After`. Default policy: **30 logins per 5 minutes**
@@ -118,15 +131,19 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-**Next task: fix the courier claim race** (`TASKS.md` → *Next* item 1). Nothing is in
-progress.
+**Nothing is in progress, and `TASKS.md` → *Next* is empty.** The seven-step hardening
+sequence — signing-key configuration, migrations, donation read scoping, CI, recipient
+read scoping, authentication rate limiting, courier claim race — is complete, the last
+of those being the work described above. Every unscoped read of personal contact data
+is closed, bcrypt is no longer the only bound on a credential-stuffing run, and the one
+correctness defect that had to be fixed before Postgres is fixed.
 
-The six-step hardening sequence — signing-key configuration, migrations, donation read
-scoping, CI, recipient read scoping, authentication rate limiting — is complete, the
-last of those being the work described above. Every unscoped read of personal
-contact data is closed, and bcrypt is no longer the only bound on a credential-stuffing
-run. What remains of that sequence is the courier claim race: inert on SQLite, a real
-TOCTOU once Postgres lands, which is why it has to land before the deployment work.
+**What follows is a Project Manager call**, deliberately not decided here. The
+consequence worth carrying into it: *Backlog → E* (Postgres, then deployment
+configuration) is no longer gated by anything in the codebase, and it is also the
+largest remaining block of work — while groups A and B hold several sub-hour items
+(SQLite foreign-key enforcement, an `image_url` cap, a readiness probe) that would not
+displace it.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional
 expansion and cleanup) or *Blocked* (four open decisions). None of it has been
@@ -176,10 +193,15 @@ moment that changes. Behind a reverse proxy the limiter also needs
 `uvicorn --proxy-headers --forwarded-allow-ips=<proxy>`, or every request arrives from
 the proxy's address and shares one budget.
 
+✅ **Resolved:** the courier claim was a read-then-write race. `donations._claim_pickup()`
+now carries the condition in the UPDATE, so the database decides the winner as it applies
+the write (D-28). **Remaining caveat — this covers the claim only:** every other
+lifecycle transition still reads `donation.status`, checks it in Python and writes.
+SQLite's serialised writes make that inert today; on Postgres two concurrent transitions
+on one donation can both succeed and append two events. Tracked in `TASKS.md` →
+*Backlog → D*.
+
 ### Medium
-5. **Courier claim is a read-then-write race.** The guard in `update_status` reads
-   `volunteer_id` then writes it with no row lock or unique constraint. SQLite
-   serialises writes so it holds today; on Postgres it is a genuine TOCTOU window.
 6. **Expiry sweep has no scheduler.** `POST /api/admin/maintenance/expire` must be
    called manually, so the expiry-loss metric currently **understates** reality.
 7. **`GET /api/metrics` loads the whole donations table plus all events into memory**
@@ -230,9 +252,12 @@ the proxy's address and shares one budget.
 
 ## Immediate priorities
 
-1. Fix the courier claim race, before the Postgres work makes it exploitable
+1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
+   promoted into it
 2. Decide whether the rate-limit counter has to be shared, when deployment is
    designed — it is per-process today (`TASKS.md` → *Backlog → E*)
+3. Extend the claim's concurrency guard to the remaining lifecycle transitions before
+   Postgres lands, for the same reason the claim itself was fixed first
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

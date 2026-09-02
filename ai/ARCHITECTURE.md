@@ -2,8 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
 > `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
-> recipient read-scope commit (`16497ea`) plus the authentication rate-limiting change
-> in the working tree, uncommitted at the time of writing.
+> authentication rate-limiting commit (`91544e3`), plus the courier-claim concurrency
+> fix present in the working tree and uncommitted at the time of writing.
 
 ## Shape
 
@@ -135,6 +135,12 @@ Rules are **data, not conditionals**, in two dicts:
 Only `ACCEPTED` binds a recipient.
 ⚠️ `COMPLETED` is the **NGO's** action, not the courier's — the party receiving
 confirms, not the party delivering.
+⚠️ **The courier claim is the one transition that is not a read-then-write.** Binding a
+courier goes through `donations._claim_pickup()`, a conditional
+`UPDATE … WHERE status = :from AND (volunteer_id IS NULL OR volunteer_id = :courier)`;
+a `rowcount` of 0 means the claim was lost and becomes the 409. Every other transition
+still compares in Python and then writes — safe under SQLite's serialised writes, not
+under PostgreSQL. See `DECISIONS.md` D-28.
 
 ## Auth & authorization
 
@@ -268,7 +274,10 @@ proxy target). `VITE_*` values are **inlined at build time** — never secrets.
    by a factor of `n` but breaks nothing. Correctness never depends on it.
 4. **Invariants live in application code**, not the schema. The state machine,
    coordinate ranges, and counter consistency are unenforced at the DB level;
-   anything writing outside the ORM can violate them.
+   anything writing outside the ORM can violate them. The single exception is the
+   courier claim, whose condition is carried in the UPDATE itself (D-28) — and it is
+   an exception because it had to survive concurrent transactions, not because the
+   schema gained a constraint. It did not.
 5. **Frontend route guards are not security.** The server re-checks every request.
 6. **The mobile UI is a separate URL space** (`/m/*`), not a viewport branch.
 7. **No background execution of any kind** — no scheduler, queue, worker, or
@@ -282,10 +291,17 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 113 in total. `test_donation_reads.py` (13) and
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 122 in total. `test_donation_reads.py` (13) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.
+`test_courier_claim.py` (9) covers the claim, including as a concurrency boundary. Its
+last three tests **cannot use the shared-session fixture** — one Session over one
+StaticPool connection means two requests share a transaction, so a competing claim
+cannot commit independently. They build a file-backed SQLite database instead, giving
+two real connections, and interleave by hand rather than with threads or sleeps: a
+competitor commits at the exact point the handler has finished reading. Two of them
+fail against the pre-fix code with a `200` where a `409` belongs.
 `test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the
