@@ -2,9 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-02, one commit past `8abc666` on
-> branch `master`. ⚠️ The recipient read-scope fix below is **in the working tree,
-> not yet committed** — it is the only difference from `origin/master`.
+> Last verified against the repository: 2026-09-02, branch `master`. The most recent
+> implementation commit is `16497ea` (recipient read scoping); no source change sits
+> outside it.
 
 ## What this project is
 
@@ -30,7 +30,7 @@ as ML.
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
-| Backend tests | ✅ 91 tests passing (~54 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 22 config + 8 migration |
+| Backend tests | ✅ 91 tests passing (~48 s): 37 integration + 13 donation-read-scope + 11 recipient-read-scope + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -44,7 +44,7 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- *(uncommitted)* — **`GET /api/recipients` scoped by role and ownership.** It returned
+- `16497ea` — **`GET /api/recipients` scoped by role and ownership.** It returned
   every organisation, `contact_person` and `phone` included, to any authenticated
   account. `_visible_recipients(user)` now returns the caller's scope as a WHERE clause
   applied in the query: admin → everything · ngo → its own row · donor and volunteer →
@@ -107,13 +107,16 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-No feature work is in progress. The hardening sequence — signing-key configuration,
-migrations, donation read scoping, CI, recipient read scoping — is complete, and with it
-every unscoped read of personal contact data is closed. `TASKS.md` → *Next* now holds two
-ordered items:
+**Next task: rate-limit `POST /api/auth/login` and `POST /api/auth/register`.** Nothing
+is in progress yet. The five-step hardening sequence — signing-key configuration,
+migrations, donation read scoping, CI, recipient read scoping — is complete and
+committed, and with it every unscoped read of personal contact data is closed. That makes
+brute-forceable authentication the highest-severity open item: no limiting of any kind
+exists in the application, so bcrypt's cost is the only bound on a credential-stuffing
+run.
 
-1. Rate-limit `POST /api/auth/login` and `/register` — now the highest-severity open item
-2. Fix the courier claim race — inert on SQLite, a real TOCTOU once Postgres lands
+After it, `TASKS.md` → *Next* holds one more item: the courier claim race — inert on
+SQLite, a real TOCTOU once Postgres lands.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional
 expansion and cleanup) or *Blocked* (four open decisions). None of it has been
@@ -210,9 +213,8 @@ gate — a type-correct behavioural regression passes CI.
 
 ## Immediate priorities
 
-1. Commit the recipient read-scope change sitting in the working tree
-2. Rate-limit `POST /api/auth/login` and `/register`
-3. Fix the courier claim race, before the Postgres work makes it exploitable
+1. Rate-limit `POST /api/auth/login` and `/register`
+2. Fix the courier claim race, before the Postgres work makes it exploitable
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

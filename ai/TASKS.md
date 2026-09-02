@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the working tree on 2026-09-02, one commit past `8abc666`.
-> Context: `PROJECT_STATE.md`.
+> Verified against the repository on 2026-09-02; the most recent implementation commit
+> is `16497ea`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -22,13 +22,13 @@
 
 ## Current
 
-**Nothing in progress.** The recipient read-scope fix is implemented and its tests pass;
-it is the working tree's only change over `8abc666` and is not yet committed. No feature
-branch, no partial implementation, no TODO/FIXME markers in `code/foodlink/` or
-`frontend/src/`.
+**Nothing in progress.** The recipient read-scope fix is committed (`16497ea`) and its
+tests pass. No feature branch, no partial implementation, no TODO/FIXME markers in
+`code/foodlink/` or `frontend/src/`.
 
 The five-item hardening sequence — signing key → migrations → donation read scope → CI →
-recipient read scope — is finished; see *Completed*.
+recipient read scope — is finished; see *Completed*. *Next* item 1, rate limiting, is the
+task that follows.
 
 ---
 
@@ -122,7 +122,7 @@ hardening** — work that makes the application that already exists safer or mor
       under `frontend/src`, zero tests — `tsc` in `npm run build` is the only frontend gate
       in CI, so a type-correct behavioural regression passes. `[R-14]` — **L**
 - [ ] Concurrency test for the courier claim. It is currently exercised sequentially,
-      which never opens the TOCTOU window. Pairs with *Next* item 3. `[§14.4]` — **S**
+      which never opens the TOCTOU window. Pairs with *Next* item 2. `[§14.4]` — **S**
 
 ### E. Operability & deployment
 
@@ -233,7 +233,7 @@ external.
 
 ## Completed (verified in the repository)
 
-### Recipient read authorization — working tree `[S-2 (recipients half) · repo]`
+### Recipient read authorization — `16497ea` `[S-2 (recipients half) · repo]`
 - [x] **`GET /api/recipients` is scoped server-side by role and ownership.** It returned
       every organisation — `contact_person` and `phone` included — to any authenticated
       account. `_visible_recipients(user)`
@@ -349,8 +349,8 @@ external.
       `getpass` prompting
 - [x] Seed script with deadlines relative to run time
 - [x] 37 integration tests, no mocks, in-memory SQLite via `StaticPool` +
-      `dependency_overrides`. **80 tests pass today** (~33 s) — 37 integration + 13
-      read-scope + 22 config + 8 migration.
+      `dependency_overrides`. **91 tests pass today** (~48 s) — 37 integration + 13
+      donation-read-scope + 11 recipient-read-scope + 22 config + 8 migration.
 
 ### Frontend
 - [x] Four role portals (donor, ngo, volunteer, admin) with nested layouts — `eaeb51d`

@@ -1,6 +1,7 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository at commit `5264fb3`.
+> Decisions evident in the repository on 2026-09-02, through the recipient read-scope
+> commit (`16497ea`) — D-01 to D-26.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but

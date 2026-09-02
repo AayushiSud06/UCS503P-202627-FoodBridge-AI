@@ -1,8 +1,8 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against commit `b2e696b` + uncommitted working-tree
-> changes.
+> `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
+> recipient read-scope commit (`16497ea`).
 
 ## Shape
 
@@ -263,8 +263,10 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests and 8 migration tests (`test_migrations.py`, temp file
-databases, never `DATABASE_URL`) — 80 in total. `test_donation_reads.py` holds the
-read-scope tests: for every role, what the list withholds the id lookup withholds too.
+databases, never `DATABASE_URL`) — 91 in total. `test_donation_reads.py` (13) and
+`test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
+withholds the id lookup withholds too, and no caller reads another organisation's
+contact details.
 Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.
 
 ## Continuous integration — `.github/workflows/ci.yml`
