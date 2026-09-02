@@ -1,134 +1,248 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against commit `8386371`, working tree clean. Context: `PROJECT_STATE.md`.
+> Verified against commit `54ee62f` (identical to `origin/master`), 2026-09-02.
+> Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
-> repository. Everything under *Current / Next / Backlog* is **recommended work
-> derived from analysis — not a commitment made by the project.** No task here was
-> invented from a template; each traces to a specific gap or defect found in the code.
+> repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
+> open work derived from analysis — not a commitment made by the project.** No task here
+> was invented from a template; each traces to a specific gap, defect or open question.
+>
+> **Traceability tags** make this list cheap to re-audit:
+> `R-n` = *Improvement Roadmap* item n · `B-n` = *Known bugs and questionable behaviour*
+> item n (both `PROJECT_KNOWLEDGE_GUIDE.md` §22) · `S-n` = §8.4 security recommendation n ·
+> `§x` = another section of that guide · `D-n` = `DECISIONS.md` · `repo` = a gap verified
+> directly in the source and not recorded anywhere else.
+>
+> **Estimates.** Hour figures are the roadmap's own (§22); where it gives none, the bucket
+> is **S** (under an hour), **M** (a few hours), **L** (a day or more). All are for
+> ordering, not promises.
 
 ---
 
 ## Current
 
-**Nothing in progress.** The working tree is clean; `e47bd86` (CI) and `8386371`
-(the `frontend/src/lib/` gitignore fix) are committed locally but **not pushed**, so
-the CI failure they fix is still the last run visible on GitHub. No feature branch, no
+**Nothing in progress.** HEAD is `54ee62f` and equals `origin/master` — the CI workflow
+(`e47bd86`), the `frontend/src/lib/` gitignore fix (`8386371`) and the state write-up
+(`54ee62f`) are all pushed. The only untracked path is `AGENTS.md`. No feature branch, no
 partial implementation, no TODO/FIXME markers in `code/foodlink/` or `frontend/src/`.
 
-The hardening phase is finished — *Next* is empty.
+The four-item hardening sequence — signing key → migrations → donation read scope → CI —
+is finished; see *Completed*.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-**Empty.** Every item that was here — the signing key, Alembic, donation read scoping
-and CI — is done; see *Completed*.
+Three items only. Each is a verified gap, each is small, and the third has to land before
+the deployment work in *Backlog → E*.
 
-Nothing has been promoted from *Backlog* to replace them. The strongest candidates, if
-hardening continues, are rate limiting on `/api/auth/login` and scoping
-`GET /api/recipients`; both are recommendations from analysis, not commitments.
+- [ ] **1 · Scope `GET /api/recipients`** `[S-2 · repo]` — **M**
+      The last unscoped read of personal data. `RecipientOut` carries `contact_person`
+      and `phone`, and `list_recipients` (`code/foodlink/routers/organisations.py:20`)
+      returns every organisation to any authenticated account. This is the same defect
+      `ea0f499` fixed on donations, on the neighbouring table; `_readable_by` (D-24) is
+      the obvious template. `GET /api/volunteers` is already restricted to admin/ngo, so
+      this is the one that remains.
+      *(`GET /api/metrics` is also platform-wide, but that is a product question rather
+      than a defect — see* Blocked*.)*
+
+- [ ] **2 · Rate-limit `POST /api/auth/login` and `/register`** `[R-6 · S-3]` — ~1 h
+      No limiting exists anywhere in the application (`slowapi`/`limiter` → no matches).
+      bcrypt's cost is the only bound on a credential-stuffing run today.
+
+- [ ] **3 · Fix the courier claim race** `[R-7 · repo]` — ~1 h
+      `update_status` reads `donation.volunteer_id`, compares, then assigns
+      (`code/foodlink/routers/donations.py:318`) with no row lock or unique constraint.
+      SQLite serialises writes so it holds today; **it becomes a genuine TOCTOU the moment
+      Postgres lands**, which is why it sits here rather than in the backlog. Fix as a
+      conditional `UPDATE … WHERE volunteer_id IS NULL` with a row-count check, or
+      `SELECT … FOR UPDATE`.
+
+Nothing is promoted from *Backlog* until one of these is done.
 
 ---
 
 ## Backlog
 
-### Security
-- [ ] Rate-limit `POST /api/auth/login` and `/register` (`slowapi`). No limiting exists anywhere.
-- [ ] Shorten access tokens (currently 720 min) and add refresh tokens, **or** add a
-      `token_version` column compared in `get_current_user` for real revocation.
-      Today logout is client-side only.
-- [ ] Issue `PRAGMA foreign_keys = ON` for SQLite via a connection event listener —
-      declared FKs are currently unenforced on the default configuration.
-- [ ] Validate and length-cap `image_url` (currently unconstrained `Text`, receives
-      base64 data URLs).
-- [ ] Send security headers + a CSP (none are sent today; would materially reduce the
-      localStorage-token risk).
-- [ ] MFA and an admin audit log — an admin compromise is currently total, with no
-      record beyond `status_events`.
+Grouped by kind; within a group, roughly by value over effort. **Groups A–F are
+hardening** — work that makes the application that already exists safer or more reliable.
+**Group G is optional product expansion** and should not compete with A–F for attention.
 
-### Correctness / concurrency
-- [ ] Fix the courier claim race: replace the read-then-write guard in `update_status`
-      with a conditional `UPDATE … WHERE volunteer_id IS NULL` + row-count check, or
-      `SELECT … FOR UPDATE`. Holds on SQLite today; a real TOCTOU on Postgres.
-- [ ] **Decide** whether a donation stuck in `ACCEPTED` past its deadline should expire.
-      The sweep only touches `AVAILABLE`/`MATCHED`. Currently undecided, not merely unbuilt.
-- [ ] **Decide** what revoking verification should do to an already-accepted donation.
-      Currently nothing happens; untested.
-- [ ] Add a global exception handler returning a correlation id — an unhandled 500
-      currently reaches the user as "cannot reach the server".
+### A. Security
 
-### Performance
-- [ ] Aggregate `GET /api/metrics` in SQL and cache it (~60 s). Currently loads every
-      donation and every event into memory.
+- [ ] Shorten access tokens (720 min today) and add refresh tokens, **or** add a
+      `token_version` column compared in `get_current_user` for real revocation. Logout is
+      client-side only; nothing can invalidate an issued token. `[R-11 · S-4 · D-13]` — ~4 h
+- [ ] Issue `PRAGMA foreign_keys = ON` for SQLite through a connection event listener —
+      declared foreign keys are unenforced on the default configuration. `[R-15 · S-5 · D-08]` — **S**
+- [ ] Validate and length-cap `image_url` — an unconstrained `Text` column
+      (`code/foodlink/models.py:219`) receiving base64 data URLs from the frontend. This is
+      the cheap guard; the real fix is object storage (group F). `[B-6 · R-19 · S-6]` — **S**
+- [ ] Security headers + CSP (and HSTS wherever TLS terminates). Nothing is sent today. A
+      CSP is the single largest mitigation available for the localStorage-token choice the
+      project has deliberately accepted (D-13). `[R-21 · S-7]` — **S**
+- [ ] Add `pip-audit` / `npm audit` to CI. This was explicitly deferred until CI existed;
+      CI exists now (`e47bd86`) and `ci.yml` has no audit step. `[S-8]` — **S**
+- [ ] Email verification at registration — any address is accepted and never confirmed.
+      `[§8.2]` — **M**
+- [ ] MFA and an admin audit log. An admin compromise is currently total, with no record
+      beyond `status_events`. Listed last because it presumes everything above. `[R-34]` — **L**
+
+### B. Correctness & reliability
+
+- [ ] Global exception handler returning a correlation id. `main.py` registers no
+      `exception_handler`, and `frontend/src/lib/api.ts` maps a bodiless 5xx to
+      `NetworkError` — so an unhandled 500 reaches the user as *"Cannot reach the FoodLink
+      server"* and a crash is indistinguishable from an outage. `[B-7 · R-18]` — **M**
+- [ ] Structured logging. The application has no `logging` configuration at all; the only
+      `logging` references in the tree are Alembic's, which `migrate.py` deliberately
+      declines to reconfigure. `[R-17]` — **M**
+- [ ] Readiness probe that runs `SELECT 1`. `/api/health` (`code/foodlink/main.py:71`)
+      returns `ok` with a dead database. Keep the existing endpoint as liveness. `[R-20]` — **S**
+
+### C. Performance & scale
+
+- [ ] Aggregate `GET /api/metrics` in SQL and cache it (~60 s). It loads every donation
+      with every event and computes medians in Python
+      (`code/foodlink/routers/metrics.py:36`), and `Donation.timestamp_of`
+      (`code/foodlink/models.py:253`) then linearly scans that event list once per metric
+      per donation. `[R-12 · §16.2]` — **M**
 - [ ] Push the match radius into SQL as a lat/long bounding box before scoring.
-      `rank_recipients` currently receives every recipient; the radius filters in Python.
-- [ ] Add cursor or offset pagination. `limit` is capped at 500 with no way to page.
-- [ ] Frontend code splitting per portal (`React.lazy`) — `App.tsx` eagerly imports all
-      four portals plus the mobile tree.
+      `rank_recipients` receives every recipient row and the radius filters in Python
+      (`code/foodlink/matching.py:128`); `config.py`'s comment claims the radius bounds the
+      work — as written, it does not. `[R-10]` — ~2 h
+- [ ] Cursor or offset pagination. `limit` is capped at 500
+      (`code/foodlink/routers/donations.py:194`) with no way to reach a second page, so
+      lists truncate silently. `[R-9]` — ~3 h
+- [ ] Frontend code splitting per portal (`React.lazy`). `App.tsx` eagerly imports all
+      four portals plus the mobile tree; there is no `lazy(` anywhere in
+      `frontend/src`. `[R-27]` — **M**
 
-### Testing
-- [ ] Unit tests for `matching.py`'s five scoring functions at their boundaries
-      (overflow ratio, negative deadline slack, the reliability cliff at 3 donations).
-      The module is pure and currently only exercised through the API.
-- [ ] Round-trip test for `UtcDateTime` — it exists to prevent a subtle timezone bug
-      and has no direct test.
-- [ ] Frontend tests (Vitest + Testing Library), starting with `ProtectedRoute`.
-      83 TS files, zero tests.
-- [ ] Concurrency test for the courier claim (currently tested sequentially).
+### D. Testing
 
-### Features / gaps
-- [ ] `PATCH` / `DELETE` for requirements — they can be created and listed but never
-      edited or deactivated.
-- [ ] Schedule the expiry sweep (cron or APScheduler holding an admin token). Until
-      then the expiry-loss metric understates reality.
-- [ ] Wire `useIsMobile` into a redirect, **or** decide `/m/*` is a deliberately-linked
-      experience. Currently the hook is dead code and nothing routes phones there.
-- [ ] Use `COLD_STORAGE` to gate matching as its comment describes, or delete it.
-- [ ] Implement a courier rating flow, or drop `Volunteer.rating` (never written by any
-      API path).
-- [ ] Structured logging — the app has no `logging` configuration at all.
-- [ ] Readiness probe that runs `SELECT 1`. `/api/health` reports healthy with a dead
-      database.
+- [ ] Unit tests for `matching.py`'s scoring functions at their boundaries —
+      `_quantity_score` at the overflow ratio, `_deadline_score` on negative slack, the
+      reliability cliff at 3 accepted donations. The module is pure and is currently only
+      exercised through the API. `[R-13]` — **M**
+- [ ] Round-trip test for `UtcDateTime`. The decorator exists to prevent one specific
+      timezone bug (D-09) and has no direct test. `[§14.4]` — **S**
+- [ ] Frontend tests (Vitest + Testing Library), starting with `ProtectedRoute`. 84 files
+      under `frontend/src`, zero tests — `tsc` in `npm run build` is the only frontend gate
+      in CI, so a type-correct behavioural regression passes. `[R-14]` — **L**
+- [ ] Concurrency test for the courier claim. It is currently exercised sequentially,
+      which never opens the TOCTOU window. Pairs with *Next* item 3. `[§14.4]` — **S**
 
-### Cleanup
-- [ ] Delete template residue: `code/Makefile`, `code/src/`, `code/inc/`,
-      `code/run_main.o` (C++ scaffold, unrelated to FoodLink).
-- [ ] Fix `pyproject.toml` — still names the course template; `requires-python = ">=3.8"`
-      contradicts the 3.10+ syntax in use.
-- [ ] Resolve the duplicate `foodlink.db` (repo root vs `code/`) caused by the relative
-      SQLite path.
+### E. Operability & deployment
 
-### Longer-term
-- [ ] Generate the TypeScript client from the OpenAPI schema instead of hand-mirroring
-      types in `lib/api.ts`.
-- [ ] Adopt React Query for server state — would keep write-then-refetch correctness
-      while removing its chattiness.
-- [ ] Postgres + PostGIS for spatial indexing once organisation count grows.
-- [ ] Notifications (email/SMS/push) on match and assignment — no integration exists.
-- [ ] WebSockets/SSE for a live donation feed.
-- [ ] Tune matching weights against real outcome data; revisit the 20 km/h travel
-      constant and the 85 reliability prior.
+> **Sequenced, not independent.** Alembic (`3e1e168`) and the fail-closed signing key were
+> the prerequisites for deploying at all, and both are done — but the schema still migrates
+> inside the app's own lifespan (D-23; `ARCHITECTURE.md` constraint 2). So the first two
+> below are strictly ordered, and the third needs the second to give it somewhere to run.
+
+- [ ] **Postgres for deployment.** `DATABASE_URL` already works with no code change (D-08),
+      but `code/requirements.txt` ships no driver (`psycopg`/`psycopg2-binary`), nothing has
+      been run against Postgres, and `ensure_schema_current()` must move out of the lifespan
+      into a deploy step first or concurrent uvicorn workers race to migrate. `[R-4 · D-23]` — **L**
+- [ ] **Deployment configuration.** None of any kind exists: no Dockerfile, no compose file,
+      no Procfile, no proxy config, no SPA rewrite for the built frontend, no TLS
+      termination. §15.5 holds the checklist. Depends on the Postgres item above.
+      `[§1.5 · §15.5]` — **L**
+- [ ] **Schedule the expiry sweep.** `POST /api/admin/maintenance/expire` exists and must be
+      called by hand; there is no scheduler, queue or worker anywhere (`ARCHITECTURE.md`
+      constraint 7). Until it runs, the expiry-loss metric **understates** reality. It needs
+      a home first — cron holding an admin token, or in-process APScheduler, which reopens
+      the single-process assumption. `[R-8]` — ~1 h once there is somewhere to run it
+
+### F. Product gaps in what already exists
+
+Places where a shipped feature is incomplete — not new ideas.
+
+- [ ] `PATCH` / `DELETE` for requirements. They can be created and listed
+      (`code/foodlink/routers/organisations.py:83,95`) but never edited or deactivated,
+      even though `is_active` exists on the model and the list already filters on it.
+      `[R-16]` — **M**
+- [ ] Courier rating flow, **or** drop `Volunteer.rating`. The column is written by nothing
+      but `seed.py`; `VolunteerUpdate` excludes it deliberately, so every courier created
+      through the app is permanently 5.0. `[B-3 · R-33]` — **M**
+- [ ] Real image upload to object storage. There is no `UploadFile` endpoint anywhere;
+      images arrive as base64 strings into a `Text` column and inflate every donation
+      response. Supersedes the cheap cap in group A rather than duplicating it. `[R-19]` — **L**
+- [ ] Use `COLD_STORAGE` to gate matching as its own comment describes, or delete it.
+      Defined at `code/foodlink/matching.py:34`, referenced nowhere. Bound up with recipient
+      food-category preferences (group G) — that is what would give it something to compare
+      against. `[B-2 · R-22 · R-32]` — **S**
+
+### G. Future features — optional expansion, not hardening
+
+- [ ] Generate the TypeScript client from the OpenAPI schema. `lib/api.ts` mirrors the
+      Pydantic schemas by hand, so a backend rename is a silent runtime break rather than a
+      compile error. `[R-25]`
+- [ ] React Query for server state — keeps write-then-refetch correctness (D-11) while
+      removing its chattiness. `[R-26]`
+- [ ] Notifications (email/SMS/push) on match and assignment. The system currently has zero
+      external service dependencies. `[R-28]`
+- [ ] WebSockets/SSE for a live donation feed. `[R-29]`
+- [ ] Real routing distance instead of haversine — which also retires the 20 km/h travel
+      constant in `score_pair`. `[R-30]`
+- [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
+- [ ] Tune the matching weights against real outcome data; revisit the 85 reliability
+      prior. `[R-31]`
+- [ ] Recurring donation schedules. `Requirement.daily_recurring` exists on the recipient
+      side; donations have no equivalent. `[R-35]`
+- [ ] Postgres + PostGIS for spatial indexing — only once organisation count makes the
+      bounding box in group C insufficient. Distinct from the Postgres *move* in group E,
+      which is about deployment, not indexing. `[§16.3]`
+
+### H. Cleanup
+
+- [ ] Delete the C++ template residue: `code/Makefile`, `code/src/`, `code/inc/`,
+      `code/run_main.o`. It builds `libbvr_math.so` and has nothing to do with
+      FoodLink. `[R-23]` — **S**
+- [ ] Fix `pyproject.toml`. It still carries the course template's name, author and
+      description, and `requires-python = ">=3.8"` contradicts the 3.10+ union syntax the
+      code uses — CI pins 3.13 and carries a comment pointing at this entry. `[R-24]` — **S**
+- [ ] Resolve the duplicate `foodlink.db`. Both `./foodlink.db` and `./code/foodlink.db`
+      exist because the default SQLite URL is relative to the working directory — a
+      recurring "my data vanished" trap. `[B-5 · D-08]` — **S**
+- [ ] Audit the remaining unanchored `.gitignore` patterns. `8386371` anchored `lib/`, but
+      `build/`, `dist/` and `var/` still match at any depth — `git check-ignore` confirms
+      that `frontend/src/build/`, `frontend/src/dist/` and `frontend/src/var/` would each be
+      silently excluded. Nothing is hidden today; this is the same latent defect that cost
+      the first CI run. `[repo]` — **S**
 
 ---
 
-## Blocked
+## Blocked — open decisions, not unbuilt work
 
-**Nothing is blocked by an external dependency or unavailable decision.**
+Each of these has a working implementation whose *intended* behaviour has never been
+settled. They sit here rather than in *Backlog* so that nobody implements one by guessing.
 
-One item is *sequenced* rather than blocked:
-- Multi-worker uvicorn deployment → requires Postgres first; SQLite's single writer
-  would corrupt under concurrent workers. It also requires moving
-  `ensure_schema_current()` out of the app lifespan into a deploy step, or the workers
-  race to migrate (D-23).
+- **Should a donation stuck in `ACCEPTED` past its deadline expire?** The sweep only
+  touches `AVAILABLE` and `MATCHED` (`code/foodlink/routers/admin.py:200`), so an
+  accepted-but-never-delivered donation stays in that state forever and never counts as an
+  expiry loss. Deliberate or oversight — undecided. `[B-1 · §14.4]`
+- **What should revoking an organisation's verification do to a donation it has already
+  accepted?** Today, nothing: verification gates ranking and acceptance, not the lifecycle
+  afterwards. Untested and undecided. `[B-4]`
+- **Should `GET /api/metrics` stay platform-wide for every role?** It returns the whole
+  platform's figures to any authenticated account. Defensible as a transparency dashboard,
+  questionable as a per-tenant view. A product call, not a defect — and it blocks nothing
+  else. `[§8.2]`
+- **Is `/m/*` a deliberately link-only experience, or unfinished routing?**
+  `frontend/src/mobile/useIsMobile.ts` is never imported, so nothing sends a phone visitor
+  to the mobile tree; entry is by typing the URL. D-20 records the rationale as unknown.
+  Decide before either wiring the redirect or deleting the hook. `[B-8 · R-22 · D-20]`
 
-*(Postgres was sequenced behind Alembic, which now exists.)*
+**Sequenced rather than blocked:** multi-worker uvicorn needs Postgres *and* the migration
+step moved out of the app lifespan. Both are group E above, and neither waits on anything
+external.
 
 ---
 
 ## Completed (verified in the repository)
 
-### Continuous integration — `e47bd86`, `8386371`
+### Continuous integration — `e47bd86`, `8386371` `[R-5]`
 - [x] **`.github/workflows/ci.yml`** runs on push to `master`/`main` and on every pull
       request, in two parallel jobs.
 - [x] Backend job (Python 3.13): `pip install -r code/requirements-dev.txt`, then
@@ -146,9 +260,11 @@ One item is *sequenced* rather than blocked:
       TS2307 for `frontend/src/lib/{api,adapters,hooks,time,geo}`, which the root
       `.gitignore`'s unanchored `lib/` had been excluding from every clone since the
       files were written. Pattern anchored to `/lib/`; the five modules committed.
-      Backend job passed on the same run.
+      Backend job passed on the same run. The fix is pushed, and the follow-up run is
+      reported green — GitHub run history is not readable from the working tree, so that
+      last part rests on report rather than local verification.
 
-### Donation read authorization — `ea0f499`
+### Donation read authorization — `ea0f499` `[R-3 · S-2 (donations half)]`
 - [x] **`GET /api/donations` is scoped server-side by role and ownership**, whatever
       `mine` is set to. `mine` remains a narrowing convenience filter only.
 - [x] **`GET /api/donations/{id}` applies the identical scope**, in the query, so an
@@ -162,9 +278,9 @@ One item is *sequenced* rather than blocked:
       the donation unscoped, because its own role/ownership gates authorise it.
 - [x] 13 tests in `code/tests/test_donation_reads.py`, including a matrix asserting the
       id lookup and the list agree for every role. Six of them fail against the previous
-      code; the full suite is 80 passing.
+      code.
 
-### Database migrations — `3e1e168`
+### Database migrations — `3e1e168` `[R-1]`
 - [x] **Alembic added** — `code/alembic.ini` + `code/migrations/`. `env.py` takes the
       URL from `Settings` rather than the ini, so no environment-specific value is
       committed and migrations cannot address a different database than the app.
@@ -182,7 +298,7 @@ One item is *sequenced* rather than blocked:
       `compare_metadata` assertion that a migrated fresh database matches
       `Base.metadata`, and a test that the baselining procedure loses no rows.
 
-### Security hardening — `3e1e168`
+### Security hardening — `3e1e168` `[R-2 · S-1]`
 - [x] **Signing key is fail-closed.** `config.py` no longer defaults
       `FOODLINK_SECRET_KEY`; a missing key raises `ConfigurationError` while `Settings`
       is built — during import, so it precedes uvicorn binding and also covers
@@ -195,8 +311,8 @@ One item is *sequenced* rather than blocked:
       retired one. `main.py`'s lifespan warns on every startup when it is active.
 - [x] `conftest.py` exports its own test key before importing the app, so the suite
       needs no environment setup and never depends on the dev fallback.
-- [x] 22 focused tests in `code/tests/test_config.py`. JWT signing/verification in
-      `security.py` unchanged.
+- [x] 22 collected tests in `code/tests/test_config.py` (14 functions, two of them
+      parametrised). JWT signing/verification in `security.py` unchanged.
 
 ### Backend — `e48c9e7`
 - [x] FastAPI application: 5 routers (`auth`, `admin`, `donations`, `organisations`,
@@ -219,8 +335,8 @@ One item is *sequenced* rather than blocked:
       `getpass` prompting
 - [x] Seed script with deadlines relative to run time
 - [x] 37 integration tests, no mocks, in-memory SQLite via `StaticPool` +
-      `dependency_overrides` — **all passing** (80 total today, with the config,
-      migration and read-scope tests above)
+      `dependency_overrides`. **80 tests pass today** (~33 s) — 37 integration + 13
+      read-scope + 22 config + 8 migration.
 
 ### Frontend
 - [x] Four role portals (donor, ngo, volunteer, admin) with nested layouts — `eaeb51d`
@@ -237,11 +353,13 @@ One item is *sequenced* rather than blocked:
       `mockData` references remain; the app runs entirely on the live API.
 
 ### Infrastructure
-- [x] Vite dev proxy `/api → :8000`, eliminating CORS in development
+- [x] Vite dev proxy `/api → 127.0.0.1:8000` (overridable through `VITE_API_PROXY`),
+      eliminating CORS in development
 - [x] `.claude/launch.json` frontend dev-server config
 - [x] `.gitignore` covering `.env`, `node_modules`; no `.db` or `.env` tracked.
       `lib/` anchored to `/lib/` (`8386371`) after it hid `frontend/src/lib/` — the
-      neighbouring `build/`, `dist/`, `var/`, `share/` are still unanchored
+      neighbouring `build/`, `dist/` and `var/` are still unanchored, tracked under
+      *Backlog → H*
 - [x] mkdocs documentation workflow — `.github/workflows/mkdocs.yml` (docs only;
       validation lives in `ci.yml`)
 - [x] `ai/` context scaffolding — `5264fb3`
