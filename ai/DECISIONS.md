@@ -1,10 +1,11 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-32. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-33. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
-> `TASKS.md` -> *Blocked*. **D-32 describes uncommitted working-tree changes** made on
-> 2026-09-03 for I-1 (impact reporting).
+> `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178`;
+> **D-33 describes uncommitted working-tree changes** made on 2026-09-03 for I-2
+> (distance, routing and GPS wording).
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -957,8 +958,8 @@ Three consequences follow, and they were the substance of I-1:
   labels that read alike would recreate the contradiction this decision exists to remove.
 - **`distanceKm` is great-circle, not road distance** (`matching.haversine_km`), and it is
   null until a donation has a recipient. Every screen showing it now says "straight-line".
-  Whether road distance should exist is `TASKS.md` → *Blocked*, and I-2 owns the remaining
-  routing claims.
+  Whether road distance should exist is `TASKS.md` → *Blocked*; the routing claims
+  elsewhere in the interface were closed by I-2 and are recorded in **D-33**.
 - **The public landing page is out of scope and still fabricates.** `pages/Landing.tsx`
   prints four literal platform statistics. `/api/metrics` requires authentication, so a
   pre-login page cannot read the real ones without a scope decision — see `TASKS.md` →
@@ -966,3 +967,66 @@ Three consequences follow, and they were the substance of I-1:
 - **Nothing tests this.** There is still no frontend test suite, so `tsc` is the only
   automated gate on `lib/impact.ts`. It is pure and takes plain arrays, which makes it the
   most testable module in the frontend the moment one exists.
+
+---
+
+## D-33 · One distance, named for what it is; no travel time at all **[documented]**
+
+**Decision.** The interface shows exactly one kind of distance — the server's great-circle
+kilometres from `matching.haversine_km` — and always says so. It shows **no travel time**.
+Where a distance is unknown the screen says it is unknown rather than printing a plausible
+number. Which of the two server-provided distances a screen uses is decided in one place,
+`frontend/src/lib/geo.displayDistanceKm`, and nothing computes a distance in the browser.
+This is D-31 applied to the routing and GPS claims, and it is what I-2 implemented.
+
+**The selector.** Two distances can reach a donation and they answer different questions,
+the same trap D-30 found with match scores:
+
+| Field | What it measures | When it exists |
+|---|---|---|
+| `DonationOut.distanceKm` | donor pin → the **matched** kitchen | only once a recipient is bound (`serialize.donation_out()`) |
+| `MatchOut.distanceKm` on `viewerMatch` | donor pin → the **calling** organisation's kitchen | only while that kitchen can still act on the donation (D-30) |
+
+`displayDistanceKm` prefers the viewer's own figure and falls back to the matched one,
+with **no third fallback**. An NGO browsing open listings is asking "how far is this from
+us", and only `viewerMatch` answers it — which is also why this was not purely a wording
+change: every NGO surface had been rendering `– km` (or silently falling back to a place
+name) because it read `distanceKm` on donations that structurally never carry one.
+
+**Reasoning.**
+
+- **The claims were larger than the capability by a wide margin.** `MapPreview` captioned
+  itself a "Redistribution Route Corridor", drew a hard-coded `~0.8 km` first leg and a
+  `distanceKm - 0.8` second one, estimated travel as `distanceKm * 6 + 10` minutes, and
+  footed the panel with "Live GPS tracking active in Phase 2" under a heading reading
+  "Live Corridor Tracking". There is no routing provider, no geocoder, no map and no
+  courier position anywhere in the repository — `navigator.geolocation` is called twice,
+  both times to pin a donation at creation. Nothing in that panel except `distanceKm` was
+  a measurement of anything.
+- **Travel time was removed rather than corrected.** The frontend's 10 km/h contradicted
+  the backend's 20 km/h, but fixing the constant would have been the wrong repair: the
+  backend's figure is an input to `_deadline_score` and is **never serialised**, so the
+  client has no travel estimate to display honestly. Inventing a better one in the browser
+  would have been a second distance model — exactly what this decision forbids. The
+  backend's constant is untouched; only the wording derived from it changed, so
+  `reasons` now says "estimated collection time" rather than asserting a deadline
+  "cannot be met".
+- **An absent number is information.** `~2 km`, `?? 1.8`, `?? 2.4` and `?? '~2'` made an
+  unmatched donation indistinguishable from a nearby one. "Distance unavailable" is
+  shorter, true, and tells the reader something the invented number actively hid.
+- **The diagram was worth keeping.** Pickup → courier → drop-off is the real shape of a
+  handover and readers use it. What made it dishonest was the numbers pinned to it and the
+  animation implying live telemetry, not the structure — so the schematic stayed, the
+  per-leg distances went, and the footer states plainly that it is a schematic.
+
+**Constraints.**
+
+- ⚠️ **"Straight-line" has to survive future edits.** The wording is load-bearing, not
+  decoration: `DISTANCE_HINT` in `lib/geo.ts` exists so the explanation is written once,
+  and compact chips carry it as a `title` rather than repeating it inline.
+- **This does not decide whether road distance should exist.** That is still `TASKS.md` →
+  *Blocked* / `R-30`. I-2 only ensures the interface is honest under either answer; if
+  routing is ever added, `displayDistanceKm` is the single place the meaning changes.
+- **Nothing tests it.** There is still no frontend test suite, so `tsc` remains the only
+  automated gate. `displayDistanceKm` is pure and takes a plain object, so it is trivially
+  testable once one exists.

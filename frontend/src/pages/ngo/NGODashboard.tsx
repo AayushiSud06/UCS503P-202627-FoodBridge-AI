@@ -4,6 +4,7 @@ import DonationRow from '../../components/DonationRow';
 import { useDonations } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
 import { deadlineStatus, byUrgency } from '../../lib/time';
+import { displayDistanceKm } from '../../lib/geo';
 
 export default function NGODashboard() {
   const donations = useDonations();
@@ -21,10 +22,14 @@ export default function NGODashboard() {
   const mealsOnOffer = open.reduce((sum, d) => sum + d.quantity, 0);
   const mealsReceived = completed.reduce((sum, d) => sum + d.quantity, 0);
 
-  // `distanceKm` is measured against the recipient a donation is matched to,
-  // so an unclaimed one has none to report from this kitchen's point of view.
-  // The ranked matches on the Available screen are where distance belongs.
-  const closest = open.find(d => typeof d.distanceKm === 'number');
+  // An unclaimed donation has no `distanceKm` — that one is measured against
+  // the recipient it is matched to. What it does carry is `viewerMatch`, this
+  // kitchen's own straight-line distance, which is the figure this sentence
+  // wants; `displayDistanceKm` picks between them.
+  const closestKm = open
+    .map(displayDistanceKm)
+    .filter((km): km is number => km !== null)
+    .sort((a, b) => a - b)[0];
   const soonest = open[0];
   const soonestStatus = soonest ? deadlineStatus(soonest.pickupDeadline) : null;
 
@@ -64,7 +69,9 @@ export default function NGODashboard() {
             {open.length === 0
               ? 'We’ll flag new donations here the moment a donor lists them nearby.'
               : [
-                  closest ? `Closest is ${closest.distanceKm} km away` : 'Sorted by how soon each closes',
+                  closestKm !== undefined
+                    ? `Closest is ${closestKm} km away in a straight line`
+                    : 'Sorted by how soon each closes',
                   soonestStatus && soonestStatus.urgency !== 'ok'
                     ? `the soonest closes in ${soonestStatus.label.replace(' left', '')}`
                     : null,

@@ -3,6 +3,7 @@ import { useDonations } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
 import { MEmpty, MSection } from './parts';
 import StatusBadge from '../components/StatusBadge';
+import { DISTANCE_HINT, formatDistanceKm } from '../lib/geo';
 
 export default function VolunteerHistory() {
   const user = useCurrentUser();
@@ -39,7 +40,9 @@ export default function VolunteerHistory() {
               </div>
               <div className="mt-2.5 flex items-center gap-3 flex-wrap">
                 <StatusBadge status={d.status} size="sm" />
-                <span className="text-xs text-gray-500">{d.distanceKm ?? '–'} km</span>
+                <span className="text-xs text-gray-500" title={DISTANCE_HINT}>
+                  {formatDistanceKm(d, 'Distance n/a')}
+                </span>
               </div>
             </article>
           ))}

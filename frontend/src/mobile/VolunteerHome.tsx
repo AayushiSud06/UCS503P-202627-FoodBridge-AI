@@ -6,6 +6,7 @@ import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MStatGrid, MSection, MEmpty } from './parts';
 import StatusBadge from '../components/StatusBadge';
 import { volunteerImpact } from '../lib/impact';
+import { DISTANCE_HINT, formatDistanceKm } from '../lib/geo';
 
 const ACTIVE = ['VOLUNTEER_ASSIGNED', 'PICKED_UP'];
 
@@ -41,7 +42,7 @@ export default function VolunteerHome() {
           { label: 'Active', value: active.length },
           { label: 'Unclaimed', value: unclaimed.length },
           { label: 'Meals moved', value: impact.deliveredMeals },
-          { label: 'Distance', value: `${impact.distanceKm.toFixed(1)} km` },
+          { label: 'Straight-line', value: `${impact.distanceKm.toFixed(1)} km` },
         ]}
       />
 
@@ -124,7 +125,8 @@ export default function VolunteerHome() {
               {d.quantity} {d.unit} · {d.foodName}
             </p>
             <p className="mt-0.5 text-xs text-gray-500 truncate">
-              {d.donorOrganization} → {d.recipientName ?? 'kitchen'} · {d.distanceKm ?? '–'} km
+              {d.donorOrganization} → {d.recipientName ?? 'kitchen'} ·{' '}
+              <span title={DISTANCE_HINT}>{formatDistanceKm(d, 'distance n/a')}</span>
             </p>
           </button>
         ))

@@ -4,6 +4,7 @@ import type { Donation } from '../types';
 import StatusBadge from './StatusBadge';
 import MatchScore from './MatchScore';
 import { formatClock } from '../lib/time';
+import { DISTANCE_HINT, displayDistanceKm } from '../lib/geo';
 
 interface DonationCardProps {
   donation: Donation;
@@ -26,6 +27,9 @@ export default function DonationCard({
   donation, viewAs = 'donor', onAction, actionLabel, detailPath
 }: DonationCardProps) {
   const emoji = CATEGORY_EMOJI[donation.category] ?? '🍽️';
+  // Server-provided and straight-line; null when neither distance applies, in
+  // which case the chip falls back to the place name rather than a number.
+  const distanceKm = displayDistanceKm(donation);
 
   return (
     <div className="card-hover p-4 space-y-3 h-full flex flex-col">
@@ -53,9 +57,9 @@ export default function DonationCard({
           <Clock size={12} className="text-gray-400" />
           Pickup by {formatClock(donation.pickupDeadline)}
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1" title={distanceKm === null ? undefined : DISTANCE_HINT}>
           <MapPin size={12} className="text-gray-400" />
-          {donation.distanceKm ? `${donation.distanceKm} km` : donation.location.split(',')[0]}
+          {distanceKm === null ? donation.location.split(',')[0] : `${distanceKm} km`}
         </span>
       </div>
 

@@ -1,40 +1,50 @@
 import { useState } from 'react';
-import { MapPin, Navigation, Building2, User, Compass, Info, Check } from 'lucide-react';
+import { MapPin, Building2, User, Compass, Info } from 'lucide-react';
 
+/**
+ * A schematic of the three points a handover passes through.
+ *
+ * It is **not** a map and **not** a route. FoodLink has no routing provider,
+ * no geocoder and no map tiles (see `ARCHITECTURE.md` → *External services:
+ * none*), and a courier's position is never read, stored or transmitted. The
+ * only figure with anything behind it is `distanceKm` — the server's
+ * great-circle distance between the donor's pin and the kitchen's — which is
+ * why the legs carry no distances and the footer carries no travel estimate.
+ * There is nothing honest to put in them.
+ */
 interface MapPreviewProps {
   pickupLocation: string;
   dropoffLocation: string;
-  distanceKm: number;
+  /** Server-provided straight-line distance. Absent until a recipient is bound. */
+  distanceKm?: number;
   volunteerLocation?: string;
-  currentStage?: 'pickup' | 'transit' | 'delivered';
 }
 
 export default function MapPreview({
   pickupLocation,
   dropoffLocation,
   distanceKm,
-  volunteerLocation = 'Aarav Sharma (0.8 km away)',
-  currentStage = 'pickup',
+  volunteerLocation = 'Courier not yet assigned',
 }: MapPreviewProps) {
-  const [activeTab, setActiveTab] = useState<'route' | 'details'>('route');
+  const [activeTab, setActiveTab] = useState<'diagram' | 'details'>('diagram');
 
   return (
     <div className="card overflow-hidden border-emerald-100 shadow-sm">
-      {/* Map Header */}
+      {/* Header */}
       <div className="px-4 py-2.5 bg-gradient-to-r from-emerald-900 to-teal-900 text-white flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Compass size={16} className="text-emerald-400 animate-spin" style={{ animationDuration: '8s' }} />
-          <span className="text-xs font-bold uppercase tracking-wider text-emerald-200">Redistribution Route Corridor</span>
+          <Compass size={16} className="text-emerald-400" />
+          <span className="text-xs font-bold uppercase tracking-wider text-emerald-200">Handover Overview</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setActiveTab('route')}
+            onClick={() => setActiveTab('diagram')}
             className={`text-xs px-2.5 py-1 rounded font-medium transition-colors ${
-              activeTab === 'route' ? 'bg-emerald-700 text-white' : 'text-emerald-300 hover:bg-emerald-800/60'
+              activeTab === 'diagram' ? 'bg-emerald-700 text-white' : 'text-emerald-300 hover:bg-emerald-800/60'
             }`}
           >
-            Route Map
+            Diagram
           </button>
           <button
             type="button"
@@ -43,15 +53,15 @@ export default function MapPreview({
               activeTab === 'details' ? 'bg-emerald-700 text-white' : 'text-emerald-300 hover:bg-emerald-800/60'
             }`}
           >
-            Waypoints
+            Locations
           </button>
         </div>
       </div>
 
-      {activeTab === 'route' ? (
-        /* Visual Map Canvas */
+      {activeTab === 'diagram' ? (
+        /* Schematic: the order the food moves in, not where anybody is */
         <div className="relative bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 flex items-center justify-center min-h-[220px] overflow-hidden">
-          {/* Animated GPS Grid Pattern */}
+          {/* Decorative grid. Not a map, and not drawn from coordinates. */}
           <div
             className="absolute inset-0 opacity-15"
             style={{
@@ -64,51 +74,45 @@ export default function MapPreview({
             }}
           />
 
-          {/* Connected Waypoints Flow */}
+          {/* Connected points */}
           <div className="relative z-10 w-full max-w-lg flex items-center justify-between gap-2 sm:gap-4">
             {/* Donor Node */}
             <div className="flex flex-col items-center text-center">
               <div className="w-11 h-11 bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-900/50 backdrop-blur">
                 <Building2 size={20} />
               </div>
-              <span className="mt-2 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Origin</span>
+              <span className="mt-2 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Pickup</span>
               <p className="text-xs font-semibold text-white max-w-[90px] truncate" title={pickupLocation}>
                 {pickupLocation.split(',')[0]}
               </p>
             </div>
 
-            {/* Connecting Line 1 */}
+            {/* Connecting line. Deliberately unlabelled with a distance: the
+                individual legs are never measured, only donor→kitchen is. */}
             <div className="flex-1 flex flex-col items-center">
               <div className="w-full flex items-center">
-                <div className="h-0.5 flex-1 bg-gradient-to-r from-emerald-500 to-sky-400 relative">
-                  <div className="absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-300 rounded-full animate-ping" />
-                </div>
+                <div className="h-0.5 flex-1 bg-gradient-to-r from-emerald-500 to-sky-400" />
               </div>
-              <span className="text-[10px] text-emerald-300 font-mono mt-1">~0.8 km</span>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-300/70 font-semibold mt-1">Collect</span>
             </div>
 
             {/* Volunteer Node */}
             <div className="flex flex-col items-center text-center">
-              <div className="w-12 h-12 bg-sky-500/20 border-2 border-sky-400 text-sky-300 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-900/50 backdrop-blur relative">
+              <div className="w-12 h-12 bg-sky-500/20 border-2 border-sky-400 text-sky-300 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-900/50 backdrop-blur">
                 <User size={22} />
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-slate-900 flex items-center justify-center">
-                  <span className="w-1.5 h-1.5 bg-white rounded-full" />
-                </span>
               </div>
-              <span className="mt-2 text-[10px] font-bold text-sky-400 uppercase tracking-wider">Volunteer</span>
-              <p className="text-xs font-semibold text-white max-w-[100px] truncate">
-                {volunteerLocation.split('(')[0]}
+              <span className="mt-2 text-[10px] font-bold text-sky-400 uppercase tracking-wider">Courier</span>
+              <p className="text-xs font-semibold text-white max-w-[100px] truncate" title={volunteerLocation}>
+                {volunteerLocation}
               </p>
             </div>
 
-            {/* Connecting Line 2 */}
+            {/* Connecting line */}
             <div className="flex-1 flex flex-col items-center">
               <div className="w-full flex items-center">
-                <div className="h-0.5 flex-1 bg-gradient-to-r from-sky-400 to-rose-400 relative">
-                  <div className="absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 bg-rose-300 rounded-full animate-ping" />
-                </div>
+                <div className="h-0.5 flex-1 bg-gradient-to-r from-sky-400 to-rose-400" />
               </div>
-              <span className="text-[10px] text-sky-300 font-mono mt-1">~{(distanceKm - 0.8 > 0 ? (distanceKm - 0.8).toFixed(1) : 1.0)} km</span>
+              <span className="text-[10px] uppercase tracking-wider text-sky-300/70 font-semibold mt-1">Deliver</span>
             </div>
 
             {/* Recipient Node */}
@@ -116,7 +120,7 @@ export default function MapPreview({
               <div className="w-11 h-11 bg-rose-500/20 border-2 border-rose-400 text-rose-300 rounded-2xl flex items-center justify-center shadow-lg shadow-rose-900/50 backdrop-blur">
                 <MapPin size={20} />
               </div>
-              <span className="mt-2 text-[10px] font-bold text-rose-400 uppercase tracking-wider">Destination</span>
+              <span className="mt-2 text-[10px] font-bold text-rose-400 uppercase tracking-wider">Drop-off</span>
               <p className="text-xs font-semibold text-white max-w-[90px] truncate" title={dropoffLocation}>
                 {dropoffLocation.split(',')[0]}
               </p>
@@ -124,7 +128,7 @@ export default function MapPreview({
           </div>
         </div>
       ) : (
-        /* Detailed Waypoints List */
+        /* The three locations, spelled out */
         <div className="p-4 bg-gray-50 divide-y divide-gray-200 text-xs">
           <div className="py-2.5 flex items-start gap-3">
             <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
@@ -156,13 +160,19 @@ export default function MapPreview({
         </div>
       )}
 
-      {/* Footer Info */}
+      {/* Footer: the one real number, and what it is not. */}
       <div className="px-4 py-2.5 bg-emerald-50/50 border-t border-emerald-100 flex items-center justify-between flex-wrap gap-2 text-xs">
         <div className="flex items-center gap-1.5 text-emerald-800">
           <Info size={13} className="text-emerald-600 shrink-0" />
-          <span>Total Corridor Distance: <strong>{distanceKm} km</strong> · Estimated Travel: <strong>~{Math.round(distanceKm * 6 + 10)} mins</strong></span>
+          {typeof distanceKm === 'number' ? (
+            <span>Straight-line distance: <strong>{distanceKm} km</strong></span>
+          ) : (
+            <span>Straight-line distance unavailable</span>
+          )}
         </div>
-        <span className="text-[11px] text-gray-500">Live GPS tracking active in Phase 2</span>
+        <span className="text-[11px] text-gray-500">
+          Schematic only — no road route, travel time or courier location
+        </span>
       </div>
     </div>
   );

@@ -3,9 +3,9 @@
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-03, branch `master`. The most recent
-> implementation **commit** is `23c27f4` (match-score consistency); on top of it the working
-> tree carries the **uncommitted** I-1 impact-reporting fix described below. A QA audit was
-> run against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
+> implementation **commit** is `e8a8178` (I-1, impact reporting); on top of it the working
+> tree carries the **uncommitted** I-2 distance/GPS-wording fix described below. A QA audit
+> was run against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
 > `TASKS.md`.
 
 ## What this project is
@@ -28,7 +28,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting is now honest (I-1, uncommitted); ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1) and distance/GPS wording (I-2, uncommitted) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -48,7 +48,27 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-03, uncommitted working tree** — **I-1: the impact screens now only print what
+- **2026-09-03, uncommitted working tree** — **I-2: the interface no longer claims routing
+  or live GPS.** `MapPreview` was captioned "Redistribution Route Corridor" with a
+  hard-coded `~0.8 km` first leg, a second leg derived as `distanceKm - 0.8`, an "Estimated
+  Travel" of `distanceKm * 6 + 10` minutes (a 10 km/h assumption contradicting the
+  backend's own 20 km/h) and a footer reading **"Live GPS tracking active in Phase 2"**,
+  under an NGO heading reading **"Live Corridor Tracking"**. It is now a *Handover
+  Overview*: the same three-node schematic, no per-leg numbers, no travel estimate, and a
+  footer carrying the one real figure — the server's straight-line distance — beside
+  "Schematic only — no road route, travel time or courier location". Invented fallbacks
+  are gone (`~2 km`, `1.8`, `2.4`, `~2`); an unknown distance now reads *unavailable*.
+  `CreateDonation`'s "ranked by real travel distance" hint, the NGO "in real time" /
+  "En route on vehicle" copy, `TaskCard`'s "get directions" and `VolunteerHistory`'s
+  "km route" are corrected. **The one behavioural fix:** open donations carry no
+  `distanceKm` (it is measured against a *matched* recipient), so every NGO surface was
+  showing `– km`; `lib/geo.displayDistanceKm` now prefers `viewerMatch.distanceKm`, the
+  server's straight-line distance to the *calling* kitchen, which is what those screens
+  were asking for. Two backend `reasons` strings were qualified ("in a straight line";
+  "estimated collection time") — no scoring change. See `DECISIONS.md` D-33.
+  148 backend tests pass; `tsc && vite build` clean.
+
+- **2026-09-03, commit `e8a8178`** — **I-1: the impact screens now only print what
   the app knows.** Six impact surfaces and two dashboards were reading a mixture of real
   counts, real counts with a literal added, and pure invention under headings reading
   "real-time" and "verified". Everything now comes from `frontend/src/lib/impact.ts`, one
@@ -212,8 +232,8 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1, the largest of them, is done** (uncommitted); eight remain, all **S**, plus
-the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
+badges. **I-1 (the largest) and I-2 are done**; seven remain, all **S**, plus the small
+I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
 
@@ -331,7 +351,7 @@ Full evidence and per-item scope in `TASKS.md` → *Backlog → I*; the principl
 `DECISIONS.md` D-31. Listed here because severity is a judgement about the project's
 credibility rather than about its correctness, and that judgement belongs in this file.
 
-18. ✅ **Resolved (uncommitted, 2026-09-03) — impact figures are no longer invented.**
+18. ✅ **Resolved (`e8a8178`, 2026-09-03) — impact figures are no longer invented.**
     The padded reals (`+ 1240`, `+ 18`, and two more the audit missed on
     `VolunteerDashboard`: `+ 42` and `+ 8`), the literal cards, the fabricated
     charts, the badge blocks and both `alert()` export buttons are gone; desktop and
@@ -402,11 +422,11 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. **I-1 is done** (uncommitted), so the audit's suggested order now
-   starts at **I-2** (live-GPS and routing claims) → **I-3** (requirement matching claims)
-   → the three group-F match-score follow-ups in one sitting → group E. I-1a (the landing
-   page's invented statistics) is the small residue I-1 left, and it needs a decision on
-   whether any metric may be read without authentication.
+   promoted into it. **I-1 and I-2 are done**, so the audit's suggested order now starts at
+   **I-3** (requirement matching claims) → the three group-F match-score follow-ups in one
+   sitting → group E. I-1a (the landing page's invented statistics) is the small residue
+   I-1 left, and it needs a decision on whether any metric may be read without
+   authentication.
 2. Answer at least the cheap half of the four decisions the audit opened
    (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
    real impact report — can be answered "not now" at zero cost, because group I removes the

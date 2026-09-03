@@ -40,7 +40,8 @@ export default function CreateDonation() {
     location: '',
     description: '',
     storageType: 'Room Temperature' as StorageType,
-    // The matcher ranks recipients by real distance, so a pin is required.
+    // The matcher ranks recipients by straight-line distance from this pin,
+    // so a pin is required. Nothing in FoodLink measures road distance.
     latitude: String(DEFAULT_COORDS.latitude),
     longitude: String(DEFAULT_COORDS.longitude),
   });
@@ -299,7 +300,7 @@ export default function CreateDonation() {
           <FormField
             label="Pickup Coordinates"
             required
-            hint="Recipients are ranked by real travel distance, so the pin has to be right"
+            hint="Recipients are ranked by straight-line distance from this pin, so it has to be right"
           >
             <div className="flex gap-2 items-start">
               <input

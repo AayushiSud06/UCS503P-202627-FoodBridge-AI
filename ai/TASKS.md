@@ -1,7 +1,8 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-02; the most recent implementation commit
-> is `23c27f4` (match-score consistency). Context: `PROJECT_STATE.md`.
+> Verified against the repository on 2026-09-03; the most recent implementation commit
+> is `e8a8178` (I-1, impact reporting), with I-2 done and uncommitted on top of it.
+> Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -33,11 +34,13 @@ CI → recipient read scope → auth rate limiting → courier claim race — is
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 is done and sitting uncommitted in the working tree** (2026-09-03): the six per-role
-impact surfaces and two dashboards no longer print invented figures, and desktop and
-`/m/*` compute them from one module. See *Backlog → I* for exactly what was removed, and
-`DECISIONS.md` D-32 for why the environmental equivalences were deleted rather than
-re-based. Nothing else is in progress.
+**I-1 is committed (`e8a8178`) and I-2 is done and sitting uncommitted in the working
+tree** (2026-09-03). I-1: the six per-role impact surfaces and two dashboards no longer
+print invented figures, computed from one module for desktop and `/m/*` (`DECISIONS.md`
+D-32). I-2: the routing, travel-time and live-GPS claims are gone, invented distance
+fallbacks are replaced by an unavailable state, and one selector decides which
+server-provided straight-line distance a screen shows (`DECISIONS.md` D-33). See
+*Backlog → I* for exactly what changed in each. Nothing else is in progress.
 
 **A manual QA audit was run on 2026-09-02** across twelve observations. It changed no
 source code — its output is this list. Its central result: **the backend is broadly
@@ -58,17 +61,17 @@ What the audit did change is what the list looks like when that call is made:
 
 - **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
   D-31 records why an interface claim the system cannot honour is a defect in a project
-  whose evaluation rests on evidence. Most of its items are **S**, and two of them
-  (I-1, I-2) are the two a demo audience sees first.
+  whose evaluation rests on evidence. Most of its items are **S**, and the two a demo
+  audience sees first (I-1, I-2) are now both done.
 - **Group E is still the largest block and is still ungated** — the courier claim was
   the last correctness prerequisite for Postgres, and it landed in `e919f7b`.
 - **Group F is unchanged and confirmed.** QA independently re-observed all three
   match-score follow-ups; they are real and they are still small.
 
 **The audit's own recommended order**, offered as analysis and not as a commitment:
-~~**I-1** (impact figures)~~ **— done, 2026-09-03** → **I-2** (live-GPS and routing claims)
-→ **I-3** (requirement matching claims) → **F** (the three match-score follow-ups, one
-sitting) → **E** (Postgres, once the demo-facing claims are true). The reasoning is in *Group I*'s header:
+~~**I-1** (impact figures)~~ and ~~**I-2** (live-GPS and routing claims)~~ **— both done,
+2026-09-03** → **I-3** (requirement matching claims) → **F** (the three match-score
+follow-ups, one sitting) → **E** (Postgres, once the demo-facing claims are true). The reasoning is in *Group I*'s header:
 the cheapest way to stop over-claiming is to stop printing the claims, and that has to
 happen before or alongside deciding which of them to actually build (*Blocked*).
 
@@ -244,8 +247,9 @@ Places where a shipped feature is incomplete — not new ideas.
       effort:** the audit confirmed the matcher measures great-circle distance only
       (`matching.haversine_km`) while the interface presents it as a road corridor with a
       travel estimate. Deciding whether the number should *become* road distance is the
-      first *Blocked* entry; **I-2 is what makes the interface honest either way**, and
-      does not wait on it. `[R-30 · QA-1]`
+      first *Blocked* entry. **I-2 has since made the interface honest either way** —
+      every distance is now labelled straight-line and no travel time is displayed — so
+      this decision is no longer urgent, only open. `[R-30 · QA-1]`
 - [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
 - [ ] Tune the matching weights against real outcome data; revisit the 85 reliability
       prior. `[R-31]`
@@ -293,7 +297,7 @@ Places where a shipped feature is incomplete — not new ideas.
 > about which of these capabilities to actually *build* are separate and are in *Blocked*.
 
 - [x] **I-1 · Stop printing impact figures that are not measurements.** `[QA-4 · repo]` — **done,
-      uncommitted working tree, 2026-09-03.** Six impact surfaces (three desktop, three
+      commit `e8a8178`, 2026-09-03.** Six impact surfaces (three desktop, three
       mobile) plus two dashboards now read `frontend/src/lib/impact.ts`, which derives every
       figure from the account's own donation list and its own server counters. Removed: the
       `+ 1240` / `+ 18` / `+ 42` / `+ 8` literal offsets, the pure-literal cards (`5`
@@ -319,22 +323,43 @@ Places where a shipped feature is incomplete — not new ideas.
       or a public subset of one — a scope decision, and D-26's neighbour. Cheap honest
       options that need no backend change: delete the strip, or relabel it as illustrative.
 
-- [ ] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **S**
-      There is no GPS tracking, no routing provider and no map in the repository.
-      `navigator.geolocation` is called in exactly two places (`lib/geo.ts` via
-      `CreateDonation.tsx:85` and `CreateDonationCamera.tsx:47`), both to pin a donation at
-      creation; a courier's position is never read, stored or transmitted. `components/MapPreview.tsx`
-      nonetheless renders a "Redistribution Route Corridor" with animated ping dots, a
-      hard-coded `~0.8 km` first leg, a default courier of `'Aarav Sharma (0.8 km away)'`,
-      an "Estimated Travel" of `distanceKm * 6 + 10` minutes — a 10 km/h assumption that
-      contradicts the backend's own 20 km/h in `matching.py:132` — and the footer
-      **"Live GPS tracking active in Phase 2"**, under a heading reading **"Live Corridor
-      Tracking"** (`NGOAcceptedDonations.tsx:143`). The distance it captions is
-      great-circle (`matching.haversine_km`), never road distance.
-      Wording, a deleted footer line and honest fallbacks; the component's structural
-      diagram is fine and worth keeping. Contrast `components/FutureIntelligenceSection.tsx`,
-      which the audit classified as **acceptable** because every entry carries an explicit
-      `phase` and `status` badge — that is the labelling D-31 asks for.
+- [x] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **done,
+      uncommitted working tree, 2026-09-03.** The audit's findings were all confirmed against
+      the source first: there is no GPS tracking, no routing provider and no map anywhere in
+      the repository, and `navigator.geolocation` is still called in exactly two places
+      (`lib/geo.ts` via `CreateDonation.tsx` and `CreateDonationCamera.tsx`), both to pin a
+      donation at creation. A courier's position is never read, stored or transmitted.
+
+      `components/MapPreview.tsx` is now a **Handover Overview**: the three-node schematic is
+      kept, but the animated ping dots, the hard-coded `~0.8 km` leg, the derived
+      `distanceKm - 0.8` second leg, the `'Aarav Sharma (0.8 km away)'` default courier, the
+      `distanceKm * 6 + 10` travel estimate and the **"Live GPS tracking active in Phase 2"**
+      footer are gone. The footer now carries the one figure with something behind it —
+      the server's straight-line distance, or *unavailable* — beside "Schematic only — no
+      road route, travel time or courier location". `distanceKm` became optional so callers
+      stop inventing one. The travel estimate was **removed rather than corrected**: no
+      travel time is serialised to the client at all, so there was no honest number to show.
+
+      Also corrected: `NGOAcceptedDonations` ("Live Corridor Tracking" → "Pickup and
+      Drop-off"; "in real time"; "En route on vehicle" → "Courier assigned"),
+      `CreateDonation`'s *"ranked by real travel distance"* hint, `MatchAnalysis`'s
+      "reduces volunteer travel time" description, `TaskCard`'s "Accept this task to get
+      directions", `VolunteerHistory`'s "km route", and `mobile/VolunteerHome`'s "Distance"
+      label. Every invented fallback is gone — `~2 km`, `?? 1.8`, `?? 2.4`, `?? '~2'` — and
+      an unknown distance now reads *unavailable* rather than a plausible number.
+
+      **One behavioural fix came with the wording.** An open donation carries no
+      `distanceKm` (`serialize.donation_out()` measures it against a *matched* recipient),
+      so every NGO surface was rendering `– km` or falling back to a place name. The right
+      figure was already on the wire as `viewerMatch.distanceKm` — this kitchen's own
+      straight-line distance (D-30) — and `lib/geo.displayDistanceKm` now picks between the
+      two for every screen, desktop and mobile. Two backend `reasons` strings were qualified
+      ("in a straight line", "estimated collection time"); no scoring logic changed.
+      Reasoning in `DECISIONS.md` D-33.
+
+      Left alone deliberately: `components/FutureIntelligenceSection.tsx`, which the audit
+      classified as **acceptable** because every entry carries an explicit `phase` and
+      `status` badge — that is the labelling D-31 asks for.
 
 - [ ] **I-3 · Stop claiming requirements drive matching.** `[QA-2 · QA-11 · repo]` — **S**
       `matching.py` neither imports nor references `Requirement`, and neither does
@@ -371,12 +396,15 @@ Places where a shipped feature is incomplete — not new ideas.
       `me.isVerified` and show *"Awaiting verification"* when it is false. Building donor
       verification is a much larger piece of work and is not proposed here.
 
-- [ ] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **S**
-      `pages/ngo/NGOAcceptedDonations.tsx:136` prints *"En route on vehicle"* whenever
-      `volunteerName` is set, with no reference to `status` — and the same screen's list
-      includes `COMPLETED` (line 22). A finished delivery therefore shows a courier still
-      driving. This is a plain rendering defect, not a lifecycle problem: the server's state
-      is correct and `StatusTimeline` beside it renders correctly. The donor's equivalent
+- [ ] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **S**,
+      and **mostly overtaken by I-2.** The line prints whenever `volunteerName` is set, with
+      no reference to `status`, on a screen whose list includes `COMPLETED` — so a finished
+      delivery showed *"En route on vehicle"*, a courier still driving. I-2 had to change
+      that string anyway (it also asserted a live position nothing tracks) and it now reads
+      **"Courier assigned"**, which is true in every status where a courier is bound. The
+      false reading is gone. What remains is the smaller original ask: the line is still
+      status-*neutral* rather than status-*aware*, so it does not distinguish assigned from
+      collected from delivered. That is a refinement, not a defect. The donor's equivalent
       block (`DonationDetails.tsx:101`) is already status-neutral and right.
 
 - [ ] **I-7 · Surface "overdue" where the deadline has passed.** `[QA-7 · repo]` — **S**
@@ -527,7 +555,7 @@ existing items in F and G.
 
 | # | Observation | Classification | Where it now lives |
 |---|---|---|---|
-| 1 | Distance is straight-line, not road | **Intentional, but misleadingly presented** | Wording → I-2 · building it → *Blocked* · `R-30` |
+| 1 | Distance is straight-line, not road | **Intentional, but misleadingly presented** | ✅ wording done → I-2 · building it → *Blocked* · `R-30` |
 | 2 | Requirements do not drive matching | **Misleading UI claim** — verified: `matching.py` never references `Requirement` | Wording → I-3 · building it → *Blocked* |
 | 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint is already open and the client already fetches it | *Blocked* |
 | 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
@@ -535,8 +563,8 @@ existing items in F and G.
 | 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | I-5 |
 | 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | I-7 · sweep → group E · `B-1` unchanged |
 | 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |
-| 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | I-6 |
-| 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | I-2 |
+| 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · residue → I-6 |
+| 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | ✅ I-2 |
 | 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | I-3 · real recurrence → `R-35` |
 | 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1, I-8, I-9 |
 

@@ -278,7 +278,7 @@ export default function CreateDonationCamera() {
             </p>
             <p className="text-sm text-emerald-100 mt-0.5">
               {analysis
-                ? `${analysis.distanceScore ? '' : ''}${created?.distanceKm ?? '–'} km · ${analysis.reliabilityScore}% reliable`
+                ? `${analysis.distanceKm} km in a straight line · ${analysis.reliabilityScore}% reliable`
                 : 'No kitchen has accepted it yet.'}
             </p>
           </section>

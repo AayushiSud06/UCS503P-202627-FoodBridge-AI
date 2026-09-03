@@ -128,7 +128,10 @@ def score_pair(
     if distance > radius_km:
         return None
 
-    # Assume 20 km/h average in mixed city traffic for the collection leg.
+    # A flat 20 km/h over the great-circle distance. This is a rough estimate
+    # feeding `_deadline_score`, not a routed journey: nothing here knows about
+    # roads or traffic, and this figure is never serialised to a client as an
+    # ETA. Any wording derived from it has to read as an estimate.
     travel_minutes = (distance / 20) * 60
 
     distance_score = _distance_score(distance, radius_km)
@@ -152,7 +155,9 @@ def score_pair(
 
     reasons: list[str] = []
     if distance_score >= 70:
-        reasons.append(f"{distance:.1f} km away — well inside the collection radius")
+        reasons.append(
+            f"{distance:.1f} km away in a straight line — well inside the collection radius"
+        )
     if quantity_score >= 80:
         reasons.append(
             f"{donation.quantity} {donation.unit.lower()} fits the {recipient.capacity}-meal "
@@ -166,7 +171,7 @@ def score_pair(
     if deadline_score >= 70:
         reasons.append("Comfortable margin before the pickup deadline")
     elif deadline_score == 0:
-        reasons.append("Deadline cannot be met from this location")
+        reasons.append("Deadline is too close for the estimated collection time")
     if reliability_score >= 85:
         reasons.append(f"{reliability_score}% completion record on accepted donations")
 

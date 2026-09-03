@@ -100,7 +100,7 @@ export default function MatchAnalysisPanel({
           label="Distance & Logistics"
           score={analysis.distanceScore}
           icon={MapPin}
-          description="Logistical proximity reduces volunteer travel time"
+          description="Straight-line distance from the donor's pin to the kitchen's"
         />
         <ScoreRow
           label="Quantity Compatibility"

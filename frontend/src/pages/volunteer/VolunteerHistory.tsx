@@ -2,6 +2,7 @@ import { History, CheckCircle, Package, MapPin, Clock, ExternalLink } from 'luci
 import { useDonations } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
 import StatusBadge from '../../components/StatusBadge';
+import { formatDistanceKm } from '../../lib/geo';
 import EmptyState from '../../components/EmptyState';
 
 export default function VolunteerHistory() {
@@ -47,8 +48,10 @@ export default function VolunteerHistory() {
                   <span className="font-medium truncate block">{d.location}</span>
                 </div>
                 <div>
-                  <span className="text-gray-400 block text-[11px]">DISTANCE</span>
-                  <span className="font-medium">{d.distanceKm ?? 1.8} km route</span>
+                  <span className="text-gray-400 block text-[11px]">STRAIGHT-LINE DISTANCE</span>
+                  <span className="font-medium">
+                    {formatDistanceKm(d, 'Unavailable')}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-400 block text-[11px]">CATEGORY</span>

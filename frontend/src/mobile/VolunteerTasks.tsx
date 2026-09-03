@@ -6,6 +6,7 @@ import { useAction } from '../lib/hooks';
 import { deadlineStatus, formatClock, URGENCY_STYLES } from '../lib/time';
 import type { Donation, DonationStatus } from '../types';
 import StatusBadge from '../components/StatusBadge';
+import { DISTANCE_HINT, formatDistanceKm } from '../lib/geo';
 import { MEmpty, MSection } from './parts';
 
 /** The one action available at each point in a courier's run. */
@@ -94,7 +95,9 @@ export default function VolunteerTasks() {
               </div>
               <div className="mt-2.5 flex items-center gap-3 flex-wrap">
                 <StatusBadge status={d.status} size="sm" />
-                <span className="text-xs text-gray-500">{d.distanceKm ?? '–'} km</span>
+                <span className="text-xs text-gray-500" title={DISTANCE_HINT}>
+                  {formatDistanceKm(d, 'Distance n/a')}
+                </span>
                 {awaitingPickup && (
                   <span className={`text-xs font-medium ${urgency.text}`}>{deadline.label}</span>
                 )}

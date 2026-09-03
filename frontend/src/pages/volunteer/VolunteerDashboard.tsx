@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
 import { useDonations, useMyVolunteer } from '../../context/AppContext';
 import { deadlineStatus, byUrgency, formatClock } from '../../lib/time';
+import { displayDistanceKm } from '../../lib/geo';
 import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
 import { volunteerImpact } from '../../lib/impact';
@@ -32,15 +33,24 @@ export default function VolunteerDashboard() {
   const carrying = nextRun?.status === 'PICKED_UP';
   const dropOff = nextRun?.recipientName ?? 'the recipient';
 
+  // The server's straight-line donor-to-kitchen distance, which exists only
+  // once a kitchen is bound. Nothing here computes a road distance, so a run
+  // without one simply says less rather than guessing a number.
+  const awayKm = nextRun ? displayDistanceKm(nextRun) : null;
+  const away = awayKm === null ? null : `${awayKm} km away in a straight line`;
+
   let runNote: string;
   if (!nextRun) {
     runNote = 'Nothing assigned right now. New pickups will show up here as donors list food nearby.';
   } else if (carrying) {
-    runNote = `You're carrying ${nextRun.quantity} ${nextRun.unit} — drop it with ${dropOff}, ${nextRun.distanceKm ?? '~2'} km away.`;
+    runNote = away
+      ? `You're carrying ${nextRun.quantity} ${nextRun.unit} — drop it with ${dropOff}, ${away}.`
+      : `You're carrying ${nextRun.quantity} ${nextRun.unit} — drop it with ${dropOff}.`;
   } else if (nextStatus?.urgency === 'expired') {
     runNote = `Pickup was due by ${formatClock(nextRun.pickupDeadline)} — go as soon as you can.`;
   } else {
-    runNote = `${nextRun.distanceKm ?? '~2'} km away, and the pickup window closes in ${nextStatus?.label.replace(' left', '')}.`;
+    const closes = `the pickup window closes in ${nextStatus?.label.replace(' left', '')}`;
+    runNote = away ? `${away}, and ${closes}.` : `${closes[0].toUpperCase()}${closes.slice(1)}.`;
   }
 
   return (

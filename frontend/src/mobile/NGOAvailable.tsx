@@ -4,6 +4,7 @@ import { useDonations, useApp, useMyRecipient } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
 import { useAction } from '../lib/hooks';
 import { deadlineStatus, formatClock, URGENCY_STYLES, byUrgency } from '../lib/time';
+import { DISTANCE_HINT, displayDistanceKm, formatDistanceKm } from '../lib/geo';
 import type { Donation } from '../types';
 import { MEmpty, MSegmented, MMeter } from './parts';
 
@@ -21,7 +22,11 @@ export default function NGOAvailable() {
   const available = donations
     .filter(d => d.status === 'AVAILABLE' || d.status === 'MATCHED')
     .sort((a, b) => {
-      if (sort === 'Nearest') return (a.distanceKm ?? 99) - (b.distanceKm ?? 99);
+      // This kitchen's own straight-line distance, which is the only one an
+      // open donation carries — `distanceKm` is null until a recipient binds.
+      if (sort === 'Nearest') {
+        return (displayDistanceKm(a) ?? Infinity) - (displayDistanceKm(b) ?? Infinity);
+      }
       if (sort === 'Closing soon') return byUrgency(a.pickupDeadline, b.pickupDeadline);
       // "Best match" means best *for this kitchen*, which is the same number
       // the sheet below breaks down — not the frozen platform-wide top match.
@@ -95,9 +100,9 @@ export default function NGOAvailable() {
                     <Package size={12} />
                     {d.quantity} {d.unit}
                   </span>
-                  <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1" title={DISTANCE_HINT}>
                     <MapPin size={12} />
-                    {d.distanceKm ?? '–'} km
+                    {formatDistanceKm(d, 'Distance n/a')}
                   </span>
                   <span className={`inline-flex items-center gap-1 font-medium ${urgency.text}`}>
                     <Clock size={12} />
@@ -131,7 +136,7 @@ export default function NGOAvailable() {
                   {selected.quantity} {selected.unit} · {selected.foodName}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  {selected.donorOrganization} · {selected.distanceKm ?? '–'} km · by{' '}
+                  {selected.donorOrganization} · <span title={DISTANCE_HINT}>{formatDistanceKm(selected, 'distance n/a')}</span> · by{' '}
                   {formatClock(selected.pickupDeadline)}
                 </p>
               </div>

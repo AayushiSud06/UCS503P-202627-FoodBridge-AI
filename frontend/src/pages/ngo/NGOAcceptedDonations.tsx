@@ -6,6 +6,7 @@ import { useAction } from '../../lib/hooks';
 import StatusBadge from '../../components/StatusBadge';
 import StatusTimeline from '../../components/StatusTimeline';
 import MapPreview from '../../components/MapPreview';
+import { displayDistanceKm } from '../../lib/geo';
 import EmptyState from '../../components/EmptyState';
 import { Link } from 'react-router-dom';
 import { formatClock } from '../../lib/time';
@@ -32,7 +33,7 @@ export default function NGOAcceptedDonations() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Accepted Deliveries</h1>
           <p className="text-gray-500 mt-1">
-            Track incoming food deliveries and monitor volunteer pickup status in real time.
+            Follow each accepted donation through pickup and handover, and confirm receipt when it arrives.
           </p>
         </div>
         <Link to="/ngo/available" className="btn-primary shrink-0">
@@ -133,14 +134,14 @@ export default function NGOAcceptedDonations() {
                       {selected.volunteerName ? selected.volunteerName : 'Pending Volunteer Assignment'}
                     </p>
                     <p className="text-gray-600 flex items-center gap-1">
-                      <Truck size={12} /> {selected.volunteerName ? 'En route on vehicle' : 'Broadcasted to nearby volunteers'}
+                      <Truck size={12} /> {selected.volunteerName ? 'Courier assigned' : 'Open to nearby couriers'}
                     </p>
                   </div>
                 </div>
 
                 {/* Map Preview */}
                 <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Live Corridor Tracking</h3>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pickup and Drop-off</h3>
                   <MapPreview
                     pickupLocation={selected.location}
                     dropoffLocation={
@@ -148,8 +149,8 @@ export default function NGOAcceptedDonations() {
                         ? `${myRecipient.name}, ${myRecipient.location}`
                         : (selected.recipientName ?? 'Your kitchen')
                     }
-                    distanceKm={selected.distanceKm ?? 1.8}
-                    volunteerLocation={selected.volunteerName ? `${selected.volunteerName} (Active)` : 'Awaiting Courier'}
+                    distanceKm={displayDistanceKm(selected) ?? undefined}
+                    volunteerLocation={selected.volunteerName ?? 'Courier not yet assigned'}
                   />
                 </div>
 

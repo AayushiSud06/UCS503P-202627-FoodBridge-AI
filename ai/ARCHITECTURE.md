@@ -63,6 +63,7 @@ layer** — deliberate, see D-07.
 | `lib/api.ts` | Only `fetch` in the app. Token attach, `ApiError`/`NetworkError`, global 401, wire types mirroring Pydantic. |
 | `lib/adapters.ts` | Wire types → app domain types. The seam preventing backend shapes leaking into components. |
 | `lib/hooks.ts` | `useAction` (keyed in-flight state + toasts), `useMatchAnalysis`. |
+| `lib/geo.ts` | Coordinate capture (`navigator.geolocation`, the only two callers being donation creation) **and** `displayDistanceKm` — the one selector choosing between `distanceKm` and `viewerMatch.distanceKm`. No distance is computed in the browser and none is invented; see D-33. |
 | `lib/impact.ts` | Per-account impact figures (`donorImpact`/`ngoImpact`/`volunteerImpact`) from the donation list plus the account's own server counters. Desktop and `/m/*` both read it, so one account gets one answer. `GET /api/metrics` is platform-wide and is **not** a source here — see D-32. |
 | `context/AuthContext.tsx` | Identity: boot token→user exchange, sign in/up/out, 401 handling with a `useRef` re-entrancy guard. |
 | `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. |
@@ -236,9 +237,12 @@ coordinate pairs is the only distance function in the repository; there is no ro
 provider, no geocoder and no map, here or anywhere else (see *External services: none*).
 Travel time, which `_deadline_score` needs, is derived from it by a flat constant —
 `travel_minutes = (distance / 20) * 60`, i.e. 20 km/h assumed city traffic
-(`matching.py:132`). Both are deliberate and both are approximations the interface should
-not present as measured journeys; `TASKS.md` → I-2 covers the wording and *Blocked* covers
-whether to replace the model.
+(`matching.py:132`). Both are deliberate and both are approximations. **Neither is
+serialised to a client**: `DonationOut.distanceKm` and `MatchOut.distanceKm` carry the
+great-circle kilometres, and travel time never leaves the module. Since I-2 the interface
+says so — every distance is labelled straight-line, no travel estimate is displayed
+anywhere, and `frontend/src/lib/geo.ts` is the single selector deciding which of the two
+server distances a screen shows (D-33). *Blocked* covers whether to replace the model.
 
 ⚠️ **Requirements are not an input.** `matching.py` neither imports nor references
 `Requirement`, and neither does `routers/donations.py`. The `requirements` table is a

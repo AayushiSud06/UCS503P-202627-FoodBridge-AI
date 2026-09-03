@@ -1,6 +1,7 @@
 import { MapPin, Clock, Package, Building2, Navigation, CheckCircle } from 'lucide-react';
 import StatusBadge from '../../components/StatusBadge';
 import MapPreview from '../../components/MapPreview';
+import { DISTANCE_HINT, displayDistanceKm, formatDistanceKm } from '../../lib/geo';
 import { useApp } from '../../context/AppContext';
 import { useAction } from '../../lib/hooks';
 import { formatClock } from '../../lib/time';
@@ -106,7 +107,7 @@ export default function TaskCard({ donation }: TaskCardProps) {
         </button>
       </div>
 
-      {/* Route preview */}
+      {/* Handover preview */}
       <div className="px-5 pb-4">
         <div className="grid grid-cols-3 items-center gap-2 text-sm">
           <div className="text-center">
@@ -117,8 +118,11 @@ export default function TaskCard({ donation }: TaskCardProps) {
             <p className="text-xs font-bold text-gray-800 truncate">{donation.donorOrganization}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-gray-400 font-medium">
-              {donation.distanceKm ? `${donation.distanceKm} km` : '~2 km'}
+            <p
+              className="text-xs text-gray-400 font-medium"
+              title={DISTANCE_HINT}
+            >
+              {formatDistanceKm(donation, 'Distance n/a')}
             </p>
             <div className="h-px bg-emerald-300 border border-dashed border-emerald-400 my-1" />
             <p className="text-xs text-gray-400">via you</p>
@@ -139,14 +143,14 @@ export default function TaskCard({ donation }: TaskCardProps) {
         <span className="flex items-center gap-1"><MapPin size={12} /> {donation.location}</span>
       </div>
 
-      {/* Expanded map */}
+      {/* Expanded schematic */}
       {expanded && (
         <div className="px-5 pb-4">
           <MapPreview
             pickupLocation={donation.location}
             dropoffLocation={donation.recipientName ?? 'Recipient'}
-            distanceKm={donation.distanceKm ?? 2.4}
-            volunteerLocation="Your current location"
+            distanceKm={displayDistanceKm(donation) ?? undefined}
+            volunteerLocation="You"
           />
         </div>
       )}
@@ -154,7 +158,7 @@ export default function TaskCard({ donation }: TaskCardProps) {
       {/* Action */}
       <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-xs text-gray-400">
-          {donation.status === 'ACCEPTED' && 'Accept this task to get directions.'}
+          {donation.status === 'ACCEPTED' && 'Accept this task to start the pickup.'}
           {donation.status === 'VOLUNTEER_ASSIGNED' && 'Proceed to pickup location.'}
           {donation.status === 'PICKED_UP' && 'On the way to ' + (donation.recipientName ?? 'recipient') + '.'}
         </p>

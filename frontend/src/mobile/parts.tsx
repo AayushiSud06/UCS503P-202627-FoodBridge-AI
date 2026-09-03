@@ -3,6 +3,7 @@ import { ChevronRight, Clock, MapPin, Package, type LucideIcon } from 'lucide-re
 import type { Donation } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
+import { DISTANCE_HINT, displayDistanceKm } from '../lib/geo';
 
 /**
  * Shared mobile building blocks. These wrap the same primitives the desktop
@@ -124,6 +125,7 @@ export function MDonationRow({
   const stillAwaitingPickup = !['PICKED_UP', 'DELIVERED', 'COMPLETED', 'CANCELLED'].includes(donation.status);
   const deadline = deadlineStatus(donation.pickupDeadline);
   const urgency = URGENCY_STYLES[deadline.urgency];
+  const distanceKm = displayDistanceKm(donation);
 
   const inner = (
     <>
@@ -144,10 +146,10 @@ export function MDonationRow({
           <Package size={12} />
           {donation.quantity} {donation.unit}
         </span>
-        {donation.distanceKm !== undefined && (
-          <span className="inline-flex items-center gap-1">
+        {distanceKm !== null && (
+          <span className="inline-flex items-center gap-1" title={DISTANCE_HINT}>
             <MapPin size={12} />
-            {donation.distanceKm} km
+            {distanceKm} km
           </span>
         )}
         {stillAwaitingPickup && (

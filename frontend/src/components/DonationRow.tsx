@@ -3,6 +3,7 @@ import { ChevronRight, MapPin, Package } from 'lucide-react';
 import type { Donation } from '../types';
 import StatusBadge from './StatusBadge';
 import { deadlineStatus, formatClock, URGENCY_STYLES } from '../lib/time';
+import { DISTANCE_HINT, displayDistanceKm } from '../lib/geo';
 
 interface DonationRowProps {
   donation: Donation;
@@ -31,6 +32,7 @@ export default function DonationRow({
   donation, to, showRecipient = false, showDonor = false, showMatch = false,
 }: DonationRowProps) {
   const settled = CLOCK_STOPPED.includes(donation.status);
+  const distanceKm = displayDistanceKm(donation);
   const { label, urgency } = deadlineStatus(donation.pickupDeadline);
   const styles = URGENCY_STYLES[urgency];
 
@@ -67,9 +69,9 @@ export default function DonationRow({
           {showRecipient && !donation.recipientName && !settled && (
             <span className="italic text-gray-400">Awaiting a recipient</span>
           )}
-          {donation.distanceKm !== undefined && (
-            <span className="flex items-center gap-1">
-              <MapPin size={11} /> {donation.distanceKm} km
+          {distanceKm !== null && (
+            <span className="flex items-center gap-1" title={DISTANCE_HINT}>
+              <MapPin size={11} /> {distanceKm} km
             </span>
           )}
           {donation.volunteerName && (
