@@ -81,11 +81,11 @@ export default function NGORequirements() {
 
     const saved = editing
       ? await run('save-requirement', () => updateRequirement(editing.id, draft), {
-          success: { message: 'Requirement updated', subtitle: 'Donors see the revised need.' },
+          success: { message: 'Requirement updated', subtitle: 'The revised need is on your board.' },
           errorTitle: 'Could not update this requirement',
         })
       : await run('save-requirement', () => createRequirement(draft), {
-          success: { message: 'Requirement posted', subtitle: 'Donors can now see what you need.' },
+          success: { message: 'Requirement posted', subtitle: 'It is now on your demand board.' },
           errorTitle: 'Could not post this requirement',
         });
     if (!saved) return;
@@ -104,15 +104,15 @@ export default function NGORequirements() {
   return (
     <>
       <p className="px-5 py-3.5 text-sm text-gray-500 leading-relaxed bg-white border-b border-gray-200">
-        Posting what you need lets the platform rank incoming surplus against your demand before
-        you even open the app.
+        Posting what you need keeps a standing record of your kitchen's demand. It is not yet
+        an input to donation matching.
       </p>
 
       {mine.length === 0 ? (
         <MEmpty
           icon={ClipboardList}
           title="No requirements posted"
-          hint="Tell donors what you need and matching donations are pushed to you first."
+          hint="Post what your kitchen needs to keep a standing record of demand."
         />
       ) : (
         <>
@@ -126,7 +126,7 @@ export default function NGORequirements() {
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500">
                     Feeds {r.beneficiaryCount}
-                    {r.dailyRecurring ? ' · recurring daily' : ' · one-off'}
+                    {r.dailyRecurring ? ' · needed daily' : ' · one-off'}
                   </p>
                 </div>
                 <span className={`m-chip shrink-0 ${URGENCY_CHIP[r.urgency]}`}>{r.urgency}</span>

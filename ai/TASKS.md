@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-03; the most recent implementation commit
-> is `e8a8178` (I-1, impact reporting), with I-2 done and uncommitted on top of it.
+> Verified against the repository on 2026-09-04; the most recent implementation commit
+> is `fcbd03b` (I-2, distance/GPS wording), with I-3 done and uncommitted on top of it.
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -34,8 +34,8 @@ CI → recipient read scope → auth rate limiting → courier claim race — is
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 is committed (`e8a8178`) and I-2 is done and sitting uncommitted in the working
-tree** (2026-09-03). I-1: the six per-role impact surfaces and two dashboards no longer
+**I-1 (`e8a8178`) and I-2 (`fcbd03b`) are committed; I-3 is done and sitting uncommitted
+in the working tree** (2026-09-04). I-1: the six per-role impact surfaces and two dashboards no longer
 print invented figures, computed from one module for desktop and `/m/*` (`DECISIONS.md`
 D-32). I-2: the routing, travel-time and live-GPS claims are gone, invented distance
 fallbacks are replaced by an unavailable state, and one selector decides which
@@ -70,8 +70,9 @@ What the audit did change is what the list looks like when that call is made:
 
 **The audit's own recommended order**, offered as analysis and not as a commitment:
 ~~**I-1** (impact figures)~~ and ~~**I-2** (live-GPS and routing claims)~~ **— both done,
-2026-09-03** → **I-3** (requirement matching claims) → **F** (the three match-score
-follow-ups, one sitting) → **E** (Postgres, once the demo-facing claims are true). The reasoning is in *Group I*'s header:
+2026-09-03** and ~~**I-3** (requirement matching claims)~~ **— done 2026-09-04** → **F**
+(the three match-score follow-ups, one sitting) → **E** (Postgres, once the demo-facing
+claims are true). The reasoning is in *Group I*'s header:
 the cheapest way to stop over-claiming is to stop printing the claims, and that has to
 happen before or alongside deciding which of them to actually build (*Blocked*).
 
@@ -324,7 +325,7 @@ Places where a shipped feature is incomplete — not new ideas.
       options that need no backend change: delete the strip, or relabel it as illustrative.
 
 - [x] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **done,
-      uncommitted working tree, 2026-09-03.** The audit's findings were all confirmed against
+      commit `fcbd03b`, 2026-09-03.** The audit's findings were all confirmed against
       the source first: there is no GPS tracking, no routing provider and no map anywhere in
       the repository, and `navigator.geolocation` is still called in exactly two places
       (`lib/geo.ts` via `CreateDonation.tsx` and `CreateDonationCamera.tsx`), both to pin a
@@ -361,16 +362,35 @@ Places where a shipped feature is incomplete — not new ideas.
       classified as **acceptable** because every entry carries an explicit `phase` and
       `status` badge — that is the labelling D-31 asks for.
 
-- [ ] **I-3 · Stop claiming requirements drive matching.** `[QA-2 · QA-11 · repo]` — **S**
-      `matching.py` neither imports nor references `Requirement`, and neither does
-      `routers/donations.py`; the only readers of the table in the whole backend are
-      `routers/organisations.py` and `seed.py`. Requirements are a **notice board**, and a
-      genuinely useful one — they are the only place demand is visible before supply
-      exists. But `pages/ngo/NGORequirements.tsx` says *"so FoodLink AI prioritizes
-      donations matching your requirements"* (line 114), **"AI Scanning Active"** and
-      **"Auto-matching enabled"** (lines 172–174), and renders a **"Daily Recurring"** badge
-      (line 141) for a flag nothing acts on. Say what it is: a standing need other parties
-      can see. Building the claim instead is the first *Blocked* question and R-35.
+- [x] **I-3 · Stop claiming requirements drive matching.** `[QA-2 · QA-11 · repo]` — **done,
+      uncommitted working tree, 2026-09-04.** Re-verified against the source first:
+      `matching.py` imports only `Donation` and `Recipient`, `score_pair` takes only those
+      two, `MatchOut` carries no requirement field, `select(Recipient)` in the ranking paths
+      loads no `requirements` relationship, and the only readers of the table in the whole
+      backend remain `routers/organisations.py` and `seed.py`. Requirements are a **notice
+      board** and stay one — no schema, API, lifecycle or test changed, and **no backend
+      file changed at all**.
+
+      Seven strings corrected across three files. Desktop `pages/ngo/NGORequirements.tsx`:
+      *"so FoodLink AI prioritizes donations matching your requirements"*, **"AI Scanning
+      Active"**, **"Auto-matching enabled"**, and the **"Daily Recurring"** badge (now
+      "Needed daily" — it describes the need, not a scheduler that does not exist). Mobile
+      `NGORequirements.tsx`: *"lets the platform rank incoming surplus against your demand
+      before you even open the app"* and *"matching donations are pushed to you first"*.
+      Mobile `NGOHome.tsx`: *"Listings matching this are ranked for you first."*
+
+      ⚠️ **Also corrected, and worth recording because it was not in the audit:** four toast
+      subtitles read *"Donors can now see what you need"* / *"Donors now see the revised
+      need"*. `useRequirements()` is called by three components and **all three are NGO
+      screens** — no donor surface renders requirements at all, which is QA-3 / the donor
+      needs board in *Blocked*. The toasts now say the requirement is on the kitchen's own
+      demand board, which is what actually happens.
+
+      Building the claim instead remains the first *Blocked* question and R-35. The
+      roadmap surfaces that name "Demand-aware redistribution" were left alone: all three
+      (`FutureIntelligenceSection`, `AdminDashboard`, `Landing`) carry an explicit phase and
+      a `done: false` / `status: 'Planned'` badge, which is exactly the labelling D-31
+      asks for.
 
 - [ ] **I-4 · Stop offering notification settings that reach nothing.** `[QA-5 · repo]` — **S**
       Ten toggles across four screens (2 + 3 + 3 + 2), none of which is sent to the server or
@@ -556,7 +576,7 @@ existing items in F and G.
 | # | Observation | Classification | Where it now lives |
 |---|---|---|---|
 | 1 | Distance is straight-line, not road | **Intentional, but misleadingly presented** | ✅ wording done → I-2 · building it → *Blocked* · `R-30` |
-| 2 | Requirements do not drive matching | **Misleading UI claim** — verified: `matching.py` never references `Requirement` | Wording → I-3 · building it → *Blocked* |
+| 2 | Requirements do not drive matching | **Misleading UI claim** — verified: `matching.py` never references `Requirement` | ✅ wording done → I-3 · building it → *Blocked* |
 | 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint is already open and the client already fetches it | *Blocked* |
 | 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
 | 5 | Notification settings send nothing | **Misleading UI claim** — 11 dead toggles, 4 screens | I-4 · delivery itself is `R-28` |
@@ -565,7 +585,7 @@ existing items in F and G.
 | 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |
 | 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · residue → I-6 |
 | 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | ✅ I-2 |
-| 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | I-3 · real recurrence → `R-35` |
+| 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | ✅ relabelled "Needed daily" by I-3 · real recurrence → `R-35` |
 | 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1, I-8, I-9 |
 
 - [x] **The backend was checked and largely cleared.** Every server-computed number the

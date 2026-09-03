@@ -3,9 +3,8 @@
 > Decisions evident in the repository — D-01 to D-33. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
-> `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178`;
-> **D-33 describes uncommitted working-tree changes** made on 2026-09-03 for I-2
-> (distance, routing and GPS wording).
+> `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
+> **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but

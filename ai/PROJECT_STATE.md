@@ -2,11 +2,11 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-03, branch `master`. The most recent
-> implementation **commit** is `e8a8178` (I-1, impact reporting); on top of it the working
-> tree carries the **uncommitted** I-2 distance/GPS-wording fix described below. A QA audit
-> was run against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
-> `TASKS.md`.
+> Last verified against the repository: 2026-09-04, branch `master`. The most recent
+> implementation **commit** is `fcbd03b` (I-2, distance/GPS wording); on top of it the
+> working tree carries the **uncommitted** I-3 (requirement-matching claims) fix described
+> below. A QA audit was run against `23c27f4` on 2026-09-02; it
+> changed no source and its conclusions are in `TASKS.md`.
 
 ## What this project is
 
@@ -28,7 +28,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1) and distance/GPS wording (I-2, uncommitted) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2) and requirement-matching claims (I-3) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -48,7 +48,23 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-03, uncommitted working tree** — **I-2: the interface no longer claims routing
+- **2026-09-04, uncommitted working tree** — **I-3: the requirements board no longer claims
+  to drive matching.** The matcher was re-verified first and is unchanged: `score_pair`
+  takes a `Donation` and a `Recipient`, `MatchOut` has no requirement field, and the only
+  backend readers of the table are still `routers/organisations.py` and `seed.py`. **No
+  backend file changed.** Removed from the NGO requirement surfaces: *"so FoodLink AI
+  prioritizes donations matching your requirements"*, **"AI Scanning Active"**,
+  **"Auto-matching enabled"**, *"lets the platform rank incoming surplus against your
+  demand"*, *"matching donations are pushed to you first"* and *"Listings matching this are
+  ranked for you first"*. The **"Daily Recurring"** badge now reads "Needed daily" — the
+  flag describes the need, and nothing re-posts a requirement (constraint 7). Four toasts
+  claiming *"Donors can now see what you need"* were also corrected: all three callers of
+  `useRequirements()` are NGO screens, so no donor surface renders requirements at all.
+  Requirement creation, editing, retirement, the API and all 15 lifecycle tests are
+  untouched. Roadmap surfaces naming "Demand-aware redistribution" were left alone — each
+  carries an explicit phase and a not-done badge.
+
+- **2026-09-03, commit `fcbd03b`** — **I-2: the interface no longer claims routing
   or live GPS.** `MapPreview` was captioned "Redistribution Route Corridor" with a
   hard-coded `~0.8 km` first leg, a second leg derived as `distanceKm - 0.8`, an "Estimated
   Travel" of `distanceKm * 6 + 10` minutes (a 10 km/h assumption contradicting the
@@ -232,7 +248,7 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest) and I-2 are done**; seven remain, all **S**, plus the small
+badges. **I-1 (the largest), I-2 and I-3 are done**; six remain, all **S**, plus the small
 I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
@@ -362,16 +378,21 @@ credibility rather than about its correctness, and that judgement belongs in thi
     **Remaining, and now tracked as `TASKS.md` → I-1a:** `pages/Landing.tsx` still prints
     four invented platform statistics pre-login, which cannot be fixed by reading real
     data without a scope decision on the authenticated metrics endpoint.
-19. **Requirements do not influence matching, and three UI strings say they do.**
-    Verified: `matching.py` never references `Requirement`. "AI Scanning Active",
-    "Auto-matching enabled" and "so FoodLink AI prioritizes donations matching your
-    requirements" are all false today. `daily_recurring` is stored and badged but acted on
-    by nothing.
-20. **"Live Corridor Tracking" / "Live GPS tracking active" over a component with no GPS.**
-    `navigator.geolocation` is called only to pin a donation at creation; a courier's
-    position is never read or stored, and there is no map or routing provider anywhere.
-    `MapPreview` also hard-codes a `0.8 km` first leg and estimates travel at 10 km/h,
-    contradicting the backend's own 20 km/h.
+19. ✅ **Resolved (uncommitted, 2026-09-04) — the requirement screens no longer claim to
+    drive matching.** Re-verified that `matching.py` never references `Requirement`, then
+    corrected seven strings across the desktop and mobile requirement surfaces plus four
+    toasts that promised donor visibility no donor screen provides. `daily_recurring` is
+    still stored and displayed — now as "Needed daily", describing the need rather than a
+    scheduler. **Requirements remain a notice board and the matcher is unchanged;** whether
+    to make ranking requirement-aware is still the first *Blocked* question (R-35).
+20. ✅ **Resolved (`fcbd03b`, 2026-09-03) — the GPS and routing claims are gone.**
+    `navigator.geolocation` is still called only to pin a donation at creation; a courier's
+    position is never read or stored, and there is no map or routing provider anywhere —
+    so `MapPreview` is now a schematic *Handover Overview* with no per-leg distances and no
+    travel estimate, and the "Live GPS" / "Live Corridor Tracking" text is gone. The
+    hard-coded `0.8 km` leg and the 10 km/h estimate that contradicted the backend's 20 km/h
+    were deleted rather than corrected: no travel time is serialised to the client at all.
+    See `DECISIONS.md` D-33.
 21. **Verification and notification settings that are pure display.** Donor screens show an
     unconditional "Verified Institutional Donor" and "FSSAI Hygiene Standards Compliant"
     for a role the data model has **no** verification concept for (`is_verified` exists on
@@ -422,11 +443,10 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. **I-1 and I-2 are done**, so the audit's suggested order now starts at
-   **I-3** (requirement matching claims) → the three group-F match-score follow-ups in one
-   sitting → group E. I-1a (the landing page's invented statistics) is the small residue
-   I-1 left, and it needs a decision on whether any metric may be read without
-   authentication.
+   promoted into it. **I-1, I-2 and I-3 are done**, so the audit's suggested order now
+   starts at the three group-F match-score follow-ups in one sitting → group E. I-1a (the
+   landing page's invented statistics) is the small residue I-1 left, and it needs a
+   decision on whether any metric may be read without authentication.
 2. Answer at least the cheap half of the four decisions the audit opened
    (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
    real impact report — can be answered "not now" at zero cost, because group I removes the

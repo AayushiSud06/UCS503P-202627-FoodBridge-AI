@@ -112,8 +112,7 @@ export default function NGOHome() {
             </p>
             <p className="mt-1 text-sm text-gray-500 leading-relaxed">
               Feeds {standing.beneficiaryCount} people · {standing.urgency.toLowerCase()} urgency
-              {standing.dailyRecurring ? ' · recurring daily' : ''}. Listings matching this are
-              ranked for you first.
+              {standing.dailyRecurring ? ' · needed daily' : ''}.
             </p>
           </div>
         </>

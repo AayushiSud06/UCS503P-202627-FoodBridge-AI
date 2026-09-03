@@ -78,14 +78,14 @@ export default function NGORequirements() {
       ? await run('save-requirement', () => updateRequirement(editing.id, draft), {
           success: {
             message: 'Requirement updated',
-            subtitle: 'Donors now see the revised need.',
+            subtitle: 'The revised need is on your board.',
           },
           errorTitle: 'Could not update this requirement',
         })
       : await run('save-requirement', () => createRequirement(draft), {
           success: {
             message: 'Requirement posted',
-            subtitle: 'Donors can now see what your kitchen needs.',
+            subtitle: 'It is now on your demand board.',
           },
           errorTitle: 'Could not post this requirement',
         });
@@ -111,7 +111,9 @@ export default function NGORequirements() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Food Requirements & Demand Signals</h1>
           <p className="text-gray-500 mt-1">
-            Specify your kitchen's daily beneficiary needs so FoodLink AI prioritizes donations matching your requirements.
+            Record what your kitchen needs and how many people it feeds. Requirements are a
+            standing record of demand — they are not yet an input to donation matching, which
+            ranks on distance, quantity, capacity, pickup window and reliability.
           </p>
         </div>
         <button
@@ -138,7 +140,7 @@ export default function NGORequirements() {
               </span>
               {req.dailyRecurring && (
                 <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-                  <Clock size={12} /> Daily Recurring
+                  <Clock size={12} /> Needed daily
                 </span>
               )}
             </div>
@@ -167,11 +169,9 @@ export default function NGORequirements() {
               </p>
             )}
 
-            <div className="pt-2 flex items-center justify-between text-xs text-emerald-700 font-semibold">
-              <span className="flex items-center gap-1">
-                <Check size={14} /> AI Scanning Active
-              </span>
-              <span className="text-gray-400 font-normal">Auto-matching enabled</span>
+            <div className="pt-2 flex items-center gap-1 text-xs text-emerald-700 font-semibold">
+              <Check size={14} /> Active on the demand board
+              <span className="text-gray-400 font-normal">— retire it once the need is met</span>
             </div>
 
             <div className="pt-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
