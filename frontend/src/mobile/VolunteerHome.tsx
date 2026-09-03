@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, MapPin, Truck } from 'lucide-react';
-import { useDonations } from '../context/AppContext';
+import { useDonations, useMyVolunteer } from '../context/AppContext';
 import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
 import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MStatGrid, MSection, MEmpty } from './parts';
 import StatusBadge from '../components/StatusBadge';
+import { volunteerImpact } from '../lib/impact';
 
 const ACTIVE = ['VOLUNTEER_ASSIGNED', 'PICKED_UP'];
 
@@ -13,12 +14,13 @@ export default function VolunteerHome() {
   const donations = useDonations();
   const user = useCurrentUser();
 
+  const me = useMyVolunteer();
   const mine = donations.filter(d => d.volunteerId === user.entityId);
   const active = mine.filter(d => ACTIVE.includes(d.status));
-  const completed = mine.filter(d => ['DELIVERED', 'COMPLETED'].includes(d.status));
   const unclaimed = donations.filter(d => d.status === 'ACCEPTED' && !d.volunteerId);
-  const km = mine.reduce((s, d) => s + (d.distanceKm ?? 0), 0);
-  const meals = completed.reduce((s, d) => s + d.quantity, 0);
+  // The same figures the Impact screen shows, from the same place: this strip
+  // and that page answer the same questions about the same courier.
+  const impact = volunteerImpact(donations, user.entityId ?? '', me);
 
   const current = active[0];
 
@@ -26,7 +28,7 @@ export default function VolunteerHome() {
     <>
       <MHero
         label="Deliveries completed"
-        value={completed.length}
+        value={impact.runs}
         sub={
           current
             ? 'You have one pickup in progress. Finish it before claiming another.'
@@ -38,8 +40,8 @@ export default function VolunteerHome() {
         items={[
           { label: 'Active', value: active.length },
           { label: 'Unclaimed', value: unclaimed.length },
-          { label: 'Meals moved', value: meals },
-          { label: 'Distance', value: `${km.toFixed(1)} km` },
+          { label: 'Meals moved', value: impact.deliveredMeals },
+          { label: 'Distance', value: `${impact.distanceKm.toFixed(1)} km` },
         ]}
       />
 

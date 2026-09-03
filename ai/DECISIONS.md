@@ -1,8 +1,10 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository on 2026-09-02, through the match-score consistency
-> commit (`23c27f4`) — D-01 to D-31. D-31 is the one decision the QA audit of the same
-> date settled; the four questions it left open are in `TASKS.md` -> *Blocked*.
+> Decisions evident in the repository — D-01 to D-32. D-01 to D-31 were verified on
+> 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
+> decision the QA audit of that date settled, and the four questions it left open are in
+> `TASKS.md` -> *Blocked*. **D-32 describes uncommitted working-tree changes** made on
+> 2026-09-03 for I-1 (impact reporting).
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -892,3 +894,75 @@ twelve findings against this line; the resulting work is `TASKS.md` → *Backlog
   `match_score` is what put an invented number on screen next to a real one (D-30), and it
   now ranks through `rank_recipients` like the API does. Demo data that does not come from
   the real code path is a claim like any other.
+
+---
+
+## D-32 · Per-account impact is the account's own rows, not `/api/metrics` **[documented]**
+
+**Decision.** Every donor / NGO / volunteer impact figure is computed by
+`frontend/src/lib/impact.ts` from two sources and no others: the donations the API already
+returned for that account, and the server-maintained counters on the account's own profile
+row (`Volunteer.completed_deliveries`, `Recipient.accepted_donations` and the
+`reliability_score` derived from it). Desktop and `/m/*` call the same function, so a
+figure cannot differ between them. `GET /api/metrics` stays where it was — the admin
+screens.
+
+Three consequences follow, and they were the substance of I-1:
+
+1. **Environmental equivalences were removed, not re-based.** `Donation.quantity` is a
+   count in the donation's own `unit` (Meals, Kg, Boxes, Pieces), so a sum of it is not a
+   mass and no per-kilogram factor can be applied to it. Desktop printed
+   `completedMeals × 2.5` kg CO₂e and `× 85` litres of water; mobile printed
+   `allListedMeals × 0.86`. Neither factor had a source and the inputs were not the same
+   quantity. Picking a third would have made the two surfaces agree on a number that still
+   meant nothing.
+2. **Both "Download Impact Report" buttons were deleted.** They were `alert()` calls that
+   produced no file. Whether a real export should exist is a live question in `TASKS.md` →
+   *Blocked*, and its answer there is that a *verified* certificate should be rendered
+   server-side from `status_events`. Building a client-side stand-in would have pre-empted
+   that decision; leaving a button that lies was not an option.
+3. **"Courier rating" is gone from every screen.** `Volunteer.rating` is a real column with
+   a real stored value, but nothing in the API ever writes it — `VolunteerUpdate` excludes
+   it by design, so every courier created through the app is permanently 5.0. A label
+   reading "rating" asserts a feedback mechanism the system does not have, which is D-31's
+   test, not D-30's.
+
+**Reasoning.**
+
+- **`/api/metrics` answers a different question.** It is ledger-derived and genuinely
+  honest, but it is **platform-wide** — `total_meals` is every completed donation on
+  FoodLink. A donor's impact page asks "what did *I* do", and pointing it at the platform
+  total would have replaced invented numbers with real numbers that are not about the
+  reader. Making it per-account would mean a scoped variant of the endpoint, which I-1 was
+  explicitly not to build.
+- **The donation list is already the right scope.** D-24's `_readable_by()` gives a donor
+  exactly their own donations, an organisation the open pool plus its own, and a courier
+  the unclaimed pool plus its own runs. The client does not have to filter for safety —
+  the server did — so per-account arithmetic over that list reads only rows the account is
+  entitled to.
+- **One function is what makes desktop and mobile agree.** The two surfaces had drifted
+  into different definitions of the same words: a courier's meal total counted `DELIVERED`
+  on mobile and `COMPLETED` on desktop, and "kitchens served" meant matched on one screen
+  and confirmed-received on the other. This is the shape of D-30 one layer up, and the
+  remedy is the same — compute it once.
+- **Where a server counter exists, it wins.** `completed_deliveries` is a lifetime tally;
+  the donation list is only what this session loaded. `volunteerImpact()` prefers the
+  counter and reports which source it used, so the subtitle can say so.
+
+**Constraints.**
+
+- ⚠️ **A list count and a lifetime counter are different numbers and must be labelled as
+  such.** The NGO screens show both — "2 of 2 in your list" beside "42 acceptances on
+  record" — because the seeded counters predate the loaded donations. Putting them under
+  labels that read alike would recreate the contradiction this decision exists to remove.
+- **`distanceKm` is great-circle, not road distance** (`matching.haversine_km`), and it is
+  null until a donation has a recipient. Every screen showing it now says "straight-line".
+  Whether road distance should exist is `TASKS.md` → *Blocked*, and I-2 owns the remaining
+  routing claims.
+- **The public landing page is out of scope and still fabricates.** `pages/Landing.tsx`
+  prints four literal platform statistics. `/api/metrics` requires authentication, so a
+  pre-login page cannot read the real ones without a scope decision — see `TASKS.md` →
+  *Backlog → I*.
+- **Nothing tests this.** There is still no frontend test suite, so `tsc` is the only
+  automated gate on `lib/impact.ts`. It is pure and takes plain arrays, which makes it the
+  most testable module in the frontend the moment one exists.

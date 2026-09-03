@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
-import { useDonations } from '../../context/AppContext';
+import { useDonations, useMyVolunteer } from '../../context/AppContext';
 import { deadlineStatus, byUrgency, formatClock } from '../../lib/time';
 import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
+import { volunteerImpact } from '../../lib/impact';
 
 export default function VolunteerDashboard() {
   const donations = useDonations();
   const user = useCurrentUser();
+  const me = useMyVolunteer();
 
   // Tasks assigned to this volunteer (v-1) or newly accepted and unclaimed.
   const myTasks = donations
@@ -22,8 +24,9 @@ export default function VolunteerDashboard() {
   const [nextRun, ...queue] = myTasks;
   const nextStatus = nextRun ? deadlineStatus(nextRun.pickupDeadline) : null;
 
-  const completedTasks = donations.filter(d => d.volunteerId === user.entityId && d.status === 'COMPLETED');
-  const mealsMoved = completedTasks.reduce((sum, d) => sum + d.quantity, 0) + 42;
+  // Same figures, same arithmetic as the Impact screen — the strip below is a
+  // preview of that page, so the two must not be able to disagree.
+  const impact = volunteerImpact(donations, user.entityId ?? '', me);
 
   // Food already collected is a drop-off, not a pickup — the copy has to follow the stage.
   const carrying = nextRun?.status === 'PICKED_UP';
@@ -58,7 +61,7 @@ export default function VolunteerDashboard() {
 
         <div className="relative">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-clay-700">
-            Aarav · Volunteer courier
+            {user.name} · Volunteer courier
           </p>
 
           <h1 className="mt-3 font-display text-3xl sm:text-[2.5rem] font-medium leading-[1.15] text-gray-900">
@@ -126,9 +129,12 @@ export default function VolunteerDashboard() {
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             {[
-              { value: completedTasks.length + 8, label: 'pickups completed' },
-              { value: mealsMoved, label: 'meals moved' },
-              { value: '12 km', label: 'distance covered' },
+              { value: impact.runs, label: 'pickups completed' },
+              { value: impact.deliveredMeals, label: 'meals moved' },
+              {
+                value: `${impact.distanceKm.toFixed(1)} km`,
+                label: 'straight-line distance',
+              },
             ].map(stat => (
               <div key={stat.label}>
                 <p className="font-display text-2xl font-semibold text-gray-900">

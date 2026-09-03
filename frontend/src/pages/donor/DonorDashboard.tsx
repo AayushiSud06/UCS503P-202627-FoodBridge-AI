@@ -58,7 +58,7 @@ export default function DonorDashboard() {
 
         <div className="relative">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-clay-700">
-            College Central Mess
+            {user.organization ?? user.name}
           </p>
 
           <h1 className="mt-3 font-display text-3xl sm:text-[2.5rem] font-medium leading-[1.15] text-gray-900">

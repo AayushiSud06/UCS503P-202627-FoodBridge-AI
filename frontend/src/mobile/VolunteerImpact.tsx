@@ -1,27 +1,20 @@
-import { Route, Star, Utensils } from 'lucide-react';
-import { useDonations } from '../context/AppContext';
-import { useMyVolunteer } from '../context/AppContext';
+import { Route, Utensils } from 'lucide-react';
+import { useDonations, useMyVolunteer } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
-import { MHero, MSection, MDetail, MMeter } from './parts';
+import { volunteerImpact } from '../lib/impact';
+import { MHero, MSection, MDetail, MShare } from './parts';
 
 export default function VolunteerImpact() {
   const user = useCurrentUser();
   const me = useMyVolunteer();
-  const mine = useDonations().filter(d => d.volunteerId === user.entityId);
-  const done = mine.filter(d => ['DELIVERED', 'COMPLETED'].includes(d.status));
-  const meals = done.reduce((s, d) => s + d.quantity, 0);
-  const km = mine.reduce((s, d) => s + (d.distanceKm ?? 0), 0);
-  // The server's tally is authoritative; the local list only covers what this
-  // session has loaded.
-  const runs = me?.completedDeliveries ?? done.length;
-  const rating = me?.rating ?? 5;
+  const impact = volunteerImpact(useDonations(), user.entityId ?? '', me);
 
   return (
     <>
       <MHero
-        label="Meals delivered"
-        value={meals}
-        sub={`Across ${runs} completed run${runs === 1 ? '' : 's'} for FoodLink.`}
+        label="Quantity delivered"
+        value={impact.deliveredMeals}
+        sub={`Across ${impact.runs} completed run${impact.runs === 1 ? '' : 's'} for FoodLink.`}
       />
 
       <MSection title="Your record" />
@@ -31,38 +24,35 @@ export default function VolunteerImpact() {
             <Utensils size={14} className="text-emerald-600" /> Runs completed
           </span>
         }
-        value={runs}
+        value={impact.runs}
       />
       <MDetail
         label={
           <span className="inline-flex items-center gap-2">
-            <Route size={14} className="text-emerald-600" /> Distance covered
+            <Route size={14} className="text-emerald-600" /> Straight-line distance
           </span>
         }
-        value={`${km.toFixed(1)} km`}
-      />
-      <MDetail
-        label={
-          <span className="inline-flex items-center gap-2">
-            <Star size={14} className="text-emerald-600" /> Courier rating
-          </span>
-        }
-        value={`${rating.toFixed(1)} / 5`}
+        value={`${impact.distanceKm.toFixed(1)} km`}
       />
 
-      <MSection title="Reliability" />
-      <div className="bg-white border-y border-gray-100 py-2">
-        <MMeter label="On-time collection rate" score={94} />
-        <MMeter label="Deliveries without incident" score={100} />
-        <MMeter label="Rating" score={Math.round((rating / 5) * 100)} />
-      </div>
+      <MSection title="Kitchens you delivered to" />
+      {impact.drops.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-gray-500 bg-white border-b border-gray-100">
+          No completed run yet. Claim a pickup and this record starts.
+        </p>
+      ) : (
+        impact.drops.map(drop => (
+          <MShare key={drop.label} label={drop.label} value={drop.meals} percent={drop.percent} />
+        ))
+      )}
 
       <div className="p-5">
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
           <p className="font-display font-semibold text-emerald-950">Why the last mile matters</p>
           <p className="mt-1 text-sm text-emerald-800 leading-relaxed">
-            A match only becomes a meal when someone moves the food. Your {runs} runs are the step
-            that turned {meals} listed meals into served ones.
+            A match only becomes a meal when someone moves the food. Your {impact.runs} run
+            {impact.runs === 1 ? '' : 's'} are the step that carried {impact.deliveredMeals} meals
+            from a donor’s door to a kitchen’s.
           </p>
         </div>
       </div>

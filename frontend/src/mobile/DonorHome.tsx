@@ -4,27 +4,29 @@ import { useDonations } from '../context/AppContext';
 import { byUrgency } from '../lib/time';
 import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MStatGrid, MSection, MDonationRow, MEmpty } from './parts';
+import { donorImpact } from '../lib/impact';
 
 const CLOSED = ['COMPLETED', 'CANCELLED'];
 
 export default function DonorHome() {
   const navigate = useNavigate();
   const user = useCurrentUser();
-  const mine = useDonations().filter(d => d.donorId === user.id);
+  const donations = useDonations();
+  const mine = donations.filter(d => d.donorId === user.id);
+  // Shared with the Impact screen so "redistributed" and "kitchens served"
+  // cannot mean one thing here and another there.
+  const impact = donorImpact(donations, user.id);
 
   const active = mine
     .filter(d => !CLOSED.includes(d.status))
     .sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
-  const completed = mine.filter(d => d.status === 'COMPLETED');
-  const redistributed = completed.reduce((s, d) => s + d.quantity, 0);
   const awaiting = mine.filter(d => d.status === 'AVAILABLE' || d.status === 'MATCHED');
-  const kitchens = new Set(mine.map(d => d.recipientName).filter(Boolean)).size;
 
   return (
     <>
       <MHero
         label="Meals redistributed"
-        value={redistributed}
+        value={impact.deliveredMeals}
         sub={
           active.length > 0
             ? `${active.length} donation${active.length === 1 ? '' : 's'} still moving. The most urgent is listed first below.`
@@ -36,8 +38,8 @@ export default function DonorHome() {
         items={[
           { label: 'Active', value: active.length },
           { label: 'Awaiting pickup', value: awaiting.length },
-          { label: 'Completed', value: completed.length },
-          { label: 'Kitchens served', value: kitchens },
+          { label: 'Completed', value: impact.deliveredCount },
+          { label: 'Kitchens served', value: impact.kitchens.length },
         ]}
       />
 

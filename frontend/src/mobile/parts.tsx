@@ -87,6 +87,27 @@ export function MMeter({ label, score }: { label: string; score: number }) {
 }
 
 /**
+ * One slice of a distribution: a name, its total, and its share.
+ *
+ * Deliberately not `MMeter`: that colours by score, so a 47% share of a
+ * breakdown would render in the same warning tone as a 47% reliability
+ * rating. A share is not a grade, and it should not be tinted like one.
+ */
+export function MShare({ label, value, percent }: { label: string; value: ReactNode; percent: number }) {
+  return (
+    <div className="px-5 py-3 bg-white border-b border-gray-100">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-gray-900 truncate">{label}</span>
+        <span className="text-sm font-semibold text-emerald-700 shrink-0">{value}</span>
+      </div>
+      <div className="mt-1.5 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+        <div className="h-full rounded-full bg-emerald-600" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/**
  * One donation in a list. `showDeadline` is suppressed once a donation is
  * already in transit — a picked-up load is a drop-off, not a pickup, so
  * pickup-deadline pressure would be wrong.

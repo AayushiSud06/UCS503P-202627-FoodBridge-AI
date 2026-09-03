@@ -25,12 +25,19 @@
 ## Current
 
 **Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`. 148 backend tests pass.
+markers in `code/foodlink/` or `frontend/src/`. 148 backend tests pass; the frontend
+`tsc && vite build` is clean.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
+
+**I-1 is done and sitting uncommitted in the working tree** (2026-09-03): the six per-role
+impact surfaces and two dashboards no longer print invented figures, and desktop and
+`/m/*` compute them from one module. See *Backlog → I* for exactly what was removed, and
+`DECISIONS.md` D-32 for why the environmental equivalences were deleted rather than
+re-based. Nothing else is in progress.
 
 **A manual QA audit was run on 2026-09-02** across twelve observations. It changed no
 source code — its output is this list. Its central result: **the backend is broadly
@@ -59,9 +66,9 @@ What the audit did change is what the list looks like when that call is made:
   match-score follow-ups; they are real and they are still small.
 
 **The audit's own recommended order**, offered as analysis and not as a commitment:
-**I-1** (impact figures) → **I-2** (live-GPS and routing claims) → **I-3** (requirement
-matching claims) → **F** (the three match-score follow-ups, one sitting) → **E**
-(Postgres, once the demo-facing claims are true). The reasoning is in *Group I*'s header:
+~~**I-1** (impact figures)~~ **— done, 2026-09-03** → **I-2** (live-GPS and routing claims)
+→ **I-3** (requirement matching claims) → **F** (the three match-score follow-ups, one
+sitting) → **E** (Postgres, once the demo-facing claims are true). The reasoning is in *Group I*'s header:
 the cheapest way to stop over-claiming is to stop printing the claims, and that has to
 happen before or alongside deciding which of them to actually build (*Blocked*).
 
@@ -285,33 +292,32 @@ Places where a shipped feature is incomplete — not new ideas.
 > rewording front-end text, or by reading a value the client already holds. The decisions
 > about which of these capabilities to actually *build* are separate and are in *Blocked*.
 
-- [ ] **I-1 · Stop printing impact figures that are not measurements.** `[QA-4 · repo]` — **M**
-      The three desktop impact pages mix three kinds of number under one heading and label
-      all of them as measured.
-      - *Padded reals:* `NGOImpact.tsx:10` computes real completed meals and adds `+ 1240`;
-        `VolunteerImpact.tsx:38` renders `completed.length + 18`. These are the worst of the
-        set — a literal wearing a derived number's clothes.
-      - *Pure literals under a "real-time"/"verified" heading:* `DonorImpact.tsx:71`
-        (`value={5}` shelters), `NGOImpact.tsx:43,53,63` (`850+`, `8`, `42`),
-        `VolunteerImpact.tsx:48,58` (`48.5` km, `4.9` rating — and `Volunteer.rating` is the
-        dead column already tracked in group F). Plus every `trend` and `equivalent` string:
-        "+18% this month", "+24% vs last month", "Certified SDG 12.3", "100% verified",
-        "Top 5% Volunteer", "Equal to 420 km car travel", "Equivalent to 550 showers".
-      - *Fabricated distributions:* the category breakdown in `DonorImpact.tsx` (68/18/10/4)
-        ignores `donation.category` entirely; `mobile/DonorImpact.tsx:6` charts a literal
-        `BARS` array under "Last six months"; `mobile/NGOImpact.tsx:6` charts literal
-        demographics.
-      - *A contradiction between two surfaces:* desktop CO₂e is `completedMeals × 2.5`,
-        mobile is `allListedMeals × 0.86`. One account, one question, two answers — the
-        shape of bug D-30 was written about.
-      - *Hard-coded identity:* `DonorImpact.tsx:26` names **"College Central Mess"** for
-        every donor; `DonorDashboard.tsx:61` and `VolunteerDashboard.tsx:61` do the same
-        with a seeded mess and a seeded courier's first name. Residue of `mockData.ts`
-        (`01a9861`) that its deletion missed.
-      The fix is subtraction plus honest subtitles, not new computation: what survives is
-      what `useDonations()` already supports. Note that `GET /api/metrics` — which *is*
-      ledger-derived — is read by the **admin screens only**; no per-role impact page calls
-      it. Wiring them to it is the larger, optional version of this item.
+- [x] **I-1 · Stop printing impact figures that are not measurements.** `[QA-4 · repo]` — **done,
+      uncommitted working tree, 2026-09-03.** Six impact surfaces (three desktop, three
+      mobile) plus two dashboards now read `frontend/src/lib/impact.ts`, which derives every
+      figure from the account's own donation list and its own server counters. Removed: the
+      `+ 1240` / `+ 18` / `+ 42` / `+ 8` literal offsets, the pure-literal cards (`5`
+      shelters, `850+` beneficiaries, `8` kitchens, `42` mins, `48.5` km, `4.9` rating),
+      every fabricated `trend`/`equivalent` string, the two fabricated badge blocks, the
+      hard-coded category and demographic distributions, the literal six-month `BARS` array,
+      the `95%`/`150` figures in the NGO standards panel, and the hard-coded identities on
+      `DonorImpact` / `DonorDashboard` / `VolunteerDashboard`. Both "Download Impact Report"
+      buttons are gone — no `alert(` remains anywhere in `frontend/src/`. The desktop/mobile
+      CO₂e contradiction is resolved by deleting both: `quantity` is a mixed-unit count, so
+      no per-kilogram factor applies to it. Charts are now real (`category`, `createdAt`,
+      recipient/donor shares) with insufficient-data states. Reasoning and constraints in
+      `DECISIONS.md` D-32; verified in the running app against the dev database for a donor,
+      an NGO and a courier on desktop and `/m/*`.
+
+- [ ] **I-1a · The public landing page still prints four invented platform statistics.**
+      `[repo]` — **S**, and it needs a decision first. `pages/Landing.tsx:8-13` renders
+      `1,240+` meals redistributed, `32` partner organisations, `56` active volunteers and
+      `84` successful pickups as facts. (The first is the same literal I-1 removed from
+      `NGOImpact`.) I-1 did not touch it because it is not a per-role impact surface and
+      because the fix is not free: `GET /api/metrics` is `Depends(get_current_user)`, so a
+      pre-login page cannot read the real figures without either a public metrics endpoint
+      or a public subset of one — a scope decision, and D-26's neighbour. Cheap honest
+      options that need no backend change: delete the strip, or relabel it as illustrative.
 
 - [ ] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **S**
       There is no GPS tracking, no routing provider and no map in the repository.
@@ -469,11 +475,10 @@ settled. They sit here rather than in *Backlog* so that nobody implements one by
   unscoped by omission rather than by a recorded decision).
 
 - **Should there be a real, exportable impact report?** `[QA-4 · repo]`
-  Both export buttons are stubs: `DonorImpact.tsx:30` and `NGOImpact.tsx:22` call
-  `alert('Downloading Verified Impact Certificate (PDF)...')` and produce no file. The
-  audit's recommendation is that I-1 **delete or neutralise both buttons**, because the
-  alert claims a verified artefact was produced and nothing was. Whether a real one should
-  exist is the open question, and it is a larger one than it looks: a *verified* impact
+  ✅ **The misleading half is closed:** I-1 deleted both stub buttons (2026-09-03), so
+  nothing in the app now claims a verified artefact was produced. **This decision is
+  therefore free to answer either way**, and answering "not now" costs nothing. Whether a
+  real one should exist is the open question, and it is a larger one than it looks: a *verified* impact
   certificate is a claim about evidence, so it should be generated server-side from
   `status_events` — the ledger D-01 exists to make exactly this kind of statement
   defensible — rather than assembled in the browser from whatever the client happens to

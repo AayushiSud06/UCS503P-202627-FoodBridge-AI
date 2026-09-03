@@ -1,117 +1,139 @@
-import { Heart, Users, Package, Clock, Award, ShieldCheck, Download } from 'lucide-react';
+import { Heart, Package, Building2, Gauge, ShieldCheck, ShieldAlert } from 'lucide-react';
 import ImpactCard from '../../components/ImpactCard';
-import { useDonations } from '../../context/AppContext';
+import { useDonations, useMyRecipient } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
+import { ngoImpact } from '../../lib/impact';
 
 export default function NGOImpact() {
-  const donations = useDonations();
   const user = useCurrentUser();
-  const completed = donations.filter(d => d.status === 'COMPLETED' && d.recipientId === user.entityId);
-  const mealsDistributed = completed.reduce((sum, d) => sum + d.quantity, 0) + 1240;
+  const me = useMyRecipient();
+  const impact = ngoImpact(useDonations(), user.entityId ?? '');
+  const who = me?.name ?? user.organization ?? user.name;
+
+  // The reliability figure is the server's own: completions over acceptances,
+  // held at 85 until an organisation has three acceptances to judge. Repeating
+  // that rule here would put a second definition in the client.
+  const reliability = me?.reliabilityScore;
+  const isProvisional = (me?.acceptedDonations ?? 0) < 3;
 
   return (
     <div className="space-y-8 max-w-6xl">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Community Nutrition & Intake Impact</h1>
-          <p className="text-gray-500 mt-1">
-            Verified hunger relief and meal distribution metrics for <strong>{user.organization ?? user.name}</strong>.
-          </p>
-        </div>
-        <button
-          onClick={() => alert('Generating NGO Impact & Auditing Statement...')}
-          className="btn-secondary text-xs"
-        >
-          <Download size={14} /> Export Community Report
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Community Intake Record</h1>
+        <p className="text-gray-500 mt-1">
+          Counted from the donations <strong>{who}</strong> accepted and confirmed receiving.
+          Distribution beyond that handover is not recorded by FoodLink.
+        </p>
       </div>
 
       {/* Impact Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <ImpactCard
-          title="Total Meals Served"
-          value={mealsDistributed}
+          title="Quantity Received"
+          value={impact.servedMeals}
           unit="Meals"
-          subtitle="Directly distributed across 3 community dining centers"
+          subtitle="Confirmed on collection, in the units the donor listed."
           icon={Heart}
           color="rose"
-          trend="+24% vs last month"
-          equivalent="Serving ~150 individuals daily"
         />
         <ImpactCard
-          title="Beneficiaries Reached"
-          value="850+"
-          unit="People"
-          subtitle="Daily-wage workers, children & senior citizens"
-          icon={Users}
-          color="blue"
-          trend="Active"
-          equivalent="Zero meal shortages recorded"
-        />
-        <ImpactCard
-          title="Verified Donors Linked"
-          value={8}
-          unit="Kitchens"
-          subtitle="University messes, banquet halls & bakeries"
+          title="Collections Completed"
+          value={impact.collections}
+          unit={`of ${impact.acceptedCount} in your list`}
+          subtitle="Donations bound to you that reached confirmed receipt."
           icon={Package}
           color="emerald"
-          trend="AI Matched"
-          equivalent="Average distance: 2.1 km"
         />
         <ImpactCard
-          title="Average Delivery Time"
-          value="42"
-          unit="mins"
-          subtitle="From donor listing to hot distribution"
-          icon={Clock}
+          title="Donor Organisations"
+          value={impact.donors.length}
+          unit={impact.donors.length === 1 ? 'Kitchen' : 'Kitchens'}
+          subtitle="Distinct donors whose surplus you have received."
+          icon={Building2}
+          color="blue"
+        />
+        <ImpactCard
+          title="Intake Reliability"
+          value={reliability ?? '—'}
+          unit={reliability === undefined ? undefined : '%'}
+          subtitle={
+            reliability === undefined
+              ? 'Available once your organisation profile loads.'
+              : isProvisional
+                ? 'Provisional starting score — fewer than 3 acceptances to judge on.'
+                : 'Server tally: completions over acceptances, across your whole history.'
+          }
+          icon={Gauge}
           color="purple"
-          trend="Rapid Logistics"
-          equivalent="100% food safety intact"
         />
       </div>
 
-      {/* Beneficiary Breakdown */}
+      {/* Who supplies this kitchen */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-6 space-y-4">
-          <h2 className="section-title">Beneficiary Distribution Demographics</h2>
-          <div className="space-y-3">
-            {[
-              { group: 'Migrant & Daily Wage Families', pct: 45, color: 'bg-emerald-500' },
-              { group: 'Children & After-School Programs', pct: 30, color: 'bg-blue-500' },
-              { group: 'Senior Citizens & Sheltered Individuals', pct: 20, color: 'bg-purple-500' },
-              { group: 'Emergency / Transient Support', pct: 5, color: 'bg-amber-400' },
-            ].map(item => (
-              <div key={item.group}>
-                <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
-                  <span>{item.group}</span>
-                  <span>{item.pct}%</span>
+        <div className="card p-6 space-y-1">
+          <h2 className="section-title">Where Your Food Comes From</h2>
+          <p className="text-xs text-gray-500 pb-3">
+            Share of received quantity by donor organisation.
+          </p>
+          {impact.donors.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No collection has been completed yet. Accept a donation and confirm receipt to
+              start this record.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {impact.donors.map(donor => (
+                <div key={donor.label}>
+                  <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
+                    <span className="truncate pr-3">{donor.label}</span>
+                    <span className="shrink-0">
+                      {donor.meals} · {donor.percent}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${donor.percent}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.pct}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="card p-6 bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-900 text-white space-y-3">
           <div className="flex items-center gap-2">
-            <Award className="text-emerald-400" size={20} />
-            <h3 className="font-bold text-base">Verified Community Kitchen Standards</h3>
+            {me?.isVerified ? (
+              <ShieldCheck className="text-emerald-400" size={20} />
+            ) : (
+              <ShieldAlert className="text-amber-400" size={20} />
+            )}
+            <h3 className="font-bold text-base">Your Organisation Record</h3>
           </div>
           <p className="text-xs text-emerald-200 leading-relaxed">
-            {user.organization ?? 'This organisation'} operates in compliance with national community feeding protocols with clean water filtration, warm-reheating equipment, and rapid distribution queues.
+            {me?.isVerified
+              ? `${who} has been verified by a FoodLink administrator and can accept donations.`
+              : `${who} is not verified yet. An administrator must verify the organisation before it can accept donations.`}
           </p>
           <div className="pt-2 border-t border-emerald-800/80 grid grid-cols-2 gap-3 text-xs text-emerald-100">
             <div>
-              <span className="text-emerald-400 font-bold block text-sm">95%</span>
-              Intake Reliability Rating
+              <span className="text-emerald-400 font-bold block text-sm">
+                {me?.acceptedDonations ?? 0}
+              </span>
+              Acceptances on record
             </div>
             <div>
-              <span className="text-emerald-400 font-bold block text-sm">150</span>
-              Simultaneous Intake Capacity
+              <span className="text-emerald-400 font-bold block text-sm">{me?.capacity ?? '—'}</span>
+              Stated intake capacity
             </div>
           </div>
+          <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+            The acceptance tally is the server counter behind the reliability score, covering your
+            whole history — the cards above count only the donations in your current list. Capacity
+            is the figure your organisation entered on its profile; the matcher reads it when
+            ranking donations, and it is not a measurement FoodLink takes.
+          </p>
         </div>
       </div>
     </div>

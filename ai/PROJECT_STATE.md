@@ -2,10 +2,11 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-02, branch `master`, working tree clean.
-> The most recent implementation commit is `23c27f4` (match-score consistency). A QA audit
-> was run against that commit on the same date; it changed no source and its conclusions
-> are in `TASKS.md`.
+> Last verified against the repository: 2026-09-03, branch `master`. The most recent
+> implementation **commit** is `23c27f4` (match-score consistency); on top of it the working
+> tree carries the **uncommitted** I-1 impact-reporting fix described below. A QA audit was
+> run against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
+> `TASKS.md`.
 
 ## What this project is
 
@@ -27,7 +28,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; ⚠️ several screens **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting is now honest (I-1, uncommitted); ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -46,6 +47,28 @@ the same `Settings` object. The error message states both options. Tests supply 
 own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
+
+- **2026-09-03, uncommitted working tree** — **I-1: the impact screens now only print what
+  the app knows.** Six impact surfaces and two dashboards were reading a mixture of real
+  counts, real counts with a literal added, and pure invention under headings reading
+  "real-time" and "verified". Everything now comes from `frontend/src/lib/impact.ts`, one
+  module both the desktop portal and `/m/*` call, fed by the account's own donation list
+  (already scoped server-side by D-24) and its own server counters. Gone: `+ 1240`, `+ 18`,
+  `+ 42`, `+ 8`; the literal cards (`5` shelters, `850+` beneficiaries, `8` kitchens, `42`
+  min delivery, `48.5` km, `4.9` rating); every invented `trend`/`equivalent` line; both
+  fabricated badge blocks; the 68/18/10/4 category chart, the literal demographics and the
+  literal six-month bar array; and the hard-coded "College Central Mess" / "Aarav"
+  identities. Both **"Download Impact Report" buttons are deleted** — they were `alert()`
+  calls producing no file, and `alert(` no longer appears anywhere in `frontend/src/`.
+  The desktop/mobile CO₂e contradiction is closed by **removing both** rather than picking
+  a third factor: `quantity` is a mixed-unit count (Meals · Kg · Boxes · Pieces), so no
+  per-kilogram figure applies to it. Charts are now derived (`category`, `createdAt`,
+  recipient and donor shares) and degrade to insufficient-data states. **`GET /api/metrics`
+  is deliberately still not read here** — it is platform-wide, and a per-role page asking
+  "how am I doing" would be answered with FoodLink's total. See `DECISIONS.md` D-32.
+  148 backend tests pass unchanged (no backend change); `tsc && vite build` clean; verified
+  in the running app for a donor, an NGO and a courier, desktop and mobile, with the
+  dashboard strips matching their impact pages figure for figure.
 
 - **2026-09-02, documentation only** — **A QA audit, and what it found.** Twelve manual-QA
   observations were traced through the stack and classified; no source changed and the 148
@@ -186,11 +209,12 @@ the only bound on a credential-stuffing run, and the one correctness defect that
 fixed before Postgres is fixed.
 
 **The QA audit added a body of work that did not exist on the list before**, and it is not
-optional polish. `TASKS.md` → *Backlog → I* holds nine items, most of them **S**, covering
-interface claims the system cannot honour — invented impact figures, live-GPS text over a
-component with no GPS, matching promises the matcher does not keep, dead notification
-settings, unearned verification badges. D-31 explains why that ranks as hardening in this
-project specifically: the platform's argument is that its numbers are evidence, and
+optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
+honour — invented impact figures, live-GPS text over a component with no GPS, matching
+promises the matcher does not keep, dead notification settings, unearned verification
+badges. **I-1, the largest of them, is done** (uncommitted); eight remain, all **S**, plus
+the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
+this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
 
 **The order is still a Project Manager call.** Two things worth carrying into it. First,
@@ -307,14 +331,17 @@ Full evidence and per-item scope in `TASKS.md` → *Backlog → I*; the principl
 `DECISIONS.md` D-31. Listed here because severity is a judgement about the project's
 credibility rather than about its correctness, and that judgement belongs in this file.
 
-18. **Impact figures are partly invented, and the worst of them are padded reals.**
-    `NGOImpact.tsx` adds `+ 1240` to a genuine completed-meal count and `VolunteerImpact.tsx`
-    adds `+ 18` to a genuine delivery count; six more cards are pure literals under
-    "real-time"/"verified" headings, the category and demographic charts ignore the data
-    entirely, and desktop and mobile disagree about the same donor's CO₂e (`×2.5` of
-    completed versus `×0.86` of all listed). Both "Download Impact Report" buttons are an
-    `alert()` that produces no file. **The ledger-derived `GET /api/metrics` is read by the
-    admin screens only** — no per-role Impact page calls it.
+18. ✅ **Resolved (uncommitted, 2026-09-03) — impact figures are no longer invented.**
+    The padded reals (`+ 1240`, `+ 18`, and two more the audit missed on
+    `VolunteerDashboard`: `+ 42` and `+ 8`), the literal cards, the fabricated
+    charts, the badge blocks and both `alert()` export buttons are gone; desktop and
+    `/m/*` now share `lib/impact.ts`, so the CO₂e contradiction cannot recur — both
+    equivalences were removed rather than re-based (D-32). **`GET /api/metrics` is still
+    read by the admin screens only, and deliberately so**: it is platform-wide, and a
+    per-role page asking "how am I doing" must not be answered with FoodLink's total.
+    **Remaining, and now tracked as `TASKS.md` → I-1a:** `pages/Landing.tsx` still prints
+    four invented platform statistics pre-login, which cannot be fixed by reading real
+    data without a scope decision on the authenticated metrics endpoint.
 19. **Requirements do not influence matching, and three UI strings say they do.**
     Verified: `matching.py` never references `Requirement`. "AI Scanning Active",
     "Auto-matching enabled" and "so FoodLink AI prioritizes donations matching your
@@ -347,6 +374,10 @@ credibility rather than about its correctness, and that judgement belongs in thi
   a phone visitor to `/m/*`; entry is by URL only.
 - `Volunteer.rating` — never written by any API path (`VolunteerUpdate` excludes it);
   only `seed.py` varies it. Every courier created through the app is permanently 5.0.
+  **No screen reads it any more:** I-1 removed the "Courier rating" displays, because a
+  rating label asserts a feedback mechanism the system does not have (D-32). The column is
+  now wholly dead — drop it, or build the mechanism, but it should not come back to a screen
+  first.
 
 **Template residue from the course scaffold (unrelated to FoodLink):**
 - `code/Makefile`, `code/src/`, `code/inc/`, `code/run_main.o` — C++ build artefacts
@@ -371,14 +402,17 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. The audit's own suggested order is **I-1** (impact figures) → **I-2**
-   (live-GPS and routing claims) → **I-3** (requirement matching claims) → the three
-   group-F match-score follow-ups in one sitting → group E.
+   promoted into it. **I-1 is done** (uncommitted), so the audit's suggested order now
+   starts at **I-2** (live-GPS and routing claims) → **I-3** (requirement matching claims)
+   → the three group-F match-score follow-ups in one sitting → group E. I-1a (the landing
+   page's invented statistics) is the small residue I-1 left, and it needs a decision on
+   whether any metric may be read without authentication.
 2. Answer at least the cheap half of the four decisions the audit opened
    (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
    real impact report — can be answered "not now" at zero cost, because group I removes the
-   claim either way. Only the donor needs board is a "yes/no build it" question, and it is
-   **S** if yes.
+   claim either way; for the impact report that is now literally true, since I-1 has already
+   deleted both stub buttons. Only the donor needs board is a "yes/no build it" question,
+   and it is **S** if yes.
 3. Decide whether the rate-limit counter has to be shared, when deployment is
    designed — it is per-process today (`TASKS.md` → *Backlog → E*)
 4. Extend the claim's concurrency guard to the remaining lifecycle transitions before

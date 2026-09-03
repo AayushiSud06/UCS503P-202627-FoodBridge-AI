@@ -1,116 +1,89 @@
-import { Award, Truck, Navigation, Heart, Clock, Star, ShieldCheck } from 'lucide-react';
+import { Truck, Navigation, Heart, Building2 } from 'lucide-react';
 import ImpactCard from '../../components/ImpactCard';
-import { useDonations } from '../../context/AppContext';
+import { useDonations, useMyVolunteer } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
+import { volunteerImpact } from '../../lib/impact';
 
 export default function VolunteerImpact() {
-  const donations = useDonations();
   const user = useCurrentUser();
-  // Only this courier's own runs — the impact page is about their record.
-  const completed = donations.filter(
-    d => d.status === 'COMPLETED' && d.volunteerId === user.entityId,
-  );
-  const deliveredMeals = completed.reduce((s, d) => s + d.quantity, 0);
+  const me = useMyVolunteer();
+  const impact = volunteerImpact(useDonations(), user.entityId ?? '', me);
 
   return (
     <div className="space-y-8 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Volunteer Courier Impact</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Volunteer Courier Record</h1>
         <p className="text-gray-500 mt-1">
-          Personal logistics contributions for <strong>{user.name}</strong>.
+          Personal logistics contributions for <strong>{user.name}</strong>, counted from the runs
+          you completed.
         </p>
       </div>
 
       {/* Impact Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ImpactCard
-          title="Meals Transported"
-          value={deliveredMeals}
+          title="Quantity Transported"
+          value={impact.deliveredMeals}
           unit="Meals"
-          subtitle="Delivered directly to community shelters"
+          subtitle="Carried on completed runs, in the units the donor listed."
           icon={Heart}
           color="rose"
-          trend="Top 5% Volunteer"
-          equivalent="Fed approx. 70 families"
         />
         <ImpactCard
-          title="Deliveries Completed"
-          value={completed.length + 18}
+          title="Runs Completed"
+          value={impact.runs}
           unit="Trips"
-          subtitle="100% on-time delivery success"
+          subtitle={
+            impact.runsFromServer
+              ? 'Your lifetime total, kept by the server as runs complete.'
+              : 'Counted from the runs loaded in this session.'
+          }
           icon={Truck}
           color="blue"
-          trend="Active"
-          equivalent="Zero damaged packages"
         />
         <ImpactCard
           title="Distance Covered"
-          value="48.5"
+          value={impact.distanceKm.toFixed(1)}
           unit="km"
-          subtitle="Campus & local district routes"
+          subtitle="Straight-line distance from each donor's pin to the kitchen's. FoodLink does not measure road distance."
           icon={Navigation}
           color="emerald"
-          trend="Eco-friendly bike/EV"
-          equivalent="Avoided ~12 kg CO2"
-        />
-        <ImpactCard
-          title="Courier Rating"
-          value="4.9"
-          unit="/ 5.0"
-          subtitle="Based on 28 recipient feedback ratings"
-          icon={Star}
-          color="amber"
-          trend="★ Top Rated"
-          equivalent="Recognized by Helping Hands"
         />
       </div>
 
-      {/* Volunteer Badges */}
+      {/* Where the runs went */}
       <div className="card p-6">
-        <h2 className="section-title mb-4 flex items-center gap-2">
-          <Award className="text-amber-500" size={20} />
-          Volunteer Courier Badges
+        <h2 className="section-title mb-1 flex items-center gap-2">
+          <Building2 className="text-emerald-600" size={18} />
+          Kitchens You Delivered To
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
-              ⚡
-            </div>
-            <div>
-              <p className="text-sm font-bold text-blue-950">Speedy Courier</p>
-              <p className="text-xs text-blue-700 mt-0.5">Average delivery completed within 35 minutes of pickup.</p>
-              <span className="inline-block mt-2 text-[10px] font-bold text-blue-800 bg-blue-200/70 px-2 py-0.5 rounded-full">
-                Unlocked
-              </span>
-            </div>
+        <p className="text-xs text-gray-500 mb-4">
+          Share of transported quantity by receiving organisation.
+        </p>
+        {impact.drops.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No completed run yet. Claim a pickup from the Tasks board and this record starts.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {impact.drops.map(drop => (
+              <div key={drop.label}>
+                <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
+                  <span className="truncate pr-3">{drop.label}</span>
+                  <span className="shrink-0">
+                    {drop.meals} · {drop.percent}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
+                    style={{ width: `${drop.percent}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-
-          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
-              🚴
-            </div>
-            <div>
-              <p className="text-sm font-bold text-emerald-950">Green Transport Hero</p>
-              <p className="text-xs text-emerald-700 mt-0.5">Completed 15+ deliveries using bicycle / EV campus commute.</p>
-              <span className="inline-block mt-2 text-[10px] font-bold text-emerald-800 bg-emerald-200/70 px-2 py-0.5 rounded-full">
-                Unlocked
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
-              🛡️
-            </div>
-            <div>
-              <p className="text-sm font-bold text-purple-950">Hygienic Handler</p>
-              <p className="text-xs text-purple-700 mt-0.5">Certified in insulated thermal crate transport procedures.</p>
-              <span className="inline-block mt-2 text-[10px] font-bold text-purple-800 bg-purple-200/70 px-2 py-0.5 rounded-full">
-                Certified
-              </span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

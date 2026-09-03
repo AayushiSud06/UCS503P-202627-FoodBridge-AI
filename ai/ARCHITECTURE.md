@@ -63,6 +63,7 @@ layer** — deliberate, see D-07.
 | `lib/api.ts` | Only `fetch` in the app. Token attach, `ApiError`/`NetworkError`, global 401, wire types mirroring Pydantic. |
 | `lib/adapters.ts` | Wire types → app domain types. The seam preventing backend shapes leaking into components. |
 | `lib/hooks.ts` | `useAction` (keyed in-flight state + toasts), `useMatchAnalysis`. |
+| `lib/impact.ts` | Per-account impact figures (`donorImpact`/`ngoImpact`/`volunteerImpact`) from the donation list plus the account's own server counters. Desktop and `/m/*` both read it, so one account gets one answer. `GET /api/metrics` is platform-wide and is **not** a source here — see D-32. |
 | `context/AuthContext.tsx` | Identity: boot token→user exchange, sign in/up/out, 401 handling with a `useRef` re-entrancy guard. |
 | `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. |
 | `components/ProtectedRoute.tsx` | Route guard. **UX affordance, not a security control.** |

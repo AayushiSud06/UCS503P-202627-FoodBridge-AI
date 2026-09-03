@@ -1,159 +1,132 @@
-import { Package, Leaf, Droplets, Heart, Award, TrendingUp, CheckCircle, Download } from 'lucide-react';
+import { Package, CheckCircle, Building2, Truck } from 'lucide-react';
 import ImpactCard from '../../components/ImpactCard';
 import { useDonations } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
+import { donorImpact } from '../../lib/impact';
 
 export default function DonorImpact() {
-  const donations = useDonations();
   const user = useCurrentUser();
-  const myDonations = donations.filter(d => d.donorId === user.id);
-  const totalMeals = myDonations.reduce((sum, d) => sum + d.quantity, 0);
-  const completedMeals = myDonations
-    .filter(d => d.status === 'COMPLETED')
-    .reduce((sum, d) => sum + d.quantity, 0);
-
-  // Environmental equivalency formulas
-  const co2AvoidedKg = Math.round(completedMeals * 2.5); // ~2.5 kg CO2e per kg food saved
-  const waterSavedLiters = Math.round(completedMeals * 85); // ~85L water embedded per meal
+  const impact = donorImpact(useDonations(), user.id);
+  const who = user.organization ?? user.name;
 
   return (
     <div className="space-y-8 max-w-6xl">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Your Sustainability & Community Impact</h1>
-          <p className="text-gray-500 mt-1">
-            Real-time environmental and hunger relief statistics for <strong>College Central Mess</strong>.
-          </p>
-        </div>
-        <button
-          onClick={() => alert('Downloading Verified Impact Certificate (PDF)...')}
-          className="btn-secondary text-xs"
-        >
-          <Download size={14} /> Download Impact Report
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Your Redistribution Record</h1>
+        <p className="text-gray-500 mt-1">
+          Counted from every donation <strong>{who}</strong> has listed on FoodLink, and from the
+          receipts the recipient organisations confirmed.
+        </p>
       </div>
 
       {/* Impact Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <ImpactCard
-          title="Meals Donated"
-          value={totalMeals}
+          title="Quantity Listed"
+          value={impact.listedMeals}
           unit="Meals"
-          subtitle="Redistributed to verified local community kitchens"
+          subtitle={`Across ${impact.listedCount} listing${impact.listedCount === 1 ? '' : 's'}, in the units you posted them.`}
           icon={Package}
           color="emerald"
-          trend="+18% this month"
-          equivalent="Fed approx. 54 families"
         />
         <ImpactCard
-          title="CO₂ Emissions Avoided"
-          value={co2AvoidedKg}
-          unit="kg CO₂e"
-          subtitle="Methane prevention from avoided landfill decay"
-          icon={Leaf}
+          title="Quantity Delivered"
+          value={impact.deliveredMeals}
+          unit="Meals"
+          subtitle="Confirmed received by the recipient organisation."
+          icon={CheckCircle}
           color="teal"
-          trend="Certified SDG 12.3"
-          equivalent="Equal to 420 km car travel"
         />
         <ImpactCard
-          title="Virtual Water Saved"
-          value={waterSavedLiters}
-          unit="Liters"
-          subtitle="Conserved agricultural water footprint"
-          icon={Droplets}
+          title="Listings Completed"
+          value={impact.deliveredCount}
+          unit={`of ${impact.listedCount}`}
+          subtitle="Donations that reached a kitchen and were signed for."
+          icon={Truck}
           color="blue"
-          trend="Saved"
-          equivalent="Equivalent to 550 showers"
         />
         <ImpactCard
-          title="Organizations Fed"
-          value={5}
-          unit="Shelters"
-          subtitle="Active community kitchen partnerships"
-          icon={Heart}
+          title="Kitchens Reached"
+          value={impact.kitchens.length}
+          unit={impact.kitchens.length === 1 ? 'Organisation' : 'Organisations'}
+          subtitle="Distinct organisations that have confirmed receipt from you."
+          icon={Building2}
           color="rose"
-          trend="100% verified"
-          equivalent="Across Patiala & Chandigarh"
         />
       </div>
 
-      {/* Impact Badges */}
+      {/* Where the surplus actually went */}
       <div className="card p-6">
-        <h2 className="section-title mb-4 flex items-center gap-2">
-          <Award className="text-amber-500" size={20} />
-          Campus Sustainability Achievements
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
-              🌱
-            </div>
-            <div>
-              <p className="text-sm font-bold text-emerald-950">Zero Food Waste Pioneer</p>
-              <p className="text-xs text-emerald-700 mt-0.5">Redirected &gt;500 meals away from university organic waste.</p>
-              <span className="inline-block mt-2 text-[10px] font-bold text-emerald-800 bg-emerald-200/70 px-2 py-0.5 rounded-full">
-                Unlocked · Tier 2
-              </span>
-            </div>
+        <h2 className="section-title mb-1">Where Your Surplus Went</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Share of delivered quantity by receiving organisation.
+        </p>
+        {impact.kitchens.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No donation of yours has been confirmed as received yet. This fills in as
+            organisations complete their collections.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {impact.kitchens.map(kitchen => (
+              <div key={kitchen.label}>
+                <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
+                  <span className="truncate pr-3">{kitchen.label}</span>
+                  <span className="shrink-0">
+                    {kitchen.meals} · {kitchen.percent}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
+                    style={{ width: `${kitchen.percent}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-
-          <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shrink-0">
-              ⚡
-            </div>
-            <div>
-              <p className="text-sm font-bold text-blue-950">Rapid Responder</p>
-              <p className="text-xs text-blue-700 mt-0.5">Average pickup readiness under 30 minutes from listing.</p>
-              <span className="inline-block mt-2 text-[10px] font-bold text-blue-800 bg-blue-200/70 px-2 py-0.5 rounded-full">
-                Unlocked · 98% Rating
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shrink-0">
-              🤝
-            </div>
-            <div>
-              <p className="text-sm font-bold text-purple-950">Community Anchor</p>
-              <p className="text-xs text-purple-700 mt-0.5">Consistent weekly donations to Helping Hands NGO.</p>
-              <span className="inline-block mt-2 text-[10px] font-bold text-purple-800 bg-purple-200/70 px-2 py-0.5 rounded-full">
-                Tier 3 Partner
-              </span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Breakdown by Food Category */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h2 className="section-title mb-4">Donation History Distribution</h2>
-          <div className="space-y-3">
-            {[
-              { label: 'Nutritious Cooked Meals', pct: 68, color: 'bg-emerald-500' },
-              { label: 'Fresh Bakery & Bread', pct: 18, color: 'bg-amber-400' },
-              { label: 'Fruits & Raw Produce', pct: 10, color: 'bg-blue-400' },
-              { label: 'Packaged Snacks', pct: 4, color: 'bg-purple-400' },
-            ].map(cat => (
-              <div key={cat.label}>
-                <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
-                  <span>{cat.label}</span>
-                  <span>{cat.pct}%</span>
+          <h2 className="section-title mb-1">Listings by Food Category</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Share of listed quantity, from the category on each donation.
+          </p>
+          {impact.categories.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Nothing listed yet — post a donation and this breakdown appears.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {impact.categories.map(category => (
+                <div key={category.label}>
+                  <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
+                    <span>{category.label}</span>
+                    <span>{category.percent}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${category.percent}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full ${cat.color} rounded-full`} style={{ width: `${cat.pct}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="card p-6 bg-gradient-to-br from-emerald-900 to-teal-900 text-white">
           <h2 className="text-lg font-bold mb-2">UN Sustainable Development Goals</h2>
           <p className="text-xs text-emerald-200 mb-4 leading-relaxed">
-            Your mess contributions directly align with UN SDG Target 12.3: Halving global food waste by 2030 and SDG 2: Zero Hunger.
+            Redistributing edible surplus rather than discarding it is the activity UN SDG
+            Target 12.3 (halving food waste by 2030) and SDG 2 (Zero Hunger) describe. FoodLink
+            does not certify or audit against either goal — the alignment is the point of the
+            work, not a rating of it.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-white/10 rounded-xl border border-white/10">
