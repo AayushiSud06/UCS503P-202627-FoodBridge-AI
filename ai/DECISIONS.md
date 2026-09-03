@@ -1082,6 +1082,11 @@ actor holding the right role but outside that scope gets the read path's
   act on a donation nobody is bound to yet — scoping them would forbid the very act of
   binding — and each already resolves its own party: acceptance to the caller's own
   organisation, the claim to the conditional UPDATE of D-28.
+  ⚠️ **Half of this bullet was wrong and is superseded by D-35.** `ACCEPTED` is not
+  always a binding step: it is also reachable from `VOLUNTEER_ASSIGNED`, where the
+  donation is already an organisation's and the transition is a *release*. Reasoning
+  about the target alone, as this bullet does, cannot see that; `VOLUNTEER_ASSIGNED`
+  is unaffected and stays unscoped for the reason given here.
 - **Withdrawal is not narrowed to the early states.** `CANCELLED` stays legal from every
   state `ALLOWED_TRANSITIONS` already permits, including `VOLUNTEER_ASSIGNED` and
   `PICKED_UP`; the scope changes *whose* donation a donor may withdraw, not *when*.
@@ -1096,4 +1101,59 @@ answer for legal-role/illegal-state attempts; the scope is therefore applied aft
 
 **Scope.** This covers `POST /api/donations/{id}/status` and nothing else. `ACCEPTED` and
 `VOLUNTEER_ASSIGNED` are reasoned about above and left unscoped on purpose; no other
-endpoint, router or authorisation path was examined as part of it.
+endpoint, router or authorisation path was examined as part of it. The `ACCEPTED` half of
+that judgement did not survive the audit in D-35.
+
+---
+
+## D-35 · `ACCEPTED` needs ownership too, but only once the donation has left the pool **[documented]**
+
+**Decision.** The ownership gate in `update_status` is no longer a set membership test on
+the target. `donations._needs_ownership(donation, target)` returns true for everything in
+`OWNED_TRANSITIONS` — unchanged — **and** for `ACCEPTED` when `donation.status` is not in
+`OPEN_TO_RECIPIENTS`. The single reachable case is `VOLUNTEER_ASSIGNED → ACCEPTED`, which
+now resolves through `_get_readable_or_404` like the other owned transitions and answers
+the read path's 404 to anyone else. `OWNED_TRANSITIONS`, `TRANSITION_ROLES`,
+`ALLOWED_TRANSITIONS`, the courier claim and every existing response are unchanged.
+
+**Reasoning.**
+
+- **It was an organisation-takeover hole, found by auditing the state graph rather than
+  the target table.** Enumerating every edge in `ALLOWED_TRANSITIONS` against
+  `TRANSITION_ROLES` and `OWNED_TRANSITIONS` showed three edges acting on an
+  already-bound donation with no ownership gate. Two are sound: `ACCEPTED → EXPIRED` is
+  admin-only, and `ACCEPTED → VOLUNTEER_ASSIGNED` is settled by the conditional UPDATE of
+  D-28. The third, `VOLUNTEER_ASSIGNED → ACCEPTED`, was not. Reproduced through the HTTP
+  endpoint before the fix: an unrelated verified kitchen `POST`s `{"status":"ACCEPTED"}`
+  on a donation another kitchen accepted and a courier is already carrying, and the
+  acceptance side effect runs to completion — `recipient_id` moves to the caller, its
+  `accepted_donations` is incremented and `match_score` is re-frozen against it. The
+  attacker then owns the donation for every later gate, `COMPLETED` included. The same
+  account gets a **404 on the plain read** of that donation, so the write granted what the
+  read refused — exactly the asymmetry D-34 was written to close.
+- **The target does not carry enough information; the state does.** D-34 reasoned
+  "`ACCEPTED` binds a party, so scoping it would forbid binding", which is true from
+  `AVAILABLE`/`MATCHED` and false from `VOLUNTEER_ASSIGNED`, where the organisation was
+  settled at the first acceptance and no offer is outstanding. A set keyed by target
+  cannot express a rule whose answer depends on the state the donation is in, which is why
+  this is a predicate and not a second set.
+- **`OPEN_TO_RECIPIENTS` is the honest test of "still anybody's".** It is already the
+  definition of the pool every organisation may consider, and already the NGO half of
+  `_readable_by`. Reusing it keeps one definition of openness instead of a new list of
+  states that could drift from the read scope.
+- **`VOLUNTEER_ASSIGNED` is deliberately left alone.** Scoping it would replace
+  `_claim_pickup`'s `409 Another courier has already claimed this pickup` with a 404 on
+  the released-pickup path, changing a tested answer to fix nothing: the conditional
+  UPDATE already refuses a stranger courier atomically (D-28).
+- **The legitimate release is untouched**, because the scope names the owner rather than
+  the act — the accepting kitchen reads its own donation whatever state it is in — and the
+  administrator stand-in path is unnarrowed. Both are asserted.
+
+**Constraints.** One extra `SELECT` on one further transition. The audit that produced
+this was bounded to `POST /api/donations/{id}/status`; every edge of the donation state
+graph is now accounted for, and the conclusion is recorded in `ARCHITECTURE.md`.
+
+**Also found, not changed.** `MATCHED → AVAILABLE` is legal in `ALLOWED_TRANSITIONS` but
+has no `TRANSITION_ROLES` entry, so `.get(target, set())` refuses it 403 for every role
+including admin — a dead edge, failing closed. It is a lifecycle-modelling question, not a
+security one, and is left for the Project Manager rather than resolved here.

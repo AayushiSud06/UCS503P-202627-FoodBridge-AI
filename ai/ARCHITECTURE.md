@@ -128,6 +128,9 @@ Rules are **data, not conditionals**, in three dicts/sets:
 - `donations.TRANSITION_ROLES` — which role may cause each target. Violation → **403**.
 - `donations.OWNED_TRANSITIONS` — the targets that additionally require the caller to be
   *this* donation's party, not merely to hold the role. Violation → **404** (D-34).
+  Applied through `donations._needs_ownership()`, which adds the one case a target set
+  cannot express: `ACCEPTED` is owned too, but only from a state outside
+  `OPEN_TO_RECIPIENTS` (D-35).
 
 | Target | Roles |
 |---|---|
@@ -140,6 +143,20 @@ Rules are **data, not conditionals**, in three dicts/sets:
 volunteer must be the courier assigned to that donation, the NGO the organisation that
 accepted it, and the donor the one who posted it. Ownership is **not** a role exemption —
 the role table gates the kind of actor, the scope gates which donation.
+
+⚠️ **`ACCEPTED` is owned conditionally, on the source state.** From `AVAILABLE`/`MATCHED`
+it is the open offer any verified organisation may take. From `VOLUNTEER_ASSIGNED` it is
+the *release* of a pickup, and belongs to the organisation already holding the donation —
+otherwise any kitchen could re-accept a delivery in flight and the binding side effect
+would move `recipient_id` on to it. See `DECISIONS.md` D-35.
+
+**Every edge of the state graph has been audited against both tables** (Task 14). The
+transitions acting on an already-bound donation without an ownership scope are
+`ACCEPTED → EXPIRED` (admin-only, whose scope is unrestricted anyway) and
+`ACCEPTED → VOLUNTEER_ASSIGNED` (settled atomically by `_claim_pickup`, D-28) — both
+sound. ⚠️ `MATCHED → AVAILABLE` is legal in `ALLOWED_TRANSITIONS` but has **no**
+`TRANSITION_ROLES` entry, so it is refused 403 for every role including admin: a dead
+edge that fails closed.
 
 ⚠️ **`MATCHED` assigns nobody** — `recipient_id` stays null. It records a suggestion.
 Only `ACCEPTED` binds a recipient.
@@ -179,7 +196,8 @@ See `DECISIONS.md` D-24.
 
 **Lifecycle writes on a donation that is already somebody's are scoped by the same
 clause.** `POST /api/donations/{id}/status` re-resolves the donation through
-`_get_readable_or_404` when the target is in `OWNED_TRANSITIONS`, after the transition and
+`_get_readable_or_404` when `_needs_ownership()` says so — the `OWNED_TRANSITIONS`
+targets, plus `ACCEPTED` from a state outside the open pool — after the transition and
 role gates. For those targets the read scope *is* the ownership rule — a donor reads their
 own donations, and a donation past `ACCEPTED` has left the open pool — so there is one
 encoding of it rather than two. Admin scope is unrestricted, so the stand-in path is
@@ -379,14 +397,17 @@ cannot commit independently. They build a file-backed SQLite database instead, g
 two real connections, and interleave by hand rather than with threads or sleeps: a
 competitor commits at the exact point the handler has finished reading. Two of them
 fail against the pre-fix code with a `200` where a `409` belongs.
-`test_lifecycle_authorization.py` (14) covers the write side of the same boundary: for
+`test_lifecycle_authorization.py` (20) covers the write side of the same boundary: for
 each of `PICKED_UP`, `DELIVERED`, `COMPLETED` and `CANCELLED`, an actor with the right
 role but the wrong donation gets a 404 **and the stored status does not move**, the real
 party still succeeds, and an administrator still drives a donation they are not party to.
-Four of them fail against the pre-fix code with a `200` where a `404` belongs. It also
-pins the two answers that must *not* change: a role that may not cancel still gets 403
-(the role gate runs first), and a cancel from a terminal state still gets 409 (so does the
-owner's).
+Four of them fail against the pre-fix code with a `200` where a `404` belongs. The last
+six cover the same boundary for `ACCEPTED` from `VOLUNTEER_ASSIGNED` (D-35), asserting
+that the stranger kitchen's 404 leaves `recipient_id` where it was — two of them fail
+against the pre-D-35 code — while the owning kitchen's release, an administrator's, and an
+ordinary acceptance from the open pool all still return 200. It also pins the answers that
+must *not* change: a role that may not cancel or accept still gets 403 (the role gate runs
+first), and a cancel from a terminal state still gets 409 (so does the owner's).
 `test_requirement_lifecycle.py` (15) covers the requirement lifecycle as an ownership
 boundary: who may revise, retire and reopen a requirement, that another organisation's id
 is a 404, and that a retired one leaves `GET /api/requirements` without being deleted.

@@ -46,17 +46,46 @@ OPEN_TO_RECIPIENTS: set[DonationStatus] = {DonationStatus.AVAILABLE, DonationSta
 #: carrying the delivery, the organisation that accepted it, the donor who
 #: posted it — and not merely an account holding the same role.
 #:
-#: `ACCEPTED` and `VOLUNTEER_ASSIGNED` are deliberately absent: they act on a
-#: donation that is still open — to every organisation, to every courier — and
-#: each binds its own party as it goes. Acceptance resolves the caller's own
-#: organisation, and the claim is settled by the conditional UPDATE in
-#: `_claim_pickup`. Scoping those two would forbid the act of binding itself.
+#: `ACCEPTED` and `VOLUNTEER_ASSIGNED` are absent because they are the two
+#: transitions that *bind* a party, and a binding step cannot require the
+#: caller to already be the party it is about to make them. `VOLUNTEER_ASSIGNED`
+#: is settled instead by the conditional UPDATE in `_claim_pickup`; `ACCEPTED`
+#: by `_needs_ownership` below, because unlike the claim it is reachable from a
+#: state in which the donation is no longer anybody's to bind.
 OWNED_TRANSITIONS: set[DonationStatus] = {
     DonationStatus.PICKED_UP,
     DonationStatus.DELIVERED,
     DonationStatus.COMPLETED,
     DonationStatus.CANCELLED,
 }
+
+
+def _needs_ownership(donation: Donation, target: DonationStatus) -> bool:
+    """Must the caller be *this* donation's party, not merely hold the role?
+
+    Always, for `OWNED_TRANSITIONS`: the party each of them belongs to is
+    already bound wherever they are reachable from — the donor from the moment
+    the donation was posted, the organisation and the courier by the states
+    that lead to collection, delivery and confirmation.
+
+    And for `ACCEPTED` whenever the donation has left the open pool, which is
+    the case `OWNED_TRANSITIONS` alone cannot express — the answer turns on the
+    state the donation is *in*, not on the target. `ACCEPTED` is reachable
+    twice. From `AVAILABLE` or `MATCHED` it is the offer every organisation is
+    invited to take, and requiring ownership there would forbid acceptance
+    itself. From `VOLUNTEER_ASSIGNED` it is something else entirely: the
+    release of a pickup whose organisation was settled at the first acceptance,
+    with no offer outstanding. Reading the target alone cannot tell those
+    apart, and treating the second as though it were the first let any verified
+    kitchen re-`ACCEPTED` a donation already in a courier's hands and have the
+    side effect below move `recipient_id` on to itself.
+    """
+    if target in OWNED_TRANSITIONS:
+        return True
+    return (
+        target is DonationStatus.ACCEPTED
+        and donation.status not in OPEN_TO_RECIPIENTS
+    )
 
 
 def _loaded(db: Session):
@@ -380,17 +409,17 @@ def update_status(
         )
 
     # Holding the right role is not the same as being *this* donation's actor.
-    # For the transitions above, re-read it through the very scope the read
-    # endpoints use: for each of them that scope already means exactly the
-    # party the transition belongs to — "the donor who posted it", and, once a
-    # donation can be collected, delivered or confirmed, "the courier assigned
-    # to it" or "the organisation that accepted it". So ownership is written
-    # down once, in `_readable_by`, rather than restated here where the two
-    # copies could drift apart. An actor outside the scope gets the 404 a read
-    # would have given them rather than a 403 that would confirm the donation
-    # exists. An administrator's scope is unrestricted, so the stand-in path is
-    # untouched.
-    if target in OWNED_TRANSITIONS:
+    # Where `_needs_ownership` says it matters, re-read the donation through
+    # the very scope the read endpoints use: for each of those transitions that
+    # scope already means exactly the party the transition belongs to — "the
+    # donor who posted it", and, once a donation has been accepted, "the
+    # courier assigned to it" or "the organisation that accepted it". So
+    # ownership is written down once, in `_readable_by`, rather than restated
+    # here where the two copies could drift apart. An actor outside the scope
+    # gets the 404 a read would have given them rather than a 403 that would
+    # confirm the donation exists. An administrator's scope is unrestricted, so
+    # the stand-in path is untouched.
+    if _needs_ownership(donation, target):
         donation = _get_readable_or_404(db, donation_id, user)
 
     # ── Side effects that must happen with the transition ────────────────────

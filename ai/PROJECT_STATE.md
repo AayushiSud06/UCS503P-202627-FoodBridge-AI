@@ -2,11 +2,10 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-04, branch `master`. The most recent
-> implementation **commit** is `b5e09ee` (I-3, requirement-matching claims); on top of it
-> the working tree carries the **uncommitted** lifecycle write-authorization fix described
-> below. A QA audit was run against `23c27f4` on 2026-09-02; it
-> changed no source and its conclusions are in `TASKS.md`.
+> Last verified against the repository: 2026-09-04, branch `master`. The D-34 lifecycle
+> write-authorization fix is now committed (`551c96d`); on top of it the working tree
+> carries the **uncommitted** D-35 follow-up described below. A QA audit was run against
+> `23c27f4` on 2026-09-02; it changed no source and its conclusions are in `TASKS.md`.
 
 ## What this project is
 
@@ -30,7 +29,7 @@ as ML.
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2) and requirement-matching claims (I-3) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`) scoped by the same clause (D-34) |
+| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
@@ -71,6 +70,26 @@ own key in `conftest.py` and need no setup.
   state the transition table already allowed. No schema change, no migration, no frontend
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
+
+- **2026-09-04, uncommitted working tree** — **Lifecycle authorization audit (Task 14):
+  one more ownership hole, closed.** Every edge of `ALLOWED_TRANSITIONS` was enumerated
+  against `TRANSITION_ROLES` and `OWNED_TRANSITIONS`. Three edges act on an already-bound
+  donation with no ownership gate; two are sound (`ACCEPTED → EXPIRED` is admin-only,
+  `ACCEPTED → VOLUNTEER_ASSIGNED` is settled atomically by `_claim_pickup`). The third was
+  **an organisation-takeover vulnerability**: `VOLUNTEER_ASSIGNED → ACCEPTED` — the
+  release of a pickup — is role-gated to `ngo`/`admin` and was unscoped, so any verified
+  kitchen could `POST` `ACCEPTED` on a donation another kitchen had accepted and a courier
+  was already carrying, and the binding side effect moved `recipient_id`,
+  `accepted_donations` and `match_score` on to the attacker, who then owned it for every
+  later gate including `COMPLETED`. The same account got a **404 on the plain read** of
+  that donation, so the write granted what the read refused. Reproduced through the HTTP
+  endpoint before the fix. D-34 had reasoned about the *target* (`ACCEPTED` binds a party,
+  so scoping it would forbid binding) when the answer depends on the *source state*; the
+  gate is now `_needs_ownership(donation, target)`, adding `ACCEPTED` from any state
+  outside `OPEN_TO_RECIPIENTS`. `OWNED_TRANSITIONS`, `TRANSITION_ROLES`,
+  `ALLOWED_TRANSITIONS`, the courier claim and every existing response are unchanged; no
+  schema change, no migration, no frontend change. 6 new tests (two fail against the
+  pre-fix code); 162 → 168 passing, no existing test modified. See `DECISIONS.md` D-35.
 
 - **2026-09-04, uncommitted working tree** — **I-3: the requirements board no longer claims
   to drive matching.** The matcher was re-verified first and is unchanged: `score_pair`

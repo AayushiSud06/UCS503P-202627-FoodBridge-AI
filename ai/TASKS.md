@@ -1,8 +1,8 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-04; the most recent implementation commit
-> is `b5e09ee` (I-3, requirement-matching claims). On top of it the working tree carries
-> the **uncommitted** lifecycle write-authorization fix described under *Completed*.
+> Verified against the repository on 2026-09-04. The D-34 lifecycle write-authorization
+> fix is now committed (`551c96d`); on top of it the working tree carries the
+> **uncommitted** D-35 follow-up described under *Completed*.
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -61,9 +61,10 @@ of all twelve.
 
 ## Next — hardening (recommended, ordered)
 
-**Empty — still a Project Manager call**, and the audit did not promote anything into it.
-(The `CANCELLED` ownership gap that sat here briefly was folded into the D-34 change
-itself — see *Completed*.)
+**Empty — still a Project Manager call**, and neither the QA audit nor the Task 14
+lifecycle audit promoted anything into it. (The `CANCELLED` ownership gap that sat here
+briefly was folded into the D-34 change itself, and the `ACCEPTED` takeover Task 14 found
+into the D-35 change — see *Completed*.)
 What the audit did change is what the list looks like when that call is made:
 
 - **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
@@ -572,7 +573,35 @@ external.
 
 ## Completed (verified in the repository)
 
-### Lifecycle write authorization — **uncommitted working-tree change** `[repo]`
+### Lifecycle authorization audit (Task 14) — **uncommitted working-tree change** `[repo]`
+- [x] **Every edge of `ALLOWED_TRANSITIONS` enumerated against `TRANSITION_ROLES` and
+      `OWNED_TRANSITIONS`.** Three edges act on an already-bound donation with no
+      ownership gate. Two are sound: `ACCEPTED → EXPIRED` (admin-only, unrestricted scope)
+      and `ACCEPTED → VOLUNTEER_ASSIGNED` (settled atomically by `_claim_pickup`, D-28).
+- [x] **The third was an organisation-takeover hole, now closed.**
+      `VOLUNTEER_ASSIGNED → ACCEPTED` — releasing a pickup — is role-gated to `ngo`/`admin`
+      and was unscoped, so **any verified kitchen could take custody of a donation another
+      kitchen had accepted and a courier was already carrying**: the binding side effect
+      moved `recipient_id`, `accepted_donations` and `match_score` on to the caller, who
+      then owned it for every later gate including `COMPLETED`. The same account got a
+      **404 on the plain read** of that donation. Reproduced through the endpoint before
+      the fix.
+- [x] **The gate is now a predicate, not a set membership test.**
+      `donations._needs_ownership(donation, target)` keeps every `OWNED_TRANSITIONS`
+      target and adds `ACCEPTED` whenever `donation.status` is outside
+      `OPEN_TO_RECIPIENTS` — the case a target-keyed set cannot express, because the
+      answer depends on the state the donation is in. See `DECISIONS.md` D-35.
+- [x] **6 regression tests** in `code/tests/test_lifecycle_authorization.py`; two fail
+      against the pre-fix code. Full suite 162 → 168 passing; `alembic check` clean; no
+      existing test modified, no schema/API/frontend change.
+- [ ] ⚠️ **Not fixed, reported instead** — two things the audit found that are outside its
+      authorization scope, for the Project Manager to rule on: `MATCHED → AVAILABLE` is
+      legal in `ALLOWED_TRANSITIONS` but has no `TRANSITION_ROLES` entry, so it is a dead
+      edge refused 403 for every role including admin (fails closed); and a release
+      followed by a re-acceptance increments the owning organisation's
+      `accepted_donations` a second time and leaves `volunteer_id` set.
+
+### Lifecycle write authorization — committed `551c96d` `[repo]`
 - [x] **`POST /api/donations/{id}/status` now scopes the write for the transitions that
       act on a donation that is already somebody's.** `donations.OWNED_TRANSITIONS`
       (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`) re-resolves the row through

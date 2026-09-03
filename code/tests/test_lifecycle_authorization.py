@@ -287,3 +287,110 @@ def test_cancelling_a_completed_donation_is_still_a_conflict(
 
     assert response.status_code == 409
     assert state_of(db_session, assigned["id"]) is DonationStatus.COMPLETED
+
+
+# ─── Releasing a pickup belongs to the organisation holding the donation ─────
+#
+# `ACCEPTED` is the one target reachable both as an offer and as an act on a
+# donation that is already somebody's. From the open pool it is the acceptance
+# any kitchen may make. From `VOLUNTEER_ASSIGNED` it is a *release* — the
+# kitchen that accepted this donation sending the pickup back to be claimed
+# again — and there is no offer outstanding to justify letting a stranger
+# drive it. The role gate cannot tell the two apart, because the difference is
+# in the state the donation is in, not in the target.
+
+def test_an_unrelated_organisation_cannot_take_over_an_assigned_donation(
+    client, db_session, assigned
+):
+    """The takeover this boundary exists to stop.
+
+    `ACCEPTED` on a donation already in a courier's hands re-runs the binding
+    side effect, so without the scope an unrelated kitchen driving it would
+    move `recipient_id` on to itself — taking custody of a delivery in flight
+    from the kitchen that accepted it, and inheriting `COMPLETED` with it.
+    """
+    donation = db_session.get(Donation, assigned["id"])
+    db_session.refresh(donation)
+    held_by = donation.recipient_id
+    assert held_by is not None
+
+    response = advance(client, assigned["stranger_kitchen"], assigned["id"], "ACCEPTED")
+
+    assert response.status_code == 404
+    # Neither the state nor, more to the point, the organisation holding it.
+    assert state_of(db_session, assigned["id"]) is DonationStatus.VOLUNTEER_ASSIGNED
+    donation = db_session.get(Donation, assigned["id"])
+    db_session.refresh(donation)
+    assert donation.recipient_id == held_by
+
+
+def test_the_accepting_organisation_may_still_release_its_own_pickup(
+    client, db_session, assigned
+):
+    """The legitimate release is untouched — the scope names the owner, not the act."""
+    response = advance(client, assigned["kitchen"], assigned["id"], "ACCEPTED")
+
+    assert response.status_code == 200, response.text
+    assert state_of(db_session, assigned["id"]) is DonationStatus.ACCEPTED
+
+
+def test_any_organisation_may_still_accept_a_donation_from_the_open_pool(
+    client, db_session
+):
+    """Acceptance is an offer, so it cannot require the caller to already own it.
+
+    The same target, from a state that has bound nobody: this is the case the
+    scope must *not* apply to, or no kitchen could ever accept anything.
+    """
+    donor = register(client, email="pool-donor@test.com", role="donor")
+    kitchen, _ = register_ngo(
+        client, db_session, email="pool-ngo@test.com", org="Open Pool Kitchen"
+    )
+    donation_id = client.post(
+        "/api/donations", json=donation_body(), headers=auth(donor)
+    ).json()["id"]
+
+    response = advance(client, kitchen, donation_id, "ACCEPTED")
+
+    assert response.status_code == 200, response.text
+    assert state_of(db_session, donation_id) is DonationStatus.ACCEPTED
+
+
+def test_an_administrator_may_still_release_a_pickup_they_are_not_party_to(
+    client, db_session, assigned
+):
+    """Scoping the release must not cost support staff their stand-in role."""
+    root = admin_token(client, db_session)
+    recipient_id = db_session.get(Donation, assigned["id"]).recipient_id
+
+    response = client.post(
+        f"/api/donations/{assigned['id']}/status",
+        json={"status": "ACCEPTED", "recipientId": recipient_id},
+        headers=auth(root),
+    )
+
+    assert response.status_code == 200, response.text
+    assert state_of(db_session, assigned["id"]) is DonationStatus.ACCEPTED
+
+
+def test_a_role_that_may_not_accept_is_still_refused_on_its_role(
+    client, db_session, assigned
+):
+    """The role gate still runs first, and still answers 403 rather than 404."""
+    response = advance(client, assigned["courier"], assigned["id"], "ACCEPTED")
+
+    assert response.status_code == 403
+    assert state_of(db_session, assigned["id"]) is DonationStatus.VOLUNTEER_ASSIGNED
+
+
+def test_an_unrelated_organisation_is_answered_the_way_a_read_answers_it(
+    client, assigned
+):
+    """One scope, not two — the same rule the cancel case asserts for donors."""
+    read = client.get(
+        f"/api/donations/{assigned['id']}", headers=auth(assigned["stranger_kitchen"])
+    )
+    released = advance(client, assigned["stranger_kitchen"], assigned["id"], "ACCEPTED")
+
+    assert read.status_code == 404
+    assert released.status_code == read.status_code
