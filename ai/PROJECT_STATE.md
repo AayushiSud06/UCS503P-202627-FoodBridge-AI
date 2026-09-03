@@ -3,8 +3,8 @@
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-04, branch `master`. The most recent
-> implementation **commit** is `fcbd03b` (I-2, distance/GPS wording); on top of it the
-> working tree carries the **uncommitted** I-3 (requirement-matching claims) fix described
+> implementation **commit** is `b5e09ee` (I-3, requirement-matching claims); on top of it
+> the working tree carries the **uncommitted** lifecycle write-authorization fix described
 > below. A QA audit was run against `23c27f4` on 2026-09-02; it
 > changed no source and its conclusions are in `TASKS.md`.
 
@@ -30,11 +30,11 @@ as ML.
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2) and requirement-matching claims (I-3) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership |
+| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`) scoped by the same clause (D-34) |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 148 tests passing (~100 s): 37 integration + 15 requirement-lifecycle + 13 donation-read-scope + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
+| Backend tests | ✅ 162 tests passing (~105 s): 37 integration + 15 requirement-lifecycle + 14 lifecycle-write-authorization + 13 donation-read-scope + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -47,6 +47,30 @@ the same `Settings` object. The error message states both options. Tests supply 
 own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
+
+- **2026-09-04, uncommitted in the working tree** — **Lifecycle write authorization: the
+  four transitions that acted on a donation without checking whose it was.**
+  `POST /api/donations/{id}/status` gated `PICKED_UP`, `DELIVERED`, `COMPLETED` and
+  `CANCELLED` on the caller's *role* alone, so any volunteer account could collect and
+  deliver a pickup assigned to a different courier; any NGO account could confirm receipt
+  of a donation its organisation never accepted — incrementing that organisation's
+  `completed_donations`, a counter the platform presents as evidence; and any donor could
+  withdraw another donor's donation out from under the kitchen and courier working on it.
+  All four were reproduced through the endpoint as a `200`. `CANCELLED` was the subtle
+  one: an `is_owning_donor` comparison sat right beside the role gate but was unreachable,
+  because `donor` was already in the role set — a named variable describing a test that
+  never ran, which is what let it survive a read of the function. The fix is one set,
+  `donations.OWNED_TRANSITIONS`, and one re-read: those targets now resolve the donation
+  through `_get_readable_or_404`, the same D-24 clause the read endpoints use, which for
+  each of them already means the party it belongs to — the posting donor, the assigned
+  courier, the accepting organisation. So ownership has one encoding rather than two, and
+  the dead clause is deleted rather than repaired. Denial is the read path's 404.
+  `ACCEPTED` and `VOLUNTEER_ASSIGNED` are deliberately still unscoped (they act on a
+  donation nobody is bound to yet), the courier claim's atomic guard is untouched, an
+  administrator's stand-in path is unnarrowed, and `CANCELLED` is still legal from every
+  state the transition table already allowed. No schema change, no migration, no frontend
+  change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
+  existing test modified. See `DECISIONS.md` D-34.
 
 - **2026-09-04, uncommitted working tree** — **I-3: the requirements board no longer claims
   to drive matching.** The matcher was re-verified first and is unchanged: `score_pair`
@@ -236,8 +260,9 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-**Nothing is in progress, and `TASKS.md` → *Next* is still empty** — but what would fill
-it has changed. The seven-step hardening sequence — signing-key configuration, migrations,
+**Nothing is in progress, and `TASKS.md` → *Next* is still empty** — the `CANCELLED`
+ownership gap found while fixing the other three was folded into the same change (D-34)
+rather than left open. But what would fill the list has changed. The seven-step hardening sequence — signing-key configuration, migrations,
 donation read scoping, CI, recipient read scoping, authentication rate limiting, courier
 claim race — is complete, and the requirement lifecycle was the first item taken out of
 *Backlog → F*. Every unscoped read of personal contact data is closed, bcrypt is no longer

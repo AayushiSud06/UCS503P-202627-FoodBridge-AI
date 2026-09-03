@@ -22,8 +22,8 @@ from ..serialize import donation_out
 router = APIRouter(prefix="/api/donations", tags=["donations"])
 settings = get_settings()
 
-#: Who is allowed to drive each transition. The donor who owns a donation and
-#: an admin may always cancel; everything else is role-gated.
+#: Who is allowed to drive each transition. Every target is role-gated here;
+#: *which* donation each role may drive is `OWNED_TRANSITIONS` below.
 TRANSITION_ROLES: dict[DonationStatus, set[UserRole]] = {
     DonationStatus.MATCHED: {UserRole.admin},
     DonationStatus.ACCEPTED: {UserRole.ngo, UserRole.admin},
@@ -40,6 +40,24 @@ TRANSITION_ROLES: dict[DonationStatus, set[UserRole]] = {
 #: browses; `MATCHED` is in it because a match is a suggestion, not a claim.
 OPEN_TO_RECIPIENTS: set[DonationStatus] = {DonationStatus.AVAILABLE, DonationStatus.MATCHED}
 
+#: Transitions that act on a donation that is already somebody's.
+#: `TRANSITION_ROLES` says what *kind* of actor may drive them; for these the
+#: caller also has to be the party this donation belongs to — the courier
+#: carrying the delivery, the organisation that accepted it, the donor who
+#: posted it — and not merely an account holding the same role.
+#:
+#: `ACCEPTED` and `VOLUNTEER_ASSIGNED` are deliberately absent: they act on a
+#: donation that is still open — to every organisation, to every courier — and
+#: each binds its own party as it goes. Acceptance resolves the caller's own
+#: organisation, and the claim is settled by the conditional UPDATE in
+#: `_claim_pickup`. Scoping those two would forbid the act of binding itself.
+OWNED_TRANSITIONS: set[DonationStatus] = {
+    DonationStatus.PICKED_UP,
+    DonationStatus.DELIVERED,
+    DonationStatus.COMPLETED,
+    DonationStatus.CANCELLED,
+}
+
 
 def _loaded(db: Session):
     return select(Donation).options(
@@ -54,9 +72,10 @@ def _get_or_404(db: Session, donation_id: int) -> Donation:
     """Any donation by id, with no read scoping.
 
     For paths that have already authorised the caller some other way — the
-    lifecycle endpoint, which is gated by `TRANSITION_ROLES` and by ownership,
-    and the response of a write. Read endpoints must use
-    `_get_readable_or_404` instead.
+    lifecycle endpoint, which gates the row it fetches on `ALLOWED_TRANSITIONS`,
+    on `TRANSITION_ROLES` and, for `OWNED_TRANSITIONS`, on the read scope; and
+    the response of a write, which the caller has by then earned. Read endpoints
+    must use `_get_readable_or_404` instead.
     """
     donation = db.scalar(_loaded(db).where(Donation.id == donation_id))
     if donation is None:
@@ -354,12 +373,25 @@ def update_status(
         )
 
     allowed_roles = TRANSITION_ROLES.get(target, set())
-    is_owning_donor = user.role is UserRole.donor and donation.donor_id == user.id
-    if user.role not in allowed_roles and not (target is DonationStatus.CANCELLED and is_owning_donor):
+    if user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Your role cannot set a donation to {target.value}",
         )
+
+    # Holding the right role is not the same as being *this* donation's actor.
+    # For the transitions above, re-read it through the very scope the read
+    # endpoints use: for each of them that scope already means exactly the
+    # party the transition belongs to — "the donor who posted it", and, once a
+    # donation can be collected, delivered or confirmed, "the courier assigned
+    # to it" or "the organisation that accepted it". So ownership is written
+    # down once, in `_readable_by`, rather than restated here where the two
+    # copies could drift apart. An actor outside the scope gets the 404 a read
+    # would have given them rather than a 403 that would confirm the donation
+    # exists. An administrator's scope is unrestricted, so the stand-in path is
+    # untouched.
+    if target in OWNED_TRANSITIONS:
+        donation = _get_readable_or_404(db, donation_id, user)
 
     # ── Side effects that must happen with the transition ────────────────────
     if target is DonationStatus.ACCEPTED:

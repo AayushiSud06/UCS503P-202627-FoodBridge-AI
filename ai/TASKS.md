@@ -1,7 +1,8 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-04; the most recent implementation commit
-> is `fcbd03b` (I-2, distance/GPS wording), with I-3 done and uncommitted on top of it.
+> is `b5e09ee` (I-3, requirement-matching claims). On top of it the working tree carries
+> the **uncommitted** lifecycle write-authorization fix described under *Completed*.
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -26,8 +27,12 @@
 ## Current
 
 **Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`. 148 backend tests pass; the frontend
-`tsc && vite build` is clean.
+markers in `code/foodlink/` or `frontend/src/`. 162 backend tests pass; the frontend
+`tsc && vite build` is clean (unchanged by the current work, which is backend-only).
+
+**Uncommitted in the working tree (2026-09-04): lifecycle write authorization.** Four
+transitions accepted any account holding the right role, whatever donation it named —
+see *Completed*. One security fix, one new test file, no schema change.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
@@ -57,6 +62,8 @@ of all twelve.
 ## Next — hardening (recommended, ordered)
 
 **Empty — still a Project Manager call**, and the audit did not promote anything into it.
+(The `CANCELLED` ownership gap that sat here briefly was folded into the D-34 change
+itself — see *Completed*.)
 What the audit did change is what the list looks like when that call is made:
 
 - **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
@@ -565,6 +572,46 @@ external.
 
 ## Completed (verified in the repository)
 
+### Lifecycle write authorization — **uncommitted working-tree change** `[repo]`
+- [x] **`POST /api/donations/{id}/status` now scopes the write for the transitions that
+      act on a donation that is already somebody's.** `donations.OWNED_TRANSITIONS`
+      (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`) re-resolves the row through
+      `_get_readable_or_404` — the D-24 read clause — after the `ALLOWED_TRANSITIONS` and
+      `TRANSITION_ROLES` gates. See `DECISIONS.md` D-34.
+- [x] **What was open:** the role gate was the only gate on those four. Any volunteer
+      account could set `PICKED_UP` and `DELIVERED` on a pickup assigned to a *different*
+      courier; any NGO account could `COMPLETED` a donation its organisation never
+      accepted — incrementing that other organisation's `completed_donations` counter,
+      which the platform reports as evidence; and any donor could `CANCELLED` another
+      donor's donation, out from under the kitchen and courier working on it. All four
+      reproduced through the endpoint as a `200`.
+- [x] **`CANCELLED` looked guarded and was not.** `is_owning_donor` was consulted only
+      after `user.role not in allowed_roles`, and `donor` is itself in
+      `TRANSITION_ROLES[CANCELLED]` — so the comparison was unreachable and the header
+      comment promising "the donor who owns a donation … may always cancel" described a
+      test that never ran. The dead clause and its variable are deleted, not repaired:
+      ownership has one home now. No answer changed — `ngo`/`volunteer` targeting
+      `CANCELLED` still fail the role gate with the same 403 (pinned by a test).
+- [x] **No new authorisation architecture.** The read scope already evaluates to exactly
+      the party each transition belongs to — the posting donor, and once a donation has
+      left the open pool the assigned courier or the accepting organisation — so the fix
+      reuses that clause rather than adding a second ownership test to keep in step with
+      it. Denial is the read path's 404, not a 403.
+- [x] **Behaviour preserved:** `ACCEPTED` and `VOLUNTEER_ASSIGNED` are deliberately not
+      scoped (they act on a donation nobody is bound to yet, and each binds its own party);
+      the 409 for an illegal transition and the 403 for a wrong role still come first and
+      are unchanged; `CANCELLED` is still legal from every state the transition table
+      already allowed, including `VOLUNTEER_ASSIGNED` and `PICKED_UP`; the courier claim's
+      concurrency guard (D-28) is untouched; an administrator's stand-in path is
+      unnarrowed.
+- [x] **No schema change, no migration, no frontend change** — no request or response
+      shape moved, and the only new status code appears where a write used to wrongly
+      succeed.
+- [x] 14 tests in `code/tests/test_lifecycle_authorization.py`; **four fail against the
+      pre-fix code with a `200` where a `404` belongs.** The refusals assert the stored
+      status as well as the response, so they prove the write did not happen. Full suite
+      148 → 162, no existing test changed.
+
 ### QA audit and roadmap reconciliation — 2026-09-02 `[QA-1 … QA-12]`
 
 Documentation only. **No source file was changed**, no schema touched, no dependency added;
@@ -776,7 +823,10 @@ existing items in F and G.
       unrestricted. One helper (`_readable_by`) serves all three endpoints, and fails
       closed for a role it does not know. See `DECISIONS.md` D-24.
 - [x] Lifecycle, matching and authentication untouched — `update_status` still resolves
-      the donation unscoped, because its own role/ownership gates authorise it.
+      the donation unscoped, ~~because its own role/ownership gates authorise it~~.
+      ⚠️ **That reasoning was wrong for three transitions** (no ownership gate existed for
+      `PICKED_UP` / `DELIVERED` / `COMPLETED`) and is corrected by the lifecycle
+      write-authorization entry below. The read-scope work itself stands as described.
 - [x] 13 tests in `code/tests/test_donation_reads.py`, including a matrix asserting the
       id lookup and the list agree for every role. Six of them fail against the previous
       code.

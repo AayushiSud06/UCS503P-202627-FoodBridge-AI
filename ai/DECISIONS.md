@@ -492,9 +492,15 @@ it returns the same `404 Donation not found` as an id that never existed.
 assignments — is what the data model can express: there is **no** volunteer/donation
 eligibility relationship in the schema, so "donations a courier is eligible for" can only
 mean "not yet claimed". A geographic or availability-based courier scope would need a new
-relationship. The write path is untouched: `update_status` still uses the unscoped
-`_get_or_404`, because its authorisation is `TRANSITION_ROLES` plus ownership, and the
-claim step legitimately acts on a donation before the courier is bound to it.
+relationship.
+
+⚠️ **The write path was left untouched here, and that was wrong.** This section used to
+read that `update_status` could keep the unscoped `_get_or_404` "because its authorisation
+is `TRANSITION_ROLES` plus ownership" — but no working ownership test existed for
+`PICKED_UP`, `DELIVERED`, `COMPLETED` or `CANCELLED`, so the role gate was the only gate.
+**D-34** closes that by reusing this clause on the write path; the claim step still
+legitimately acts on a donation before the courier is bound to it, which is why it is not
+covered by that scoping.
 
 ---
 
@@ -1029,3 +1035,65 @@ name) because it read `distanceKm` on donations that structurally never carry on
 - **Nothing tests it.** There is still no frontend test suite, so `tsc` remains the only
   automated gate. `displayDistanceKm` is pure and takes a plain object, so it is trivially
   testable once one exists.
+
+---
+
+## D-34 · A lifecycle write on a donation that is already somebody's is scoped by the read scope **[documented]**
+
+**Decision.** `POST /api/donations/{id}/status` re-resolves the donation through
+`_get_readable_or_404` — the same scope D-24 gives the read endpoints — for the targets
+in `donations.OWNED_TRANSITIONS`: `PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`. An
+actor holding the right role but outside that scope gets the read path's
+`404 Donation not found`. `ACCEPTED` and `VOLUNTEER_ASSIGNED` keep the unscoped lookup.
+
+**Reasoning.**
+
+- **The role gate was the only gate.** `TRANSITION_ROLES` says *what kind* of actor may
+  drive a target, and for these four that was all `update_status` checked: any volunteer
+  account could collect and deliver a pickup assigned to a different courier, any NGO
+  account could confirm receipt of a donation its organisation never accepted — writing
+  another organisation's `completed_donations` counter, which the platform reports as
+  evidence — and any donor could withdraw another donor's donation out from under the
+  kitchen and courier already working on it. Reproduced through the HTTP endpoint before
+  the fix: four `200`s where a `404` belongs.
+- **`CANCELLED` looked guarded and was not.** `update_status` computed
+  `is_owning_donor = user.role is donor and donation.donor_id == user.id` and consulted it
+  only as `user.role not in allowed_roles and not (target is CANCELLED and
+  is_owning_donor)` — but `donor` is itself in `TRANSITION_ROLES[CANCELLED]`, so the left
+  operand was already false for every donor and the ownership comparison was unreachable.
+  A named variable and a header comment claiming "the donor who owns a donation … may
+  always cancel" described a test that never ran; that is what let the hole survive a read
+  of the function. The clause and the variable are **deleted** rather than repaired:
+  ownership now has one home, and a second copy beside the role gate is the drift D-24 was
+  written to prevent. Removing it changes no answer — an `ngo` or `volunteer` targeting
+  `CANCELLED` still fails the role gate with the same 403.
+- **Reuse the clause; do not restate it.** `_readable_by` already evaluates to exactly the
+  party each of these transitions belongs to: "the donations they posted" for a donor, and
+  — since a donation past `ACCEPTED` has left the open pool — "the courier assigned to it"
+  for a volunteer and "the organisation that accepted it" for an NGO. Writing a second
+  ownership test beside it would be two encodings of one rule, free to drift — the failure
+  D-24 was written to prevent between the list and the id lookup.
+- **404, not 403,** for the same reason as D-24 and D-29: a 403 on a real id would confirm
+  the donation exists. A write is not a reason to answer what a read would withhold.
+- **A set, not a condition per branch.** The transitions that need this are data
+  (`OWNED_TRANSITIONS`) beside `TRANSITION_ROLES` and `ALLOWED_TRANSITIONS`, so the
+  lifecycle rules stay readable in one place.
+- **The open transitions stay open, deliberately.** `ACCEPTED` and `VOLUNTEER_ASSIGNED`
+  act on a donation nobody is bound to yet — scoping them would forbid the very act of
+  binding — and each already resolves its own party: acceptance to the caller's own
+  organisation, the claim to the conditional UPDATE of D-28.
+- **Withdrawal is not narrowed to the early states.** `CANCELLED` stays legal from every
+  state `ALLOWED_TRANSITIONS` already permits, including `VOLUNTEER_ASSIGNED` and
+  `PICKED_UP`; the scope changes *whose* donation a donor may withdraw, not *when*.
+- **Administrators are unaffected.** Their scope is `None`; the stand-in path support
+  staff rely on is not narrowed, and a test asserts it.
+
+**Constraints.** It costs one extra `SELECT` on those three transitions — the same row,
+re-read under the scope. Rejected alternative: scoping the *first* lookup for these
+targets, which would answer 404 before the transition table's 409 and change the existing
+answer for legal-role/illegal-state attempts; the scope is therefore applied after the
+`ALLOWED_TRANSITIONS` and `TRANSITION_ROLES` gates, so only the ownership outcome changes.
+
+**Scope.** This covers `POST /api/donations/{id}/status` and nothing else. `ACCEPTED` and
+`VOLUNTEER_ASSIGNED` are reasoned about above and left unscoped on purpose; no other
+endpoint, router or authorisation path was examined as part of it.

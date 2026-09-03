@@ -123,17 +123,23 @@ silently shifting every deadline. Postgres passes through unchanged.
 DELIVERED → COMPLETED`, plus `CANCELLED` / `EXPIRED`.
 Terminal states have an empty transition set.
 
-Rules are **data, not conditionals**, in two dicts:
+Rules are **data, not conditionals**, in three dicts/sets:
 - `models.ALLOWED_TRANSITIONS` — legal state graph. Violation → **409**.
-- `donations.TRANSITION_ROLES` — which role may cause each target. Violation → **403**
-  (with a narrow exception: the owning donor may always `CANCELLED`).
+- `donations.TRANSITION_ROLES` — which role may cause each target. Violation → **403**.
+- `donations.OWNED_TRANSITIONS` — the targets that additionally require the caller to be
+  *this* donation's party, not merely to hold the role. Violation → **404** (D-34).
 
 | Target | Roles |
 |---|---|
 | `MATCHED` / `EXPIRED` | admin |
 | `ACCEPTED` / `COMPLETED` | ngo, admin |
 | `VOLUNTEER_ASSIGNED` / `PICKED_UP` / `DELIVERED` | volunteer, admin |
-| `CANCELLED` | owning donor, admin |
+| `CANCELLED` | donor, admin |
+
+`PICKED_UP`, `DELIVERED`, `COMPLETED` and `CANCELLED` are `OWNED_TRANSITIONS`: the
+volunteer must be the courier assigned to that donation, the NGO the organisation that
+accepted it, and the donor the one who posted it. Ownership is **not** a role exemption —
+the role table gates the kind of actor, the scope gates which donation.
 
 ⚠️ **`MATCHED` assigns nobody** — `recipient_id` stays null. It records a suggestion.
 Only `ACCEPTED` binds a recipient.
@@ -170,6 +176,14 @@ may not read returns the ordinary 404 rather than a 403 that would confirm it ex
 Scope: donor → their own; ngo → `AVAILABLE`/`MATCHED` plus their own organisation's;
 volunteer → unclaimed `ACCEPTED` plus their own assignments; admin → everything.
 See `DECISIONS.md` D-24.
+
+**Lifecycle writes on a donation that is already somebody's are scoped by the same
+clause.** `POST /api/donations/{id}/status` re-resolves the donation through
+`_get_readable_or_404` when the target is in `OWNED_TRANSITIONS`, after the transition and
+role gates. For those targets the read scope *is* the ownership rule — a donor reads their
+own donations, and a donation past `ACCEPTED` has left the open pool — so there is one
+encoding of it rather than two. Admin scope is unrestricted, so the stand-in path is
+untouched. See `DECISIONS.md` D-34.
 
 **A requirement may only be changed by the organisation that posted it.**
 `routers/organisations._own_requirement_or_404()` matches on the caller's own
@@ -354,7 +368,7 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 148 in total. `test_donation_reads.py` (13) and
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 162 in total. `test_donation_reads.py` (13) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.
@@ -365,6 +379,14 @@ cannot commit independently. They build a file-backed SQLite database instead, g
 two real connections, and interleave by hand rather than with threads or sleeps: a
 competitor commits at the exact point the handler has finished reading. Two of them
 fail against the pre-fix code with a `200` where a `409` belongs.
+`test_lifecycle_authorization.py` (14) covers the write side of the same boundary: for
+each of `PICKED_UP`, `DELIVERED`, `COMPLETED` and `CANCELLED`, an actor with the right
+role but the wrong donation gets a 404 **and the stored status does not move**, the real
+party still succeeds, and an administrator still drives a donation they are not party to.
+Four of them fail against the pre-fix code with a `200` where a `404` belongs. It also
+pins the two answers that must *not* change: a role that may not cancel still gets 403
+(the role gate runs first), and a cancel from a terminal state still gets 409 (so does the
+owner's).
 `test_requirement_lifecycle.py` (15) covers the requirement lifecycle as an ownership
 boundary: who may revise, retire and reopen a requirement, that another organisation's id
 is a 404, and that a retired one leaves `GET /api/requirements` without being deleted.
