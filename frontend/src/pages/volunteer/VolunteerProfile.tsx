@@ -19,7 +19,7 @@ export default function VolunteerProfile() {
     phone: '',
     location: '',
     // Transport and radius are not modelled server-side yet, so they are
-    // local notes rather than something the dispatcher can act on.
+    // local notes. Nothing reads them, and there is no dispatcher to read them.
     vehicleType: '',
     maxDistanceKm: 6,
     isAvailable: true,
@@ -51,8 +51,8 @@ export default function VolunteerProfile() {
         success: {
           message: 'Courier profile saved',
           subtitle: profile.isAvailable
-            ? 'You are on duty and will be offered pickups.'
-            : 'You are off duty. No new pickups will be offered.',
+            ? 'Organisations see you as on duty.'
+            : 'Organisations see you as off duty. Open pickups are still yours to claim.',
         },
         errorTitle: 'Could not save your profile',
       },
@@ -63,7 +63,7 @@ export default function VolunteerProfile() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Volunteer Courier Profile</h1>
-        <p className="text-gray-500 mt-1">Manage transport mode, active radius, and dispatch availability.</p>
+        <p className="text-gray-500 mt-1">Manage transport mode, active radius, and duty status.</p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
@@ -176,7 +176,7 @@ export default function VolunteerProfile() {
                 onChange={e => setProfile({ ...profile, isAvailable: e.target.checked })}
                 className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
               />
-              <span className="font-medium">Active & ready to receive new pickup dispatch alerts</span>
+              <span className="font-medium">On duty — show me as available on the courier roster</span>
             </label>
           </div>
         </div>

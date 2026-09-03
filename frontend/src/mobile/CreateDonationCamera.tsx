@@ -302,7 +302,7 @@ export default function CreateDonationCamera() {
           <MSection title="What happens next" />
           <div className="px-5 pb-2 space-y-3">
             {([
-              ['Kitchen notified · awaiting accept', true],
+              ['Listed for kitchens · awaiting accept', true],
               ['Volunteer courier assigned', false],
               [`Picked up before ${formatClock(created?.pickupDeadline)}`, false],
             ] as [string, boolean][]).map(([label, done]) => (

@@ -2,10 +2,11 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-04, branch `master`. The D-34 lifecycle
-> write-authorization fix is now committed (`551c96d`); on top of it the working tree
-> carries the **uncommitted** D-35 follow-up described below. A QA audit was run against
-> `23c27f4` on 2026-09-02; it changed no source and its conclusions are in `TASKS.md`.
+> Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
+> write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
+> follow-up as `efd5fd8`. On top of those the working tree carries the **uncommitted** I-4
+> notification-honesty pass described below. A QA audit was run against `23c27f4` on
+> 2026-09-02; it changed no source and its conclusions are in `TASKS.md`.
 
 ## What this project is
 
@@ -27,7 +28,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2) and requirement-matching claims (I-3) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3) and notification claims (I-4) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -47,7 +48,7 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-04, uncommitted in the working tree** — **Lifecycle write authorization: the
+- **2026-09-04, commit `551c96d`** — **Lifecycle write authorization: the
   four transitions that acted on a donation without checking whose it was.**
   `POST /api/donations/{id}/status` gated `PICKED_UP`, `DELIVERED`, `COMPLETED` and
   `CANCELLED` on the caller's *role* alone, so any volunteer account could collect and
@@ -71,7 +72,24 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **Lifecycle authorization audit (Task 14):
+- **2026-09-04, uncommitted working tree** — **I-4: the interface no longer offers
+  notifications it cannot send.** Verified first that there is nothing to wire to: the
+  backend contains no occurrence of `notif`, `sms`, `smtp`, `twilio`, `sendgrid`, `fcm` or
+  `websocket`. **No backend file changed.** All ten dead toggles removed across four
+  profile screens — the desktop donor's email/SMS checkboxes, the mobile donor's
+  auto-accept/reminders/digest, the mobile NGO's entire *Notifications* section, and the
+  mobile courier's proximity/night-hours pair. Four adjacent claims reworded rather than
+  deleted, because each sits on a screen that does do something real: *"Kitchen notified"*
+  → *"Listed for kitchens"*, *"…notify the best recipient organization"* → the scoring the
+  matcher actually performs, *"ready to receive new pickup dispatch alerts"* → *"show me as
+  available on the courier roster"*, and both availability toasts, which promised an offer
+  mechanism that does not exist. **Volunteer availability was preserved and re-verified
+  end-to-end** — `is_available` is a real `VolunteerUpdate` field, and toggling it in the
+  running mobile UI wrote `is_available = 0` to the database. Nothing replaced with
+  `localStorage`, mocks or new endpoints. Typecheck and production build clean. See
+  `DECISIONS.md` D-36.
+
+- **2026-09-04, commit `efd5fd8`** — **Lifecycle authorization audit (Task 14):
   one more ownership hole, closed.** Every edge of `ALLOWED_TRANSITIONS` was enumerated
   against `TRANSITION_ROLES` and `OWNED_TRANSITIONS`. Three edges act on an already-bound
   donation with no ownership gate; two are sound (`ACCEPTED → EXPIRED` is admin-only,
@@ -91,7 +109,7 @@ own key in `conftest.py` and need no setup.
   schema change, no migration, no frontend change. 6 new tests (two fail against the
   pre-fix code); 162 → 168 passing, no existing test modified. See `DECISIONS.md` D-35.
 
-- **2026-09-04, uncommitted working tree** — **I-3: the requirements board no longer claims
+- **2026-09-04, commit `b5e09ee`** — **I-3: the requirements board no longer claims
   to drive matching.** The matcher was re-verified first and is unchanged: `score_pair`
   takes a `Donation` and a `Recipient`, `MatchOut` has no requirement field, and the only
   backend readers of the table are still `routers/organisations.py` and `seed.py`. **No
@@ -157,7 +175,8 @@ own key in `conftest.py` and need no setup.
   live through `score_pair`, reliability from the recipient's own counters. Meanwhile the
   interface claims requirement-aware matching that `matching.py` cannot do (it never
   references `Requirement`), live GPS tracking that exists nowhere in the repository,
-  notification delivery through ten dead toggles, FSSAI verification of a donor the data
+  notification delivery through ten dead toggles (all four of those claim families since
+  removed — I-1, I-2, I-3, I-4), FSSAI verification of a donor the data
   model has no verification concept for, and impact totals padded with literals — one real
   meal count with `+ 1240` added to it, another with `+ 18`. Two "Download Impact Report"
   buttons are an `alert()` and produce no file. Nine items in `TASKS.md` → *Backlog → I*,
@@ -292,8 +311,8 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest), I-2 and I-3 are done**; six remain, all **S**, plus the small
-I-1a residue on the landing page. D-31 explains why that ranks as hardening in
+badges. **I-1 (the largest), I-2, I-3 and I-4 are done**; five remain, all **S**, plus the
+small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
 
@@ -422,7 +441,7 @@ credibility rather than about its correctness, and that judgement belongs in thi
     **Remaining, and now tracked as `TASKS.md` → I-1a:** `pages/Landing.tsx` still prints
     four invented platform statistics pre-login, which cannot be fixed by reading real
     data without a scope decision on the authenticated metrics endpoint.
-19. ✅ **Resolved (uncommitted, 2026-09-04) — the requirement screens no longer claim to
+19. ✅ **Resolved (`b5e09ee`, 2026-09-04) — the requirement screens no longer claim to
     drive matching.** Re-verified that `matching.py` never references `Requirement`, then
     corrected seven strings across the desktop and mobile requirement surfaces plus four
     toasts that promised donor visibility no donor screen provides. `daily_recurring` is
@@ -440,9 +459,10 @@ credibility rather than about its correctness, and that judgement belongs in thi
 21. **Verification and notification settings that are pure display.** Donor screens show an
     unconditional "Verified Institutional Donor" and "FSSAI Hygiene Standards Compliant"
     for a role the data model has **no** verification concept for (`is_verified` exists on
-    `Recipient` only); ten preference toggles across four profile screens are `useState`
-    and reach no server, one of them promising to "Auto-accept best match". Contrast
-    `NGOProfile`, which reads the real `me.isVerified` correctly.
+    `Recipient` only) — still open as I-5. The notification half is **fixed**: the ten
+    `useState` toggles across four profile screens, one of them promising to "Auto-accept
+    best match", are removed (I-4, D-36). Contrast `NGOProfile`, which reads the real
+    `me.isVerified` correctly.
 22. **Smaller, same family:** "En route on vehicle" renders on a `COMPLETED` donation
     because the line ignores `status`; `StatusTimeline` shows "Matched · Current" with no
     hint that the deadline passed, though `lib/time.ts` already computes "Overdue"; three

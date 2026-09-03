@@ -1157,3 +1157,48 @@ graph is now accounted for, and the conclusion is recorded in `ARCHITECTURE.md`.
 has no `TRANSITION_ROLES` entry, so `.get(target, set())` refuses it 403 for every role
 including admin — a dead edge, failing closed. It is a lifecycle-modelling question, not a
 security one, and is left for the Project Manager rather than resolved here.
+
+---
+
+## D-36 · A dead toggle is removed, not disabled **[documented]**
+
+**Decision.** The ten notification preference toggles across the four profile screens are
+**deleted**, not relabelled, greyed out or badged "coming soon". Surrounding text that
+asserted a delivery event — a kitchen being notified, an organisation being told, a
+courier receiving a dispatch alert, a pickup being *offered* to a courier — is reworded to
+what the system does. `is_available` is untouched. This is D-31 applied to notifications
+(the QA audit's observation 5, tracked as I-4); nothing about it is a new principle.
+
+**Reasoning.**
+
+- **There is nothing to wire to, and this was checked rather than assumed.** The backend
+  contains no occurrence of `notif`, `sms`, `smtp`, `twilio`, `sendgrid`, `fcm` or
+  `websocket`; the only `email` is a login identity. There is no table, no provider, no
+  queue and no worker. The toggles were `useState` that reset on remount.
+- **Removed rather than disabled, because they were never settings.** A disabled control
+  still says "this preference exists and will work later" — a roadmap commitment the
+  project has not made, and one D-31 permits only where a phase label appears at the point
+  of the claim. `FutureIntelligenceSection` earns its `SMS`/`dispatch` mentions that way
+  (`status: 'Planned'`, `phase: 'Phase 2'`) and is deliberately left alone; a lone greyed
+  checkbox on a settings screen carries no such frame. The desktop donor's pair was the
+  worst case, because the form's own submit button then answered *"Profile saved."*
+- **The adjacent prose mattered more than the controls.** A toggle a user never touches
+  claims less than a receipt screen reading *"Kitchen notified · awaiting accept"*, which
+  states that a message was delivered as a completed step. Those four were reworded rather
+  than deleted, because each sits beside something real — a donation was listed, a match
+  was scored, a duty flag was saved.
+- **The availability toasts were the subtle case.** `is_available` genuinely persists
+  through `PATCH /volunteers/me` and appears on the courier roster, so the *control* is
+  real — but nothing dispatches on it. Every courier still sees the same unclaimed
+  `ACCEPTED` pool whatever the flag says (`donations._readable_by`), so *"New pickups will
+  not be offered to you"* was false in a way that could cost a courier work they thought
+  they had declined. The wording now describes what the flag actually is: a status other
+  organisations can see.
+
+**Constraints.** No backend file changed; no schema, migration, endpoint or API contract.
+Nothing was substituted for the removed state — no `localStorage`, no mock feed, no
+simulated delivery — because a preference that persists but still reaches nothing is the
+same false claim with a longer lifetime.
+
+**Scope.** The four profile screens and the two donation-creation surfaces. Real
+notification delivery remains unbuilt and unscheduled (`TASKS.md` `R-28`).

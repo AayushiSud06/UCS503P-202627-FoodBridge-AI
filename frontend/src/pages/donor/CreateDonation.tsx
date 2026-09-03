@@ -437,7 +437,9 @@ export default function CreateDonation() {
         <div className="flex items-start gap-2 text-xs text-gray-400 pb-4">
           <Info size={13} className="mt-0.5 shrink-0" />
           <span>
-            Upon listing, FoodLink AI will instantly calculate distance and capacity utility scores to notify the best recipient organization.
+            Upon listing, FoodLink scores nearby verified organisations on distance and
+            capacity and records the best match. Organisations see your donation when they
+            browse available listings.
           </span>
         </div>
       </form>

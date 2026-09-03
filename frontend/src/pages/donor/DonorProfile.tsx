@@ -19,8 +19,6 @@ export default function DonorProfile() {
     phone: '',
     location: '',
     operatingHours: '',
-    notificationEmail: true,
-    notificationSMS: true,
   });
 
   const handleSave = (e: React.FormEvent) => {
@@ -142,26 +140,10 @@ export default function DonorProfile() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="flex items-center gap-2.5 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={profile.notificationEmail}
-                onChange={e => setProfile({ ...profile, notificationEmail: e.target.checked })}
-                className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-              />
-              <span>Send me real-time email updates when an NGO accepts a donation</span>
-            </label>
-            <label className="flex items-center gap-2.5 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={profile.notificationSMS}
-                onChange={e => setProfile({ ...profile, notificationSMS: e.target.checked })}
-                className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-              />
-              <span>Send SMS alerts when a volunteer arrives for food pickup</span>
-            </label>
-          </div>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Track a donation's progress on your dashboard — it updates each time an
+            organisation accepts, a courier collects, and the delivery is confirmed.
+          </p>
         </div>
 
         {/* Submit */}

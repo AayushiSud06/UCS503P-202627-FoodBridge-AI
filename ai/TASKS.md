@@ -1,8 +1,9 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-04. The D-34 lifecycle write-authorization
-> fix is now committed (`551c96d`); on top of it the working tree carries the
-> **uncommitted** D-35 follow-up described under *Completed*.
+> Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
+> committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8`. On top
+> of those the working tree carries the **uncommitted** I-4 notification-honesty pass
+> described under *Backlog → I*.
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -39,8 +40,11 @@ CI → recipient read scope → auth rate limiting → courier claim race — is
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 (`e8a8178`) and I-2 (`fcbd03b`) are committed; I-3 is done and sitting uncommitted
-in the working tree** (2026-09-04). I-1: the six per-role impact surfaces and two dashboards no longer
+**I-1 (`e8a8178`), I-2 (`fcbd03b`) and I-3 (`b5e09ee`) are committed; I-4 is done and
+sitting uncommitted in the working tree** (2026-09-04). I-4: the ten dead notification
+toggles are gone from all four profile screens and the "notified / dispatch alert /
+will be offered pickups" claims around them are reworded to what the system does
+(`DECISIONS.md` D-36); real volunteer availability is untouched and re-verified. I-1: the six per-role impact surfaces and two dashboards no longer
 print invented figures, computed from one module for desktop and `/m/*` (`DECISIONS.md`
 D-32). I-2: the routing, travel-time and live-GPS claims are gone, invented distance
 fallbacks are replaced by an unavailable state, and one selector decides which
@@ -70,7 +74,7 @@ What the audit did change is what the list looks like when that call is made:
 - **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
   D-31 records why an interface claim the system cannot honour is a defect in a project
   whose evaluation rests on evidence. Most of its items are **S**, and the two a demo
-  audience sees first (I-1, I-2) are now both done.
+  audience sees first (I-1, I-2) are now both done, as are I-3 and I-4.
 - **Group E is still the largest block and is still ungated** — the courier claim was
   the last correctness prerequisite for Postgres, and it landed in `e919f7b`.
 - **Group F is unchanged and confirmed.** QA independently re-observed all three
@@ -78,7 +82,8 @@ What the audit did change is what the list looks like when that call is made:
 
 **The audit's own recommended order**, offered as analysis and not as a commitment:
 ~~**I-1** (impact figures)~~ and ~~**I-2** (live-GPS and routing claims)~~ **— both done,
-2026-09-03** and ~~**I-3** (requirement matching claims)~~ **— done 2026-09-04** → **F**
+2026-09-03**, ~~**I-3** (requirement matching claims)~~ and ~~**I-4** (notification
+settings)~~ **— both done 2026-09-04** → **F**
 (the three match-score follow-ups, one sitting) → **E** (Postgres, once the demo-facing
 claims are true). The reasoning is in *Group I*'s header:
 the cheapest way to stop over-claiming is to stop printing the claims, and that has to
@@ -371,7 +376,7 @@ Places where a shipped feature is incomplete — not new ideas.
       `status` badge — that is the labelling D-31 asks for.
 
 - [x] **I-3 · Stop claiming requirements drive matching.** `[QA-2 · QA-11 · repo]` — **done,
-      uncommitted working tree, 2026-09-04.** Re-verified against the source first:
+      commit `b5e09ee`, 2026-09-04.** Re-verified against the source first:
       `matching.py` imports only `Donation` and `Recipient`, `score_pair` takes only those
       two, `MatchOut` carries no requirement field, `select(Recipient)` in the ranking paths
       loads no `requirements` relationship, and the only readers of the table in the whole
@@ -400,18 +405,36 @@ Places where a shipped feature is incomplete — not new ideas.
       a `done: false` / `status: 'Planned'` badge, which is exactly the labelling D-31
       asks for.
 
-- [ ] **I-4 · Stop offering notification settings that reach nothing.** `[QA-5 · repo]` — **S**
-      Ten toggles across four screens (2 + 3 + 3 + 2), none of which is sent to the server or
-      anywhere — they are `useState` and reset on remount. `pages/donor/DonorProfile.tsx`
-      ("real-time email updates…", "SMS alerts…") is the worst case, because its submit
-      button then answers *"Profile saved — Your contact details have been updated."*
-      `mobile/DonorProfile.tsx:48` is the most misleading single one: **"Auto-accept best
-      match"** claims an automatic lifecycle transition, not just an alert. Also
-      `mobile/NGOProfile.tsx:66–74` and `mobile/VolunteerProfile.tsx:60–61`. The file
-      already carries an honest comment saying these are not saved; the UI does not repeat
-      it. Either mark them plainly as not yet active or remove them until R-28 exists.
-      ⚠️ Do **not** sweep up `VolunteerProfile.tsx`'s availability checkbox — `is_available`
-      is a real `VolunteerUpdate` field and that screen is correctly wired.
+- [x] **I-4 · Stop offering notification settings that reach nothing.** `[QA-5 · repo]` —
+      **done, uncommitted working tree, 2026-09-04.** Confirmed against the source first:
+      the backend contains no occurrence of `notif`, `sms`, `smtp`, `twilio`, `sendgrid`,
+      `fcm` or `websocket` — there is no delivery mechanism of any kind to wire a
+      preference to.
+
+      **All ten toggles removed** rather than relabelled (2 + 3 + 3 + 2): the desktop
+      donor's "real-time email updates…" / "SMS alerts…" checkboxes, whose submit button
+      answered *"Profile saved"*; `mobile/DonorProfile.tsx`'s "Auto-accept best match"
+      (which claimed an automatic lifecycle transition, not merely an alert), "Pickup
+      reminders" and "Weekly impact digest"; `mobile/NGOProfile.tsx`'s whole
+      **Notifications** section; and `mobile/VolunteerProfile.tsx`'s "Only alert me under
+      3 km" / "Available after 8 PM". Removal over labelling because none of them is a
+      *setting* — there is nothing for a "not yet active" badge to be about, and a disabled
+      control still advertises a roadmap the project has not committed to (D-31, D-36).
+
+      **Four adjacent claims reworded**, not just the controls: `mobile/CreateDonationCamera`'s
+      *"Kitchen notified · awaiting accept"* → *"Listed for kitchens · awaiting accept"*;
+      `pages/donor/CreateDonation`'s *"…to notify the best recipient organization"* → the
+      scoring it really does, with organisations seeing the donation when they browse;
+      the desktop volunteer's *"Active & ready to receive new pickup dispatch alerts"* →
+      *"On duty — show me as available on the courier roster"*; and both availability
+      toasts, which promised *"you will be offered pickups" / "no new pickups will be
+      offered"* — an offer mechanism that does not exist, since every courier sees the same
+      open pool regardless of the flag.
+
+      ⚠️ The volunteer **availability** control was preserved on both screens, as this entry
+      required: `is_available` is a real `VolunteerUpdate` field. Verified end-to-end after
+      the change — toggling it in the mobile UI wrote `is_available = 0` to the database.
+      Nothing was replaced with `localStorage`, a mock, or a new endpoint.
 
 - [ ] **I-5 · Remove or ground the donor verification badges.** `[QA-6 · repo]` — **S**
       `is_verified` exists on `Recipient` only (`models.py:165`); there is **no donor
@@ -573,7 +596,7 @@ external.
 
 ## Completed (verified in the repository)
 
-### Lifecycle authorization audit (Task 14) — **uncommitted working-tree change** `[repo]`
+### Lifecycle authorization audit (Task 14) — committed `efd5fd8` `[repo]`
 - [x] **Every edge of `ALLOWED_TRANSITIONS` enumerated against `TRANSITION_ROLES` and
       `OWNED_TRANSITIONS`.** Three edges act on an already-bound donation with no
       ownership gate. Two are sound: `ACCEPTED → EXPIRED` (admin-only, unrestricted scope)
@@ -655,7 +678,7 @@ existing items in F and G.
 | 2 | Requirements do not drive matching | **Misleading UI claim** — verified: `matching.py` never references `Requirement` | ✅ wording done → I-3 · building it → *Blocked* |
 | 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint is already open and the client already fetches it | *Blocked* |
 | 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
-| 5 | Notification settings send nothing | **Misleading UI claim** — 11 dead toggles, 4 screens | I-4 · delivery itself is `R-28` |
+| 5 | Notification settings send nothing | **Misleading UI claim** — 10 dead toggles, 4 screens | ✅ toggles and claims removed by I-4 · delivery itself → `R-28` |
 | 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | I-5 |
 | 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | I-7 · sweep → group E · `B-1` unchanged |
 | 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |

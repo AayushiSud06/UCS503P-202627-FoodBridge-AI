@@ -1,16 +1,12 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth, useCurrentUser } from '../context/AuthContext';
-import { MSection, MDetail, MToggle } from './parts';
+import { MSection, MDetail } from './parts';
 
 export default function DonorProfile() {
   const navigate = useNavigate();
   const user = useCurrentUser();
   const { signOut } = useAuth();
-  // Preferences have no server-side home yet, so they stay local.
-  const [prefs, setPrefs] = useState({ autoAccept: true, reminders: true, digest: false });
-  const toggle = (k: keyof typeof prefs) => setPrefs(p => ({ ...p, [k]: !p[k] }));
 
   const details: [string, string][] = [
     ['Organisation', user.organization ?? '—'],
@@ -43,11 +39,6 @@ export default function DonorProfile() {
       {details.map(([k, v]) => (
         <MDetail key={k} label={k} value={v} />
       ))}
-
-      <MSection title="Preferences" />
-      <MToggle label="Auto-accept best match" checked={prefs.autoAccept} onChange={() => toggle('autoAccept')} />
-      <MToggle label="Pickup reminders" checked={prefs.reminders} onChange={() => toggle('reminders')} />
-      <MToggle label="Weekly impact digest" checked={prefs.digest} onChange={() => toggle('digest')} />
 
       <div className="p-5">
         <button type="button" className="m-btn-secondary" onClick={handleSignOut}>

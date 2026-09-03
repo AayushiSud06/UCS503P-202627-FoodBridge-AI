@@ -1,18 +1,14 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart2, LogOut, ShieldCheck, Clock } from 'lucide-react';
 import { useMyRecipient } from '../context/AppContext';
 import { useAuth, useCurrentUser } from '../context/AuthContext';
-import { MSection, MDetail, MToggle } from './parts';
+import { MSection, MDetail } from './parts';
 
 export default function NGOProfile() {
   const navigate = useNavigate();
   const user = useCurrentUser();
   const me = useMyRecipient();
   const { signOut } = useAuth();
-  // Notification preferences have no server-side home yet, so they stay local.
-  const [prefs, setPrefs] = useState({ pushMatches: true, onlyMatching: false, digest: true });
-  const toggle = (k: keyof typeof prefs) => setPrefs(p => ({ ...p, [k]: !p[k] }));
 
   const handleSignOut = () => {
     signOut();
@@ -59,19 +55,6 @@ export default function NGOProfile() {
       <MDetail label="Donations accepted" value={me?.acceptedDonations ?? 0} />
       <MDetail label="Contact" value={me?.phone ?? '—'} />
       <MDetail label="Email" value={user.email} />
-
-      <MSection title="Notifications" />
-      <MToggle
-        label="Push new matches"
-        checked={prefs.pushMatches}
-        onChange={() => toggle('pushMatches')}
-      />
-      <MToggle
-        label="Only alert above 85% match"
-        checked={prefs.onlyMatching}
-        onChange={() => toggle('onlyMatching')}
-      />
-      <MToggle label="Weekly intake digest" checked={prefs.digest} onChange={() => toggle('digest')} />
 
       <div className="p-5 space-y-2.5">
         <button type="button" className="m-btn-secondary" onClick={() => navigate('/m/ngo/impact')}>

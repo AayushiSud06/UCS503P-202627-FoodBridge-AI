@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart2, LogOut, Star } from 'lucide-react';
 import { useApp, useMyVolunteer } from '../context/AppContext';
@@ -13,9 +12,6 @@ export default function VolunteerProfile() {
   const { setAvailability } = useApp();
   const { signOut } = useAuth();
   const { run, isBusy } = useAction();
-  // Preferences are not stored server-side yet, so they stay local.
-  const [prefs, setPrefs] = useState({ nearby: true, night: false });
-  const toggle = (k: keyof typeof prefs) => setPrefs(p => ({ ...p, [k]: !p[k] }));
 
   const available = me?.isAvailable ?? true;
 
@@ -24,8 +20,8 @@ export default function VolunteerProfile() {
       success: {
         message: available ? 'Off duty' : 'On duty',
         subtitle: available
-          ? 'New pickups will not be offered to you.'
-          : 'You will be offered pickups again.',
+          ? 'Organisations now see you as off duty. Open pickups are still yours to claim.'
+          : 'Organisations now see you as on duty.',
       },
       errorTitle: 'Could not change your availability',
     });
@@ -57,8 +53,6 @@ export default function VolunteerProfile() {
         checked={available}
         onChange={isBusy ? () => {} : toggleAvailability}
       />
-      <MToggle label="Only alert me under 3 km" checked={prefs.nearby} onChange={() => toggle('nearby')} />
-      <MToggle label="Available after 8 PM" checked={prefs.night} onChange={() => toggle('night')} />
 
       <MSection title="Details" />
       <MDetail label="Email" value={user.email} />
