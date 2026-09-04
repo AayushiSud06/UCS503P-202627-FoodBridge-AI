@@ -203,6 +203,7 @@ export interface ApiUser {
   email: string;
   role: UserRole;
   organization: string | null;
+  phone: string | null;
   initials: string;
   recipientId: number | null;
   volunteerId: number | null;

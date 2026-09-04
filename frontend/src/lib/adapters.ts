@@ -31,6 +31,7 @@ export function toUser(api: ApiUser): User {
     role: api.role,
     avatarInitials: api.initials,
     organization: api.organization ?? undefined,
+    phone: api.phone ?? undefined,
     // Which record this account acts through when filtering donations. Donors
     // act as themselves; NGOs and couriers act through their profile row.
     entityId:

@@ -1,14 +1,15 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-39. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-40. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
 > **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`. **D-34**/**D-35**
 > (lifecycle write authorization) are committed as `551c96d` and `efd5fd8`, **D-36**
-> (notifications, I-4) as `6863451`, **D-37** (verification wording, I-5) as `6c82739` and
-> **D-38** (courier status display, I-6) as `b41c4e6`; **D-39** (overdue deadlines, I-7) is
-> in the working tree, uncommitted.
+> (notifications, I-4) as `6863451`, **D-37** (verification wording, I-5) as `6c82739`,
+> **D-38** (courier status display, I-6) as `b41c4e6` and **D-39** (overdue deadlines, I-7)
+> as `fc91091`; **D-40** (an account reads its own contact details, I-9) is in the working
+> tree, uncommitted.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1334,3 +1335,44 @@ every other deadline surface, so it appears on the next render after the deadlin
 
 **Scope.** `frontend/src/components/StatusTimeline.tsx`, and therefore the three detail
 views that render it. The `CANCELLED` and `EXPIRED` panels are unchanged.
+
+---
+
+## D-40 · An account can read the contact details it is allowed to write **[documented]**
+
+**Decision.** `UserOut` carries `phone`. A field the holder may set — at registration
+through `RegisterRequest`, and afterwards through `ProfileUpdate` — must be readable by
+that holder, or the interface is asked to display something it cannot obtain. This closes
+a write-only field rather than opening a new one; no endpoint, permission or column
+changed.
+
+**Reasoning.**
+
+- **Write-only was the actual defect behind I-9.** `User.phone` has always been real
+  column data and the donor profile form already sent it on save, but the only schema an
+  account receives about *itself* left it out. So the number could be saved and never seen
+  again, and the form's `phone: ''` was the only value available to it. The audit read that
+  empty string as a lazy default in the component; it was a gap in the response.
+- **It widens nobody else's contact data.** `UserOut` appears in exactly five places, all
+  in `routers/auth.py`, and every one describes the caller's own account: register, login,
+  `GET /me`, `PATCH /me`, `POST /password`. Other people's numbers are reached only through
+  the admin-only `UserAdminOut` and through `RecipientOut`, whose scoping was closed
+  separately (S-2). Adding the field here therefore has no read-scope consequence — which
+  is why it was checked before the line was written rather than after.
+- **The alternative was worse.** Leaving the response alone would have meant either a form
+  that silently discards what it shows, or a second request to some other endpoint to
+  recover a value the account had just sent. Both cost more than one optional field.
+- **A donor still has no profile row, and none was invented.** NGOs have `Recipient`,
+  couriers have `Volunteer`, donors have neither, and no user-level location column exists.
+  The donor form's *Default Pickup Address* and *Operating Hours* consequently stay local
+  and empty; giving them a home is a modelling decision the project has not made.
+
+**Constraints.** No new endpoint, no schema table change, no migration — `phone` was
+already on `users`. `ProfileUpdate` is unchanged, so what an account may *write* about
+itself is exactly what it was. `UserAdminOut` still declares `phone` itself; the
+redeclaration is now redundant but harmless, and was left rather than reordering an
+admin response for cosmetics.
+
+**Scope.** `schemas.UserOut`, its three frontend mirrors (`ApiUser`, `User`,
+`adapters.toUser`) and the donor profile form's initialiser. `pages/donor/DonorProfile.tsx`
+is the only screen that edits the field; `mobile/DonorProfile.tsx` lists the email only.

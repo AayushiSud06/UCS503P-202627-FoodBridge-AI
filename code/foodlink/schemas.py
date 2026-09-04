@@ -107,6 +107,14 @@ class UserOut(Schema):
     email: EmailStr
     role: UserRole
     organization: str | None = None
+    #: The holder's own number. `ProfileUpdate` lets an account set this and
+    #: `RegisterRequest` lets it arrive at sign-up, so leaving it out here made
+    #: it write-only: the profile form could save a number and never show it
+    #: again. Every response carrying `UserOut` describes the caller's own
+    #: account — register, login, `GET/PATCH /me`, `POST /password` — so this
+    #: widens nobody else's contact data. Other people's numbers stay behind
+    #: the admin view (`UserAdminOut`) and `RecipientOut`.
+    phone: str | None = None
     initials: str
     #: Which record this account acts for. Exactly one is set for ngo and
     #: volunteer accounts; donors act as themselves and admins act for nobody.

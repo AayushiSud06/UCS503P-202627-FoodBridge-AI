@@ -9,14 +9,16 @@ export default function DonorProfile() {
   const { updateProfile } = useAuth();
   const { run, isBusy } = useAction();
 
-  // Name, organisation and phone are stored on the account. The rest are
-  // local preferences the API does not model yet — kept, but not pretended
-  // to be saved anywhere.
+  // Name, organisation and phone are stored on the account, so all three are
+  // read back from it. Pickup address and operating hours are local
+  // preferences the API does not model for a donor — a donor account has no
+  // profile row of its own, unlike an NGO's recipient or a courier's volunteer
+  // record — so they start empty and are not pretended to be saved anywhere.
   const [profile, setProfile] = useState({
     name: user.name,
     email: user.email,
     organization: user.organization ?? '',
-    phone: '',
+    phone: user.phone ?? '',
     location: '',
     operatingHours: '',
   });

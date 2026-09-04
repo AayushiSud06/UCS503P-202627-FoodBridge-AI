@@ -33,6 +33,8 @@ export interface User {
   role: UserRole;
   avatarInitials: string;
   organization?: string;
+  /** Stored on the account itself, not on a role profile row. */
+  phone?: string;
   /**
    * Id this account owns inside donation records: `donorId` for donors,
    * `recipientId` ("r-*") for NGOs, `volunteerId` ("v-*") for volunteers.

@@ -3,9 +3,10 @@
 > Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
 > committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are
 > the I-4 notification-honesty pass (`6863451`), the I-5 trust/verification pass
-> (`6c82739`), the I-6 courier status-display fix (`b41c4e6`) and the I-7 overdue-deadline
-> fix (`fc91091`). On top of those the working tree carries the **uncommitted** I-8
-> match-criteria wording fix described under *Backlog → I*. Context: `PROJECT_STATE.md`.
+> (`6c82739`), the I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix
+> (`fc91091`) and the I-8 match-criteria wording fix (`ed56bd5`). On top of those the
+> working tree carries the **uncommitted** I-9 donor-profile binding fix described under
+> *Backlog → I*. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -29,14 +30,16 @@
 ## Current
 
 **Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`. 162 backend tests pass (untouched by the
-current work, which is frontend-only); `tsc --noEmit` and `tsc && vite build` are clean.
+markers in `code/foodlink/` or `frontend/src/`. 168 backend tests pass; `tsc --noEmit` and
+`tsc && vite build` are clean.
 
-**Uncommitted in the working tree (2026-09-04): I-8, the two wrong criterion captions in
-the match explainability panel.** `MatchAnalysis.tsx` described *Recipient Capacity* as
-cold storage and *Pickup Availability* as recipient intake volunteers; `matching.py` reads
-neither. Both captions now say what their criterion actually measures. One frontend file,
-two strings and a comment, no scoring change — see *Backlog → I*.
+**Uncommitted in the working tree (2026-09-04): I-9, the donor profile's field bindings.**
+`User.phone` was writable — through registration and `PATCH /auth/me` — but absent from
+`UserOut`, the only view an account gets of itself, so the donor form saved a number it
+could never read back and started every session with the field blank. `UserOut` now
+carries `phone`, and the form initialises from it. One schema field, its three frontend
+mirrors, and one initialiser — see *Backlog → I*. **Two of the three claims the audit
+filed under I-9 were wrong**, and are corrected there.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
@@ -44,8 +47,11 @@ first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-repo
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
 **I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`), I-5 (`6c82739`),
-I-6 (`b41c4e6`) and I-7 (`fc91091`) are committed; I-8 is done and sitting uncommitted in
-the working tree** (2026-09-04). I-8: the explainability panel's *Recipient Capacity* and
+I-6 (`b41c4e6`), I-7 (`fc91091`) and I-8 (`ed56bd5`) are committed; I-9 is done and sitting
+uncommitted in the working tree** (2026-09-04). With it **every group-I item except I-1a is
+closed**, and I-1a is a decision, not an implementation. I-9: an account can now read the
+phone number it is allowed to write, and the donor profile form initialises from it
+(`DECISIONS.md` D-40). I-8: the explainability panel's *Recipient Capacity* and
 *Pickup Availability* captions now describe what `_capacity_score` and `_deadline_score`
 actually compute. I-7: `StatusTimeline` marks the current step *Overdue* and names the time
 the pickup window closed, in the four statuses where the food has not been collected yet
@@ -526,7 +532,7 @@ Places where a shipped feature is incomplete — not new ideas.
       these rows remains unbuilt (*Backlog → E*). See `DECISIONS.md` D-39.
 
 - [x] **I-8 · Correct the explainability panel's criterion descriptions.** `[QA-12 · D-06]` —
-      **done, uncommitted working tree, 2026-09-04.** Both captions were re-read against
+      **done, commit `ed56bd5`, 2026-09-04.** Both captions were re-read against
       `matching.py` before either was rewritten, and both audit findings were confirmed:
 
       * *Recipient Capacity* said "Cold storage and immediate consumption bandwidth".
@@ -547,14 +553,39 @@ Places where a shipped feature is incomplete — not new ideas.
       criterion still predates the API's `deadlineScore` name — `adapters.toMatchAnalysis`
       already carries a comment saying so — and renaming it was left alone as out of scope.
 
-- [ ] **I-9 · Fix the donor profile form's field wiring.** `[QA-12 · repo]` — **S**
-      `pages/donor/DonorProfile.tsx` binds the input labelled **"Email Address"** to
-      `profile.operatingHours` (line ~120), so the field renders empty and edits an
-      unrelated key; `profile.email` is initialised and never rendered. The same form
-      initialises `phone` and `location` to `''` instead of reading the signed-in account,
-      unlike `VolunteerProfile.tsx`, which syncs from `useMyVolunteer()` in a `useEffect`.
-      Grouped here rather than in B because it is the same screen as I-4 and I-5 and should
-      be opened once.
+- [x] **I-9 · Fix the donor profile form's field wiring.** `[QA-12 · repo]` — **done,
+      uncommitted working tree, 2026-09-04.** Each of the audit's three claims was checked
+      against the source before anything was changed, and **two of them were wrong**:
+
+      * *"The input labelled Email Address is bound to `profile.operatingHours`"* — **not
+        true, and never was.** Every label/input pair on the form is correctly matched, at
+        HEAD and at the audit's own commit (`23c27f4`): the email input reads
+        `profile.email`, rendered read-only with the title *"Your sign-in address. An
+        administrator can change it."* Verified with `git show 23c27f4:` and in the running
+        app. A misread, not a defect.
+      * *"`profile.email` is initialised and never rendered"* — **not true** for the same
+        reason. It is initialised from `user.email` and it is rendered.
+      * *"`phone` and `location` initialise to `''` instead of reading the signed-in
+        account"* — **true of `phone`, and the cause was in the API, not the form.**
+
+      **The real defect.** `User.phone` is real column data: `RegisterRequest` accepts it at
+      sign-up, `ProfileUpdate` lets the holder change it, and the donor form already sent it
+      on save. But `UserOut` — the only schema an account receives about *itself* (register,
+      login, `GET|PATCH /auth/me`, `POST /auth/password`) — omitted `phone`, exposing it
+      solely through the admin-only `UserAdminOut`. The field was therefore **write-only**:
+      a donor could save a number and never see it again, and the form's `phone: ''` was the
+      only value available to it rather than laziness. Fixed by adding `phone: str | None`
+      to `UserOut` and mirroring it through `ApiUser` → `User` → `toUser()` → the form's
+      initialiser. See `DECISIONS.md` D-40 for why widening that one response is safe.
+
+      **`location` is a different thing and was left alone.** A donor account has no profile
+      row — NGOs have `Recipient`, couriers have `Volunteer`, donors have neither — and no
+      user-level location column exists anywhere. `RegisterRequest`'s `location`, `latitude`
+      and `longitude` are NGO-only and seed the recipient organisation. So *Default Pickup
+      Address* and *Operating Hours* have nothing to read from, correctly start empty, and
+      were not given an invented source. The comparison with `VolunteerProfile.tsx`'s
+      `useEffect` does not carry over for the same reason: it syncs from a `Volunteer` row
+      that loads asynchronously, while `user` is already present before this page renders.
 
 ---
 
@@ -754,7 +785,7 @@ existing items in F and G.
 | 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · line made status-aware by I-6 |
 | 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | ✅ I-2 |
 | 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | ✅ relabelled "Needed daily" by I-3 · real recurrence → `R-35` |
-| 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1 · ✅ captions corrected by I-8 · I-9 |
+| 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1 · ✅ captions corrected by I-8 · ⚠️ the email-binding claim was **wrong** — I-9 fixed the real defect instead (a write-only `phone`) |
 
 - [x] **The backend was checked and largely cleared.** Every server-computed number the
       audit traced is derived from real rows: `/api/metrics` from `status_events` (D-01),

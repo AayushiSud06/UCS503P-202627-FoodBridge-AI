@@ -5,9 +5,10 @@
 > Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
 > write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
 > follow-up as `efd5fd8` — as are the I-4 notification-honesty pass (`6863451`), the I-5
-> trust/verification pass (`6c82739`), the I-6 courier status-display fix (`b41c4e6`) and
-> the I-7 overdue-deadline fix (`fc91091`). On top of those the working tree carries the
-> **uncommitted** I-8 match-criteria wording fix described below. A QA audit was run
+> trust/verification pass (`6c82739`), the I-6 courier status-display fix (`b41c4e6`), the
+> I-7 overdue-deadline fix (`fc91091`) and the I-8 match-criteria wording fix (`ed56bd5`).
+> On top of those the working tree carries the **uncommitted** I-9 donor-profile binding
+> fix described below. A QA audit was run
 > against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
 > `TASKS.md`.
 
@@ -31,13 +32,13 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7) and the match-criteria captions (I-8) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 162 tests passing (~105 s): 37 integration + 15 requirement-lifecycle + 14 lifecycle-write-authorization + 13 donation-read-scope + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
+| Backend tests | ✅ 168 tests passing (~130 s): 37 integration + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -75,7 +76,26 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **I-8: the explainability panel describes the
+- **2026-09-04, uncommitted working tree** — **I-9: an account can read the phone number it
+  is allowed to write.** The audit filed three claims here and two were wrong: the donor
+  form's *Email Address* input has been bound to `profile.email` since the first commit, at
+  the audit's own commit included, and that value is rendered — both were verified with
+  `git show 23c27f4:` and in the running app. The third was real, and the cause sat in the
+  API rather than the form. `User.phone` is written at registration (`RegisterRequest`) and
+  by the holder (`ProfileUpdate` via `PATCH /auth/me`), and the donor form already sent it
+  on save — but `UserOut`, the only schema an account receives about itself, omitted it, so
+  the number was **write-only** and the form had nothing to initialise from. `UserOut` now
+  carries `phone`, mirrored through `ApiUser` → `User` → `toUser()`, and the form reads it.
+  Every response carrying `UserOut` describes the caller's own account, so no other
+  person's contact data is widened; other people's numbers stay behind `UserAdminOut` and
+  `RecipientOut` (`DECISIONS.md` D-40). *Default Pickup Address* and *Operating Hours* were
+  left empty on purpose: a donor account has no profile row and no location column exists
+  for one, so there is nothing to read and none was invented. Round-trip verified in the
+  running app — seeded number loads, an edit saves through `PATCH /auth/me`, a full reload
+  shows the new value, and an account with no number shows an empty field. 168 backend
+  tests pass.
+
+- **2026-09-04, commit `ed56bd5`** — **I-8: the explainability panel describes the
   criteria the matcher actually scores.** Two of the four captions in
   `components/MatchAnalysis.tsx` named inputs `matching.py` never reads. *Recipient
   Capacity* claimed "Cold storage and immediate consumption bandwidth", where
@@ -377,10 +397,11 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest), I-2, I-3, I-4, I-5, I-6, I-7 and I-8 are done**; one remains
-(**I-9**, **S**), plus the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
-this project specifically: the platform's argument is that its numbers are evidence, and
-fabricated ones sitting beside real ones cost more here than they would elsewhere.
+badges. **All nine are now done** — I-1 (the largest) through I-9 — leaving only the
+I-1a residue on the landing page, which is a decision rather than an implementation.
+D-31 explains why that ranks as hardening in this project specifically: the platform's
+argument is that its numbers are evidence, and fabricated ones sitting beside real ones
+cost more here than they would elsewhere.
 
 **The order is still a Project Manager call.** Two things worth carrying into it. First,
 group I is cheap and demo-facing: it is what an evaluator sees in the first five minutes,
@@ -573,12 +594,11 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. **I-1 through I-8 are done**, leaving only I-9 (**S**, one form), so
-   the audit's suggested order now points at the three group-F match-score follow-ups in
-   one sitting → group E. I-1a (the landing page's
-   invented statistics) is the small residue I-1 left, and it is the one group-I item that
-   cannot simply be implemented: it needs a decision on whether any metric may be read
-   without authentication.
+   promoted into it. **Group I is finished** (I-1 through I-9), so the audit's suggested
+   order now points at the three group-F match-score follow-ups in one sitting → group E.
+   I-1a (the landing page's invented statistics) is the small residue I-1 left, and it is
+   the one group-I item that cannot simply be implemented: it needs a decision on whether
+   any metric may be read without authentication.
 2. Answer at least the cheap half of the four decisions the audit opened
    (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
    real impact report — can be answered "not now" at zero cost, because group I removes the
