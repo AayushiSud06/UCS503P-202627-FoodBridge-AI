@@ -1,5 +1,6 @@
-import { Check, Clock } from 'lucide-react';
+import { AlertTriangle, Check, Clock } from 'lucide-react';
 import type { Donation, DonationStatus } from '../types';
+import { deadlineStatus, formatClock, URGENCY_STYLES } from '../lib/time';
 
 interface TimelineStep {
   status: DonationStatus;
@@ -23,6 +24,17 @@ const STATUS_ORDER: DonationStatus[] = [
   'PICKED_UP', 'DELIVERED', 'COMPLETED',
 ];
 
+/**
+ * The states in which the pickup deadline is still something that can be
+ * missed. Once the food is collected the deadline has been answered, so a
+ * `PICKED_UP`, `DELIVERED` or `COMPLETED` donation is never overdue however
+ * long ago that time was — the same rule as D-38, one field further along:
+ * a value that outlives the moment it described is not current state.
+ */
+const AWAITING_COLLECTION: DonationStatus[] = [
+  'AVAILABLE', 'MATCHED', 'ACCEPTED', 'VOLUNTEER_ASSIGNED',
+];
+
 function formatTimestamp(iso: string | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -38,6 +50,13 @@ export default function StatusTimeline({ donation }: StatusTimelineProps) {
   // through it, so no step is marked done.
   const isTerminatedEarly = donation.status === 'CANCELLED' || donation.status === 'EXPIRED';
   const currentIdx = isTerminatedEarly ? -1 : STATUS_ORDER.indexOf(donation.status);
+
+  // The deadline has gone and the food is still at the donor's. The row is
+  // *not* expired — nothing sweeps it, and this component must not pretend
+  // otherwise — so this annotates the state it is in rather than replacing it.
+  const isOverdue =
+    AWAITING_COLLECTION.includes(donation.status) &&
+    deadlineStatus(donation.pickupDeadline).urgency === 'expired';
 
   return (
     <div className="space-y-0">
@@ -72,7 +91,7 @@ export default function StatusTimeline({ donation }: StatusTimelineProps) {
 
             {/* Content */}
             <div className={`pb-6 ${isLast ? 'pb-0' : ''}`}>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <p className={`text-sm font-medium ${isDone ? 'text-gray-900' : 'text-gray-400'}`}>
                   {step.label}
                 </p>
@@ -81,10 +100,22 @@ export default function StatusTimeline({ donation }: StatusTimelineProps) {
                     Current
                   </span>
                 )}
+                {isCurrent && isOverdue && (
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${URGENCY_STYLES.expired.chip}`}
+                  >
+                    <AlertTriangle size={11} /> Overdue
+                  </span>
+                )}
               </div>
               <p className={`text-xs ${isDone ? 'text-gray-500' : 'text-gray-300'} mt-0.5`}>
                 {step.description}
               </p>
+              {isCurrent && isOverdue && (
+                <p className={`text-xs font-medium mt-0.5 ${URGENCY_STYLES.expired.text}`}>
+                  Pickup deadline passed at {formatClock(donation.pickupDeadline)}
+                </p>
+              )}
               {isDone && ts && (
                 <p className="text-xs text-emerald-600 font-medium mt-0.5">{formatTimestamp(ts)}</p>
               )}

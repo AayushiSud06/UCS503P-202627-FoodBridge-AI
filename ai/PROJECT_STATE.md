@@ -4,9 +4,10 @@
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
 > write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
-> follow-up as `efd5fd8` — as are the I-4 notification-honesty pass (`6863451`) and the I-5
-> trust/verification pass (`6c82739`). On top of those the working tree carries the
-> **uncommitted** I-6 courier status-display fix described below. A QA audit was run
+> follow-up as `efd5fd8` — as are the I-4 notification-honesty pass (`6863451`), the I-5
+> trust/verification pass (`6c82739`) and the I-6 courier status-display fix (`b41c4e6`).
+> On top of those the working tree carries the **uncommitted** I-7 overdue-deadline fix
+> described below. A QA audit was run
 > against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
 > `TASKS.md`.
 
@@ -30,7 +31,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5) and the NGO courier status line (I-6) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6) and the overdue pickup deadline (I-7) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -74,7 +75,23 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **I-6: the NGO courier line follows the
+- **2026-09-04, uncommitted working tree** — **I-7: the detail-view timeline says when a
+  pickup deadline has gone.** `components/StatusTimeline.tsx` was driven purely by `status`,
+  so a donation whose collection window closed hours ago read *"Matched · Current"* with no
+  mention of the deadline — the one surface that never showed it, while the list and card
+  surfaces already used `lib/time.deadlineStatus()`. The timeline now calls that same
+  helper on the donation it already holds (no new prop, no change at the three call sites)
+  and marks the current step *Overdue*, naming the time the window closed, in the four
+  statuses where the food is still uncollected. `PICKED_UP`, `DELIVERED` and `COMPLETED`
+  are never marked overdue — the pickup happened, so the deadline has been answered, which
+  is D-38's rule one field along. **No new lifecycle state and no client-side expiry:** the
+  row is still exactly the status the server says it is, and the sweep that would retire
+  these rows remains unbuilt (`TASKS.md` → *Backlog → E*). Verified in the running app
+  against a scratch database holding all ten cases — the four uncollected statuses past
+  deadline, an accepted donation still inside its window, picked-up/delivered/completed
+  past deadline, and the existing `EXPIRED` and `CANCELLED` panels. See `DECISIONS.md` D-39.
+
+- **2026-09-04, commit `b41c4e6`** — **I-6: the NGO courier line follows the
   donation's status, not the presence of a name.** `pages/ngo/NGOAcceptedDonations.tsx`
   picked both the courier name and the "COURIER DISPATCH" caption from `volunteerName`
   alone, on a screen that lists `COMPLETED` donations — so a finished delivery still
@@ -345,7 +362,7 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest), I-2, I-3, I-4, I-5 and I-6 are done**; three remain, all **S**, plus
+badges. **I-1 (the largest), I-2, I-3, I-4, I-5, I-6 and I-7 are done**; two remain, all **S**, plus
 the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
@@ -541,10 +558,12 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. **I-1, I-2 and I-3 are done**, so the audit's suggested order now
-   starts at the three group-F match-score follow-ups in one sitting → group E. I-1a (the
-   landing page's invented statistics) is the small residue I-1 left, and it needs a
-   decision on whether any metric may be read without authentication.
+   promoted into it. **I-1 through I-7 are done**, leaving I-8 and I-9 (both **S**, both
+   on screens nothing else depends on), so the audit's suggested order now points at the
+   three group-F match-score follow-ups in one sitting → group E. I-1a (the landing page's
+   invented statistics) is the small residue I-1 left, and it is the one group-I item that
+   cannot simply be implemented: it needs a decision on whether any metric may be read
+   without authentication.
 2. Answer at least the cheap half of the four decisions the audit opened
    (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
    real impact report — can be answered "not now" at zero cost, because group I removes the

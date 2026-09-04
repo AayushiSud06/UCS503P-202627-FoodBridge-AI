@@ -2,9 +2,10 @@
 
 > Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
 > committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are
-> the I-4 notification-honesty pass (`6863451`) and the I-5 trust/verification pass
-> (`6c82739`). On top of those the working tree carries the **uncommitted** I-6 courier
-> status-display fix described under *Backlog → I*. Context: `PROJECT_STATE.md`.
+> the I-4 notification-honesty pass (`6863451`), the I-5 trust/verification pass
+> (`6c82739`) and the I-6 courier status-display fix (`b41c4e6`). On top of those the
+> working tree carries the **uncommitted** I-7 overdue-deadline fix described under
+> *Backlog → I*. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -31,22 +32,26 @@
 markers in `code/foodlink/` or `frontend/src/`. 162 backend tests pass (untouched by the
 current work, which is frontend-only); `tsc --noEmit` and `tsc && vite build` are clean.
 
-**Uncommitted in the working tree (2026-09-04): I-6, the courier line on the NGO
-accepted-donations screen.** `NGOAcceptedDonations.tsx` derived its dispatch text from
-`volunteerName` alone, so a `COMPLETED` donation still read as one a courier was holding.
-The line is now keyed on `status`. One frontend file, no backend or schema change — see
-*Backlog → I*.
+**Uncommitted in the working tree (2026-09-04): I-7, the overdue pickup deadline in
+`StatusTimeline`.** The detail-view timeline was driven purely by `status`, so a donation
+whose collection window closed hours ago read *"Matched · Current"* with no warning — the
+one surface that never said the deadline had gone. It now annotates the current step when
+the deadline has passed **and** the food is still uncollected. One frontend file, no
+backend or schema change, no client-side expiry — see *Backlog → I*.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`) and I-5 (`6c82739`)
-are committed; I-6 is done and sitting uncommitted in the working tree** (2026-09-04).
-I-6: the NGO accepted-donations courier line is chosen by the donation's status instead of
-by the presence of a courier name, so a `COMPLETED` donation no longer reads as one still
-being carried (`DECISIONS.md` D-38). I-4: the ten dead notification toggles are gone from
+**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`), I-5 (`6c82739`) and
+I-6 (`b41c4e6`) are committed; I-7 is done and sitting uncommitted in the working tree**
+(2026-09-04). I-7: `StatusTimeline` marks the current step *Overdue* and names the time the
+pickup window closed, in the four statuses where the food has not been collected yet
+(`DECISIONS.md` D-39). I-6: the NGO accepted-donations courier line is chosen by the
+donation's status instead of by the presence of a courier name, so a `COMPLETED` donation
+no longer reads as one still being carried (`DECISIONS.md` D-38). I-4: the ten dead
+notification toggles are gone from
 all four profile screens and the claims around them are reworded to what the system does
 (`DECISIONS.md` D-36). I-5: the fabricated donor
 verification badge and the FSSAI compliance panel are gone, and "verified" now appears only
@@ -472,7 +477,7 @@ Places where a shipped feature is incomplete — not new ideas.
       D-37.
 
 - [x] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **done,
-      uncommitted working tree, 2026-09-04.** `pages/ngo/NGOAcceptedDonations.tsx` chose both
+      commit `b41c4e6`, 2026-09-04.** `pages/ngo/NGOAcceptedDonations.tsx` chose both
       the courier name and the dispatch caption from `volunteerName` alone, on a screen whose
       list includes `COMPLETED`. I-2 had already replaced the worst string (*"En route on
       vehicle"*) with *"Courier assigned"*, but the residue was a real misreading: that
@@ -496,15 +501,28 @@ Places where a shipped feature is incomplete — not new ideas.
       print the courier's name with no state claim attached, so neither carries the defect
       and neither was touched.
 
-- [ ] **I-7 · Surface "overdue" where the deadline has passed.** `[QA-7 · repo]` — **S**
-      `lib/time.ts` already computes it — `deadlineStatus()` returns the label *"Overdue"*
-      with `urgency: 'expired'` — and the list and card surfaces use it. `StatusTimeline`
-      does not: it is driven purely by `status`, so a donation whose deadline passed hours
-      ago shows *"Matched · Current"* with no warning. That reading is **not wrong** — the
-      row genuinely is still `MATCHED`, because the expiry sweep is manual (group E) — but
-      the detail view is the one surface that never says the deadline has gone. Pass the
-      deadline state into the timeline; do not invent a new lifecycle state, and do not
-      expire client-side.
+- [x] **I-7 · Surface "overdue" where the deadline has passed.** `[QA-7 · repo]` — **done,
+      uncommitted working tree, 2026-09-04.** `components/StatusTimeline.tsx` was driven
+      purely by `status`, so a donation whose collection window closed hours ago read
+      *"Matched · Current"* with nothing said about the deadline — the detail view was the
+      one surface that never mentioned it, while the list and card surfaces already used
+      `deadlineStatus()`.
+
+      **Changed:** the timeline now calls the same `lib/time.deadlineStatus()` on the
+      donation it already holds — no prop was added, and the three call sites
+      (`donor/DonationDetails`, `ngo/NGOAcceptedDonations`, `ngo/NGOAvailableDonations`) are
+      untouched. When the deadline has passed **and** the status is one of the four in
+      `AWAITING_COLLECTION` (`AVAILABLE`, `MATCHED`, `ACCEPTED`, `VOLUNTEER_ASSIGNED`), the
+      current step gains an *Overdue* chip in `URGENCY_STYLES.expired` and a line reading
+      *"Pickup deadline passed at 8:00 PM"*. Once the food is collected the deadline has been
+      answered, so `PICKED_UP`, `DELIVERED` and `COMPLETED` are never marked overdue however
+      long ago that time was — D-38's rule one field further along. `CANCELLED` and `EXPIRED`
+      keep their existing panels and gain nothing.
+
+      **Not done, deliberately:** no new lifecycle state, no client-side expiry, no timer —
+      the marker is computed at render like every other deadline surface, and the row is
+      still exactly the status the server says it is. The sweep that would actually retire
+      these rows remains unbuilt (*Backlog → E*). See `DECISIONS.md` D-39.
 
 - [ ] **I-8 · Correct the explainability panel's criterion descriptions.** `[QA-12 · D-06]` — **S**
       `components/MatchAnalysis.tsx:98–122` describes *Recipient Capacity* as "Cold storage
@@ -718,7 +736,7 @@ existing items in F and G.
 | 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
 | 5 | Notification settings send nothing | **Misleading UI claim** — 10 dead toggles, 4 screens | ✅ toggles and claims removed by I-4 · delivery itself → `R-28` |
 | 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | ✅ both removed by I-5 · D-37 |
-| 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | I-7 · sweep → group E · `B-1` unchanged |
+| 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | ✅ display fixed by I-7 · sweep → group E · `B-1` unchanged |
 | 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |
 | 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · line made status-aware by I-6 |
 | 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | ✅ I-2 |

@@ -1,13 +1,14 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-38. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-39. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
 > **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`. **D-34**/**D-35**
 > (lifecycle write authorization) are committed as `551c96d` and `efd5fd8`, **D-36**
-> (notifications, I-4) as `6863451` and **D-37** (verification wording, I-5) as `6c82739`;
-> **D-38** (courier status display, I-6) is in the working tree, uncommitted.
+> (notifications, I-4) as `6863451`, **D-37** (verification wording, I-5) as `6c82739` and
+> **D-38** (courier status display, I-6) as `b41c4e6`; **D-39** (overdue deadlines, I-7) is
+> in the working tree, uncommitted.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1294,3 +1295,42 @@ them back.
 **Scope.** `frontend/src/pages/ngo/NGOAcceptedDonations.tsx`. The donor's equivalent block
 (`pages/donor/DonationDetails.tsx`) and `mobile/NGOAccepted.tsx` print the courier's name
 with no state claim attached, so neither carries the defect and neither was changed.
+
+---
+
+## D-39 · A passed deadline is annotated, never enforced **[documented]**
+
+**Decision.** `StatusTimeline` marks the current step **Overdue** when the pickup deadline
+has passed and the donation is in one of the four statuses where the food has not been
+collected — `AVAILABLE`, `MATCHED`, `ACCEPTED`, `VOLUNTEER_ASSIGNED`. It is an annotation
+on the status the server reported, never a substitute for it: no lifecycle state is
+invented, nothing is expired client-side, and the row keeps saying what it is. This is
+D-31 applied to time (QA observation 7, tracked as I-7).
+
+**Reasoning.**
+
+- **The reading was incomplete, not wrong.** A donation whose window closed hours ago
+  genuinely *is* still `MATCHED` — the expiry sweep is unbuilt and unscheduled
+  (`TASKS.md` → *Backlog → E*), so `EXPIRED` is a state an administrator reaches, not one
+  time reaches on its own. Printing "Matched · Current" was accurate; printing it with no
+  mention of the deadline was the defect, and only on the detail view — the list and card
+  surfaces already read `deadlineStatus()`.
+- **The client must not expire anything.** Deriving `EXPIRED` in the browser would put the
+  lifecycle in two places and let one screen disagree with the ledger, which is the whole
+  reason transitions are server-stamped (D-01). The marker changes what is *said*, never
+  what the donation *is*.
+- **Overdue stops at collection.** After `PICKED_UP` the deadline has been answered — the
+  food left the donor — so a completed donation is never flagged, however far in the past
+  its pickup window sits. That is D-38's rule one field along: a value that outlives the
+  moment it described is not current state.
+- **It reuses what already computes this.** `lib/time.deadlineStatus()` and
+  `URGENCY_STYLES.expired` already decide and colour "Overdue" everywhere else, and the
+  component already receives the whole donation — so the timeline calls the same helper
+  rather than taking a new prop, and none of its three call sites changed.
+
+**Constraints.** No backend, schema, migration or lifecycle change; no new
+`DonationStatus`; no timer or interval — the marker is computed at render, exactly like
+every other deadline surface, so it appears on the next render after the deadline passes.
+
+**Scope.** `frontend/src/components/StatusTimeline.tsx`, and therefore the three detail
+views that render it. The `CANCELLED` and `EXPIRED` panels are unchanged.
