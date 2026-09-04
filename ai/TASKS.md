@@ -3,9 +3,9 @@
 > Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
 > committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are
 > the I-4 notification-honesty pass (`6863451`), the I-5 trust/verification pass
-> (`6c82739`) and the I-6 courier status-display fix (`b41c4e6`). On top of those the
-> working tree carries the **uncommitted** I-7 overdue-deadline fix described under
-> *Backlog → I*. Context: `PROJECT_STATE.md`.
+> (`6c82739`), the I-6 courier status-display fix (`b41c4e6`) and the I-7 overdue-deadline
+> fix (`fc91091`). On top of those the working tree carries the **uncommitted** I-8
+> match-criteria wording fix described under *Backlog → I*. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -32,22 +32,23 @@
 markers in `code/foodlink/` or `frontend/src/`. 162 backend tests pass (untouched by the
 current work, which is frontend-only); `tsc --noEmit` and `tsc && vite build` are clean.
 
-**Uncommitted in the working tree (2026-09-04): I-7, the overdue pickup deadline in
-`StatusTimeline`.** The detail-view timeline was driven purely by `status`, so a donation
-whose collection window closed hours ago read *"Matched · Current"* with no warning — the
-one surface that never said the deadline had gone. It now annotates the current step when
-the deadline has passed **and** the food is still uncollected. One frontend file, no
-backend or schema change, no client-side expiry — see *Backlog → I*.
+**Uncommitted in the working tree (2026-09-04): I-8, the two wrong criterion captions in
+the match explainability panel.** `MatchAnalysis.tsx` described *Recipient Capacity* as
+cold storage and *Pickup Availability* as recipient intake volunteers; `matching.py` reads
+neither. Both captions now say what their criterion actually measures. One frontend file,
+two strings and a comment, no scoring change — see *Backlog → I*.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`), I-5 (`6c82739`) and
-I-6 (`b41c4e6`) are committed; I-7 is done and sitting uncommitted in the working tree**
-(2026-09-04). I-7: `StatusTimeline` marks the current step *Overdue* and names the time the
-pickup window closed, in the four statuses where the food has not been collected yet
+**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`), I-5 (`6c82739`),
+I-6 (`b41c4e6`) and I-7 (`fc91091`) are committed; I-8 is done and sitting uncommitted in
+the working tree** (2026-09-04). I-8: the explainability panel's *Recipient Capacity* and
+*Pickup Availability* captions now describe what `_capacity_score` and `_deadline_score`
+actually compute. I-7: `StatusTimeline` marks the current step *Overdue* and names the time
+the pickup window closed, in the four statuses where the food has not been collected yet
 (`DECISIONS.md` D-39). I-6: the NGO accepted-donations courier line is chosen by the
 donation's status instead of by the presence of a courier name, so a `COMPLETED` donation
 no longer reads as one still being carried (`DECISIONS.md` D-38). I-4: the ten dead
@@ -502,7 +503,7 @@ Places where a shipped feature is incomplete — not new ideas.
       and neither was touched.
 
 - [x] **I-7 · Surface "overdue" where the deadline has passed.** `[QA-7 · repo]` — **done,
-      uncommitted working tree, 2026-09-04.** `components/StatusTimeline.tsx` was driven
+      commit `fc91091`, 2026-09-04.** `components/StatusTimeline.tsx` was driven
       purely by `status`, so a donation whose collection window closed hours ago read
       *"Matched · Current"* with nothing said about the deadline — the detail view was the
       one surface that never mentioned it, while the list and card surfaces already used
@@ -524,15 +525,27 @@ Places where a shipped feature is incomplete — not new ideas.
       still exactly the status the server says it is. The sweep that would actually retire
       these rows remains unbuilt (*Backlog → E*). See `DECISIONS.md` D-39.
 
-- [ ] **I-8 · Correct the explainability panel's criterion descriptions.** `[QA-12 · D-06]` — **S**
-      `components/MatchAnalysis.tsx:98–122` describes *Recipient Capacity* as "Cold storage
-      and immediate consumption bandwidth" — `matching._capacity_score` measures headroom
-      after the donation and nothing else, and `COLD_STORAGE` is the dead constant already
-      tracked in group F — and describes *Pickup Availability* as "Recipient intake
-      volunteers ready before deadline", where `_deadline_score` measures slack between now
-      and the deadline less assumed travel. Smaller than the rest of this group, but it is
-      the one panel whose entire purpose is to explain the score correctly (D-06), so a
-      wrong caption there costs more than it would anywhere else.
+- [x] **I-8 · Correct the explainability panel's criterion descriptions.** `[QA-12 · D-06]` —
+      **done, uncommitted working tree, 2026-09-04.** Both captions were re-read against
+      `matching.py` before either was rewritten, and both audit findings were confirmed:
+
+      * *Recipient Capacity* said "Cold storage and immediate consumption bandwidth".
+        `_capacity_score(quantity, capacity)` takes those two numbers and nothing else —
+        `100 * (1 - (quantity / capacity) * 0.5)`, or `0` when the donation does not fit —
+        so it is the headroom the kitchen keeps afterwards. `matching.py` never reads
+        `storage_type`, and `COLD_STORAGE` is still the dead constant tracked in group F.
+        Now: **"Capacity the kitchen still has spare after taking this donation."**
+      * *Pickup Availability* said "Recipient intake volunteers ready before deadline".
+        No volunteer data reaches the matcher at all. `_deadline_score` measures the slack
+        between now and the pickup deadline less an estimated collection trip (a flat
+        20 km/h over the straight-line distance), full marks at two hours of slack.
+        Now: **"Time left before the pickup deadline, less an estimated collection trip."**
+
+      Two strings and an explanatory comment in `components/MatchAnalysis.tsx`. **No
+      scoring change:** no weight, formula, threshold, criterion, label or API field was
+      touched, and `matching.py` is byte-identical. The panel's own `label` for the second
+      criterion still predates the API's `deadlineScore` name — `adapters.toMatchAnalysis`
+      already carries a comment saying so — and renaming it was left alone as out of scope.
 
 - [ ] **I-9 · Fix the donor profile form's field wiring.** `[QA-12 · repo]` — **S**
       `pages/donor/DonorProfile.tsx` binds the input labelled **"Email Address"** to
@@ -741,7 +754,7 @@ existing items in F and G.
 | 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · line made status-aware by I-6 |
 | 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | ✅ I-2 |
 | 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | ✅ relabelled "Needed daily" by I-3 · real recurrence → `R-35` |
-| 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1, I-8, I-9 |
+| 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1 · ✅ captions corrected by I-8 · I-9 |
 
 - [x] **The backend was checked and largely cleared.** Every server-computed number the
       audit traced is derived from real rows: `/api/metrics` from `status_events` (D-01),

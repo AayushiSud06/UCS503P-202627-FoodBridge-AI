@@ -5,9 +5,9 @@
 > Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
 > write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
 > follow-up as `efd5fd8` — as are the I-4 notification-honesty pass (`6863451`), the I-5
-> trust/verification pass (`6c82739`) and the I-6 courier status-display fix (`b41c4e6`).
-> On top of those the working tree carries the **uncommitted** I-7 overdue-deadline fix
-> described below. A QA audit was run
+> trust/verification pass (`6c82739`), the I-6 courier status-display fix (`b41c4e6`) and
+> the I-7 overdue-deadline fix (`fc91091`). On top of those the working tree carries the
+> **uncommitted** I-8 match-criteria wording fix described below. A QA audit was run
 > against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
 > `TASKS.md`.
 
@@ -31,7 +31,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6) and the overdue pickup deadline (I-7) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7) and the match-criteria captions (I-8) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -75,7 +75,22 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **I-7: the detail-view timeline says when a
+- **2026-09-04, uncommitted working tree** — **I-8: the explainability panel describes the
+  criteria the matcher actually scores.** Two of the four captions in
+  `components/MatchAnalysis.tsx` named inputs `matching.py` never reads. *Recipient
+  Capacity* claimed "Cold storage and immediate consumption bandwidth", where
+  `_capacity_score` takes only the donation quantity and the kitchen's stated capacity and
+  returns the headroom left afterwards — the matcher never reads `storage_type`, and
+  `COLD_STORAGE` remains the dead constant tracked in *Backlog → F*. *Pickup Availability*
+  claimed "Recipient intake volunteers ready before deadline", where `_deadline_score`
+  measures the slack between now and the pickup deadline less an estimated collection trip,
+  and no volunteer data reaches the matcher at all. Both now say what their criterion
+  computes. **Nothing about the scoring changed** — no weight, formula, threshold or API
+  field, and `matching.py` is untouched. This is D-06 being kept rather than a new
+  decision: the panel exists so a score can be read back, and a caption naming a
+  non-existent input defeats it.
+
+- **2026-09-04, commit `fc91091`** — **I-7: the detail-view timeline says when a
   pickup deadline has gone.** `components/StatusTimeline.tsx` was driven purely by `status`,
   so a donation whose collection window closed hours ago read *"Matched · Current"* with no
   mention of the deadline — the one surface that never showed it, while the list and card
@@ -362,8 +377,8 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest), I-2, I-3, I-4, I-5, I-6 and I-7 are done**; two remain, all **S**, plus
-the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
+badges. **I-1 (the largest), I-2, I-3, I-4, I-5, I-6, I-7 and I-8 are done**; one remains
+(**I-9**, **S**), plus the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
 
@@ -558,9 +573,9 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. **I-1 through I-7 are done**, leaving I-8 and I-9 (both **S**, both
-   on screens nothing else depends on), so the audit's suggested order now points at the
-   three group-F match-score follow-ups in one sitting → group E. I-1a (the landing page's
+   promoted into it. **I-1 through I-8 are done**, leaving only I-9 (**S**, one form), so
+   the audit's suggested order now points at the three group-F match-score follow-ups in
+   one sitting → group E. I-1a (the landing page's
    invented statistics) is the small residue I-1 left, and it is the one group-I item that
    cannot simply be implemented: it needs a decision on whether any metric may be read
    without authentication.

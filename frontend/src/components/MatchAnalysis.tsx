@@ -94,7 +94,12 @@ export default function MatchAnalysisPanel({
         </div>
       </div>
 
-      {/* Multi-Dimensional Scoring Grid */}
+      {/* Multi-Dimensional Scoring Grid.
+
+          Each caption says what the criterion behind it actually measures in
+          `matching.py`. This is the one panel whose entire purpose is to explain
+          the score (D-06), so a caption describing an input the matcher never
+          reads costs more here than the same wording would anywhere else. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <ScoreRow
           label="Distance & Logistics"
@@ -112,13 +117,13 @@ export default function MatchAnalysisPanel({
           label="Recipient Capacity"
           score={analysis.capacityScore}
           icon={Building2}
-          description="Cold storage and immediate consumption bandwidth"
+          description="Capacity the kitchen still has spare after taking this donation"
         />
         <ScoreRow
           label="Pickup Availability"
           score={analysis.pickupAvailabilityScore}
           icon={Clock}
-          description="Recipient intake volunteers ready before deadline"
+          description="Time left before the pickup deadline, less an estimated collection trip"
         />
       </div>
 
