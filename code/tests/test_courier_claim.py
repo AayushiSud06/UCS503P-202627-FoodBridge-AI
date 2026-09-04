@@ -99,16 +99,25 @@ def test_an_unclaimed_pickup_can_be_claimed(client, db_session):
     assert [e["toStatus"] for e in body["events"]].count("VOLUNTEER_ASSIGNED") == 1
 
 
-def test_a_second_courier_cannot_take_a_pickup_that_was_released_to_the_first(
-    client, db_session
-):
-    """The only sequential route to the already-claimed guard.
+def test_a_second_courier_can_take_a_pickup_released_by_the_first(client, db_session):
+    """A released pickup is genuinely back in the pool.
 
-    A second claim on an assigned pickup is refused by the transition table
-    before it ever reaches the courier check, because VOLUNTEER_ASSIGNED is not
-    a legal target from VOLUNTEER_ASSIGNED. It is a *released* pickup — sent
-    back to ACCEPTED with `volunteer_id` still set — that puts a donation back
-    into a claimable state while it already belongs to somebody.
+    ⚠️ **This assertion used to be its inverse, and the old one was the bug.**
+    It was written as "the only sequential route to the already-claimed guard",
+    on the reasoning that a released pickup returns to ACCEPTED "with
+    `volunteer_id` still set" — which described the defect rather than the
+    intent. Keeping the courier bound meant a release released nothing: the
+    donation stayed invisible to every other courier, because
+    `donations._readable_by` gives a volunteer `ACCEPTED AND volunteer_id IS
+    NULL`, and any who reached it by id were told a pickup had "already been
+    claimed" when nobody was carrying it. The release now clears the assignment,
+    so this sequence has the outcome its name always implied.
+
+    **No guard coverage is lost with it.** `ACCEPTED` with a courier still bound
+    is now unreachable through the API, so the "another courier has already
+    claimed this pickup" branch is reachable only as a race — which is what the
+    three file-backed, two-transaction tests at the end of this module exist for,
+    and they are the honest way to reach it in any case.
     """
     donor = register(client, email="released-donor@test.com", role="donor")
     ngo, _ = register_ngo(
@@ -131,20 +140,26 @@ def test_a_second_courier_cannot_take_a_pickup_that_was_released_to_the_first(
 
     response = claim(client, second, donation_id)
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Another courier has already claimed this pickup"
-    # The first courier keeps the pickup; the loser changed nothing.
+    assert response.status_code == 200, response.text
+    # The second courier now holds it, and the first is off the row entirely.
     donation = db_session.get(Donation, donation_id)
     db_session.refresh(donation)
-    assert donation.volunteer_id is not None
-    assert donation.volunteer.user.email == "released-first@test.com"
-    assert donation.status is DonationStatus.ACCEPTED
+    assert donation.status is DonationStatus.VOLUNTEER_ASSIGNED
+    assert donation.volunteer.user.email == "released-second@test.com"
 
 
 def test_the_original_courier_may_reclaim_a_pickup_released_back_to_them(
     client, db_session
 ):
-    """`volunteer_id == the caller` is readmission, not a stale lock."""
+    """A courier who let a pickup go may take it back.
+
+    The property is unchanged; the mechanism moved. It used to exercise
+    `_claim_pickup`'s `volunteer_id == the caller` half, because a release left
+    the caller bound. Now that the release clears the assignment it goes through
+    the `volunteer_id IS NULL` half, like any other courier — which is the point
+    of a release. The `== the caller` half is still load-bearing for one
+    courier's duplicate concurrent requests, covered at the end of this module.
+    """
     donor = register(client, email="reclaim-donor@test.com", role="donor")
     ngo, _ = register_ngo(
         client, db_session, email="reclaim-ngo@test.com", org="Reclaim Kitchen"

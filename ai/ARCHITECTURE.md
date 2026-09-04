@@ -1,9 +1,10 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05, at HEAD `c274e99`**
-> (the project health audit, which changed no source and is recorded in `TASKS.md`).
-> Earlier verification points: `23c27f4` on 2026-09-02, and the QA audit of the same date.
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05**, at HEAD `68d28c5`
+> **plus the uncommitted Task 21 fixes** in the working tree (roster scope, pickup release,
+> image bound — `TASKS.md` → *Current*). Earlier verification points: the project health
+> audit at `c274e99`, and `23c27f4` on 2026-09-02.
 
 ## Shape
 
@@ -150,38 +151,21 @@ the *release* of a pickup, and belongs to the organisation already holding the d
 otherwise any kitchen could re-accept a delivery in flight and the binding side effect
 would move `recipient_id` on to it. See `DECISIONS.md` D-35.
 
-⚠️ **The release is authorized correctly and does not actually work.** No code path clears
-`Donation.volunteer_id`, so after `VOLUNTEER_ASSIGNED → ACCEPTED` the row is `ACCEPTED`
-with a courier still attached. Three consequences, all reproduced: the pickup is
-**invisible to every other courier** (`_readable_by` gives a volunteer
-`ACCEPTED AND volunteer_id IS NULL`); no other courier can claim it (`_claim_pickup`'s
-`volunteer_id IS NULL OR volunteer_id = :courier` fails, answering
-`409 Another courier has already claimed this pickup`, which is untrue); and the acceptance
-side effect runs a second time, so the kitchen's `accepted_donations` goes 1 → 2 for one
-donation and its `reliability_score` — 15% of the ranking weight — **drops as a penalty for
-releasing a courier**. Only the original courier can ever re-claim it. Fix tracked as
-`TASKS.md` → *Next* step 1 / `HA-2`. Note that the released state **is** reachable, which
-is why D-38's `COURIER_STAGE` handling of an `ACCEPTED` donation naming a courier is
-correct; what is missing is the way out of it.
+**The release puts a pickup back in the pool, and clears the courier with it**
+(Task 21, D-41). `update_status` nulls `volunteer_id` when `ACCEPTED` is reached from
+`VOLUNTEER_ASSIGNED`, so `_readable_by` shows the donation to every courier again
+(`ACCEPTED AND volunteer_id IS NULL`) and `_claim_pickup` admits the next one. The
+acceptance side effects — `accepted_donations += 1` and re-freezing `match_score` — are
+skipped when the donation is **already bound to the accepting organisation**, so a release
+is not counted as a second acceptance: that counter is the denominator of
+`Recipient.reliability_score`, and counting it made a kitchen's own match score fall as a
+penalty for releasing a courier. An administrator re-accepting on behalf of a *different*
+organisation is still a rebind and still counts.
 
-**Every edge of the state graph has been audited against both tables** (Task 14). The
-transitions acting on an already-bound donation without an ownership scope are
-`ACCEPTED → EXPIRED` (admin-only, whose scope is unrestricted anyway) and
-`ACCEPTED → VOLUNTEER_ASSIGNED` (settled atomically by `_claim_pickup`, D-28) — both
-sound. ⚠️ `MATCHED → AVAILABLE` is legal in `ALLOWED_TRANSITIONS` but has **no**
-`TRANSITION_ROLES` entry, so it is refused 403 for every role including admin: a dead
-edge that fails closed.
-
-⚠️ **`MATCHED` assigns nobody** — `recipient_id` stays null. It records a suggestion.
-Only `ACCEPTED` binds a recipient.
-⚠️ `COMPLETED` is the **NGO's** action, not the courier's — the party receiving
-confirms, not the party delivering.
-⚠️ **The courier claim is the one transition that is not a read-then-write.** Binding a
-courier goes through `donations._claim_pickup()`, a conditional
-`UPDATE … WHERE status = :from AND (volunteer_id IS NULL OR volunteer_id = :courier)`;
-a `rowcount` of 0 means the claim was lost and becomes the 409. Every other transition
-still compares in Python and then writes — safe under SQLite's serialised writes, not
-under PostgreSQL. See `DECISIONS.md` D-28.
+⚠️ **Only the accepting organisation (or an administrator) can release** —
+`TRANSITION_ROLES[ACCEPTED]` is `{ngo, admin}`, so a courier cannot hand back its own
+pickup. That is existing behaviour, not a consequence of the fix, and whether it should
+change is a product question rather than a defect.
 
 ## Auth & authorization
 
@@ -241,25 +225,25 @@ row only; donor and volunteer → none. `RecipientOut` carries a contact person 
 phone, so the list is a directory of people. Denial here is an empty list rather than a
 403 — unlike `GET /volunteers`, which role-gates. See `DECISIONS.md` D-26.
 
-⚠️ **Read scoping is finished for donations and recipients, and not elsewhere.** Three
-cross-organisation reads remain open, and they are not equally serious:
+**Courier reads are scoped the same way**, by `routers/organisations._visible_volunteers()`
+(Task 21, `DECISIONS.md` D-41): admin → every courier; ngo → the couriers carrying, or who
+have carried, one of that organisation's **own** donations; anyone else → none. The scope is
+a subquery over `Donation.volunteer_id` joined through `Recipient`, so it needs no new
+relationship and an `ngo` account with no organisation row matches nothing. The route keeps
+its `require_roles(admin, ngo)` gate, so a donor or a courier still gets a 403 here rather
+than the empty list `GET /recipients` returns — the D-26 asymmetry is deliberate and
+unchanged. `GET /volunteers/me` is a separate route and is untouched.
 
-1. **`GET /api/volunteers` is role-gated but unscoped, and this is the serious one.**
-   `require_roles(admin, ngo)` and no ownership clause, so `VolunteerOut` — name, location,
-   availability and **phone** — is returned in full to every account holding the `ngo` role.
-   Registration hands that role to a stranger and the row starts `is_verified=False`;
-   verification gates ranking and acceptance, **not this endpoint**. The docstring raises
-   the objection ("it is a list of people's phone numbers") and the scope was never
-   narrowed. D-26 applied exactly this fix to the neighbouring table and stopped there.
-   Tracked as `TASKS.md` → *Next* step 1 / `HA-1`.
-2. **`GET /api/requirements` is unscoped by omission.** `Depends(get_current_user)`, no role
+⚠️ **Two cross-organisation reads remain open, and they are not equally serious:**
+
+1. **`GET /api/requirements` is unscoped by omission.** `Depends(get_current_user)`, no role
    gate, no ownership clause, so every authenticated caller receives every organisation's
    active requirements including `recipientName` — and `AppContext.load()` fetches it for
    every role, so a donor's client already holds them. This is **consistent with D-26**,
    which scoped `RecipientOut` because it carries `contact_person` and `phone` and expressly
    recorded that organisation *names* are already public here; `RequirementOut` carries no
    contact details. Defensible, but never decided — see `TASKS.md` → *Blocked*.
-3. **`GET /donations/{id}/matches` discloses recipient coordinates.** `MatchOut.distanceKm`
+2. **`GET /donations/{id}/matches` discloses recipient coordinates.** `MatchOut.distanceKm`
    is a real measurement to a named organisation, so a donor who reads `200 []` from
    `GET /api/recipients` by design can post three donations at pins of its choosing and
    trilaterate any verified kitchen exactly. `TASKS.md` → *Backlog → A* / `HA-3`.
@@ -290,8 +274,8 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 | Group | Endpoints |
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
-| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). ⚠️ `/matches` returns named organisations with real distances — see `HA-3` |
-| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and unscoped within that — see `HA-1`**) · `GET|PATCH /volunteers/me` |
+| donations | `POST /donations` (auto-ranks on create; `imageUrl` capped at `schemas.MAX_IMAGE_URL_LENGTH` = 256 KiB) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). ⚠️ `/matches` returns named organisations with real distances — see `HA-3` |
+| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and scoped within that** — an ngo sees only its own donations' couriers) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
 | meta | `GET /health` (does **not** touch the DB) |
@@ -437,8 +421,9 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **168 in total**
-(~130 s, almost entirely real bcrypt hashing). `test_donation_reads.py` (13) and
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **191 in total**
+(~163 s, almost entirely real bcrypt hashing). `test_donation_reads.py` (13),
+`test_volunteer_reads.py` (8) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.

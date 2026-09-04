@@ -454,15 +454,38 @@ def update_status(
                 ),
             )
 
-        donation.recipient_id = recipient.id
-        recipient.accepted_donations += 1
+        # `ACCEPTED` is reachable twice and only one of them is an acceptance.
+        # From the open pool it binds an organisation to a donation nobody held.
+        # From `VOLUNTEER_ASSIGNED` it is the *release* of a pickup, and the
+        # organisation was settled at the first acceptance — so the steps that
+        # record a decision must not run again for a donation already bound
+        # here. `accepted_donations` is the denominator of
+        # `Recipient.reliability_score`, so counting a release as a second
+        # acceptance made a kitchen's own match score fall for releasing a
+        # courier; re-freezing `match_score` would likewise slide the number the
+        # accepting kitchen actually decided on (D-30) every time it did.
+        already_bound = donation.recipient_id == recipient.id
 
-        # Freeze the score this decision was actually made on.
-        ranked = rank_recipients(
-            donation, [recipient], radius_km=settings.max_match_radius_km, limit=1
-        )
-        if ranked:
-            donation.match_score = ranked[0].overall_score
+        # A release puts the pickup back in the pool, so the courier has to come
+        # off it. Without this the row keeps its `volunteer_id`, and then
+        # `_readable_by` hides the donation from every other courier while
+        # `_claim_pickup` refuses them — so the release released nothing and only
+        # the original courier could ever take it again.
+        if donation.status is DonationStatus.VOLUNTEER_ASSIGNED:
+            donation.volunteer = None
+            donation.volunteer_id = None
+
+        donation.recipient_id = recipient.id
+
+        if not already_bound:
+            recipient.accepted_donations += 1
+
+            # Freeze the score this decision was actually made on.
+            ranked = rank_recipients(
+                donation, [recipient], radius_km=settings.max_match_radius_km, limit=1
+            )
+            if ranked:
+                donation.match_score = ranked[0].overall_score
 
     elif target is DonationStatus.VOLUNTEER_ASSIGNED:
         volunteer = db.scalar(select(Volunteer).where(Volunteer.user_id == user.id))

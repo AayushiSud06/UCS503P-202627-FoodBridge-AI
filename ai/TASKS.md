@@ -1,6 +1,8 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05, at **HEAD `c274e99`, working tree clean**.
+> Verified against the repository on 2026-09-05. HEAD is `68d28c5` (the documentation
+> reconciliation); the working tree carries the **uncommitted Task 21 foundation fixes**
+> described under *Current* — `HA-1`, `HA-2` and the `image_url` bound.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
@@ -31,28 +33,46 @@
 
 ## Current
 
-**Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`. Verified at HEAD `c274e99`: 168 backend
-tests pass (~130 s), `alembic check` reports no drift, `tsc && vite build` is clean, and
-`git status` is empty.
+**Uncommitted in the working tree: Task 21 — *Next* step 1, complete.** All three of its
+items are implemented and tested; **191 backend tests pass** (168 → 191), `alembic check`
+reports no drift, and no schema, migration, frontend, dependency or configuration file was
+touched. The three defects the health audit reproduced on 2026-09-05 no longer reproduce.
 
-**I-9 is committed as `c274e99`** — the working tree no longer carries it. With it, **every
-group-I item except I-1a is closed**, and I-1a has been superseded by `HA-6` (see *Next*,
-step 4): the health audit found the landing page fabricates in two places rather than one,
-which makes it an implementation again rather than only a decision.
+- **`HA-1` — the courier roster is scoped.** `organisations._visible_volunteers(user)`
+  returns the caller's scope as a WHERE clause, in `_visible_recipients`' shape: admin
+  unrestricted, an `ngo` narrowed to the couriers on its **own** donations (joined through
+  `Recipient` so an account with no organisation row matches nothing), everyone else
+  `false()`. The route's `require_roles(admin, ngo)` is unchanged, so donors and couriers
+  still get the same 403 and `/volunteers/me` is untouched. No response shape changed and
+  **no frontend change was needed** — `AdminVolunteers` is the only screen that renders the
+  roster, so no NGO functionality depended on the wider list. See `DECISIONS.md` D-41.
+- **`HA-2` — the release actually releases.** `donations.update_status` clears
+  `volunteer_id` when `ACCEPTED` is reached from `VOLUNTEER_ASSIGNED`, and skips the
+  acceptance side effects when the donation is already bound to the accepting organisation.
+  A released pickup is now visible and claimable to every courier, and one donation counts
+  as one acceptance however many times it is released. `match_score` is no longer re-frozen
+  on a release, which keeps D-30's "the number the decision was made on" true. The state
+  graph, `TRANSITION_ROLES`, `OWNED_TRANSITIONS`, `_needs_ownership` and `_claim_pickup` are
+  all unchanged. See `DECISIONS.md` D-41.
+- **`image_url` is bounded** at `schemas.MAX_IMAGE_URL_LENGTH` = 262,144 characters
+  (256 KiB), enforced by `Field(max_length=...)` on `DonationCreate` so it appears in the
+  OpenAPI document. The column stays `Text` — no migration. ⚠️ **This is a real behavioural
+  bound:** an unresized phone photo is now a 422. Resizing before encoding, or object
+  storage (*Backlog → F*), is what lifts it.
 
-The seven-item hardening sequence — signing key → migrations → donation read scope → CI →
-recipient read scope → auth rate limiting → courier claim race — is finished, as is the
-first item out of *Backlog → F* (requirement `PATCH`) and the QA-reported match-score
-discrepancy (`23c27f4`). See *Completed*.
+⚠️ **One existing test asserted the `HA-2` defect and was rewritten, not deleted.**
+`test_courier_claim.py::test_a_second_courier_cannot_take_a_pickup_that_was_released_to_the_first`
+reached `_claim_pickup`'s already-claimed guard by way of a release that left
+`volunteer_id` set — its own docstring described the bug as the mechanism. It is now
+`test_a_second_courier_can_take_a_pickup_released_by_the_first` and asserts the corrected
+outcome. **No guard coverage was lost:** `ACCEPTED` with a courier still bound is now
+unreachable through the API, so that branch is reachable only as a race, which the three
+file-backed two-transaction tests in the same module already cover.
 
-**What changed on 2026-09-05: the health audit.** It changed no source and re-ran every
-check unmodified. Its result reverses the shape of the previous one: the QA audit of
-2026-09-02 found *the backend honest and the frontend not*, and group I fixed the
-description. The health audit found six defects **in the running system**, five of which
-none of these four files carried. They are `HA-1` … `HA-6` below and they are what *Next*
-now holds. Nothing about the architecture, the authorization model or the decision log was
-found unsound — none of the six needs a schema change or an architectural change.
+**Nothing else is in progress.** No feature branch, no TODO/FIXME markers in
+`code/foodlink/` or `frontend/src/`. Group I is closed except the landing page, now
+`HA-6`; the seven-item hardening sequence and the requirement `PATCH` are done. See
+*Completed*.
 
 ---
 
@@ -69,7 +89,7 @@ ahead of it. **Promotion into *Current* is still a Project Manager call.**
 `[HA-1 · HA-2 · B-6 · R-19 · S-6]` — **S**, roughly half a day including tests. Grouped
 because each is a few lines and each needs a regression test that does not exist yet.
 
-- [ ] **`HA-1` · Scope `GET /api/volunteers`.** It is gated by `require_roles(admin, ngo)`
+- [x] **`HA-1` · Scope `GET /api/volunteers`.** It is gated by `require_roles(admin, ngo)`
       (`code/foodlink/routers/organisations.py:209`) and applies **no ownership scope**, so
       `VolunteerOut` — name, location, availability and **phone** — is returned in full to
       any account holding the `ngo` role. Registration accepts `role: "ngo"` from a stranger
@@ -82,7 +102,7 @@ because each is a few lines and each needs a regression test that does not exist
       result as ordinary. Dropping `phone` from the non-admin response is the cheaper
       alternative. `pages/admin/AdminVolunteers.tsx` is the only screen wanting the full
       roster.
-- [ ] **`HA-2` · Clear `volunteer_id` when a pickup is released, and stop the second
+- [x] **`HA-2` · Clear `volunteer_id` when a pickup is released, and stop the second
       `accepted_donations` increment.** `VOLUNTEER_ASSIGNED → ACCEPTED` is legal, role-gated
       to the accepting kitchen and described throughout this documentation as a release —
       but nothing clears `volunteer_id`, so the "released" pickup is **invisible to every
@@ -96,7 +116,7 @@ because each is a few lines and each needs a regression test that does not exist
       after a release a *different* courier can see and claim the pickup, and the counter
       did not move — the property the existing D-35 tests do not assert, which is how this
       survived an authorization audit of the same edge.
-- [ ] **Bound `image_url`.** Unchanged in substance from group A, promoted here because it
+- [x] **Bound `image_url`.** Unchanged in substance from group A, promoted here because it
       is the same size of change and the audit measured its cost: a 3 MB base64 data URL is
       accepted (`code/foodlink/models.py:219`; `schemas.DonationCreate.image_url` has no
       `max_length`), and `AppContext.load()` re-reads `limit=500` donations after **every**
@@ -166,12 +186,13 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       client-side only; nothing can invalidate an issued token. `[R-11 · S-4 · D-13]` — ~4 h
 - [ ] Issue `PRAGMA foreign_keys = ON` for SQLite through a connection event listener —
       declared foreign keys are unenforced on the default configuration. `[R-15 · S-5 · D-08]` — **S**
-- [ ] ⬆️ **Promoted to *Next* step 1** — validate and length-cap `image_url`, an
+- [x] ✅ **Done (Task 21, uncommitted)** — `image_url` is capped at 256 KiB by
+      `schemas.MAX_IMAGE_URL_LENGTH` on `DonationCreate`; the column stays `Text`, an
       unconstrained `Text` column (`code/foodlink/models.py:219`) receiving base64 data URLs
       from the frontend. The cheap guard; object storage (group F) is the real fix.
       `[B-6 · R-19 · S-6 · HA-7]` — **S**
-- [ ] ⬆️ **Promoted to *Next* step 1** — `HA-1`: scope `GET /api/volunteers`, which returns
-      every courier's phone number to any account holding the `ngo` role, verified or not.
+- [x] ✅ **Done (Task 21, uncommitted)** — `HA-1`: `GET /api/volunteers` is scoped by
+      `_visible_volunteers`, so an `ngo` reads only the couriers on its own donations.
       `[HA-1 · D-26 · repo]` — **S**
 - [ ] **`HA-3` · `GET /donations/{id}/matches` gives back the recipient coordinates D-26
       withholds.** A donor reads `200 []` from `GET /api/recipients` by design, then posts
@@ -196,10 +217,8 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 ### B. Correctness & reliability
 
-- [ ] ⬆️ **Promoted to *Next* step 1** — `HA-2`: clear `volunteer_id` when a pickup is
-      released and stop the second `accepted_donations` increment. Releasing a pickup
-      currently strands it: no other courier can see or claim it, and the owning kitchen's
-      `reliability_score` drops for having released. `[HA-2 · D-35 · D-38 · repo]` — **S**
+- [x] ✅ **Done (Task 21, uncommitted)** — `HA-2`: the release clears `volunteer_id` and
+      no longer re-runs the acceptance side effects for a donation already bound here. `[HA-2 · D-35 · D-38 · repo]` — **S**
 - [ ] ⬆️ **Promoted to *Next* step 2** — `HA-4`/`HA-5`: the matcher's `quantity` and
       `capacity` criteria are algebraically collinear (45% of the weight moves 5 points),
       and the fit ratio compares `Donation.quantity` against `Recipient.capacity` without
@@ -249,6 +268,11 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       only through the API. `[R-13]` — **M**
 - [ ] Round-trip test for `UtcDateTime`. The decorator exists to prevent one specific
       timezone bug (D-09) and has no direct test. `[§14.4]` — **S**
+- [x] ✅ **Done (Task 21, uncommitted)** — read-scope coverage for the courier roster.
+      `test_volunteer_reads.py` (8) is the missing third of the read-scope trio beside
+      `test_donation_reads.py` and `test_recipient_reads.py`; the endpoint previously had
+      **no test of any kind**. `test_pickup_release.py` (13) covers what the release edge
+      does after authorization allows it. `[HA-1 · HA-2]`
 - [ ] ⬆️ **Promoted to *Next* step 3** — frontend tests (Vitest + Testing Library),
       starting with the pure modules and `ProtectedRoute`. 84 files under `frontend/src`,
       zero tests; `tsc` in `npm run build` is the only frontend gate in CI, so a
@@ -791,6 +815,52 @@ external.
 ---
 
 ## Completed (verified in the repository)
+
+### Foundation hardening: roster scope, pickup release, image bound — **uncommitted** `[HA-1 · HA-2 · HA-7]`
+
+Task 21 / *Next* step 1. In the working tree, not yet committed. 168 → **191 tests**;
+`alembic check` clean; no schema, migration, frontend, dependency or configuration change.
+
+- [x] **`HA-1` · `GET /api/volunteers` is scoped, not merely role-gated.**
+      `_visible_volunteers(user)` is a WHERE clause in `_visible_recipients`' shape — admin
+      unrestricted, `ngo` narrowed to the couriers on its own donations (subquery joined
+      through `Recipient`, so an account with no organisation row matches nothing rather
+      than needing a branch), everyone else `false()`. The existing `require_roles(admin,
+      ngo)` gate, the response shape and `/volunteers/me` are all untouched. **No new
+      relationship was introduced** — `Donation.recipient_id` and `Donation.volunteer_id`
+      already express the connection. No frontend change: `AdminVolunteers` is the only
+      screen rendering the roster.
+- [x] **What was open:** `ngo` is a self-signup role and `is_verified` gates ranking and
+      acceptance, not reads, so every courier's name, location and **phone number** was one
+      registration away from anybody. Reproduced before the fix; the same probe now returns
+      `[]`.
+- [x] **`HA-2` · The release clears the courier and does not re-count the acceptance.**
+      `update_status` nulls `volunteer_id` when `ACCEPTED` is reached from
+      `VOLUNTEER_ASSIGNED`, and runs the acceptance side effects only when the donation is
+      not already bound to the accepting organisation. A released pickup is now visible and
+      claimable to other couriers; `accepted_donations` counts one donation once however
+      many times it is released; `match_score` is not re-frozen, so D-30's number survives.
+      `ALLOWED_TRANSITIONS`, `TRANSITION_ROLES`, `OWNED_TRANSITIONS`, `_needs_ownership` and
+      `_claim_pickup` are unchanged, and so are the D-35 ownership answers.
+- [x] **`image_url` is bounded at 256 KiB** (`schemas.MAX_IMAGE_URL_LENGTH`, 262,144
+      characters) via `Field(max_length=...)`, so the constraint is in the OpenAPI document
+      (D-04's shape). The column stays `Text`: the bound belongs at the request boundary,
+      and this way there is no migration. ⚠️ A raw phone photo is now a 422 — a real bound,
+      not a formality.
+- [x] **21 new tests**, 12 of which fail against the pre-fix code:
+      `test_volunteer_reads.py` (8, a new file completing the read-scope trio),
+      `test_pickup_release.py` (13), plus 2 in `test_api.py` for the image bound.
+- [x] ⚠️ **One existing test asserted the defect and was rewritten rather than deleted.**
+      `test_courier_claim.py`'s second-courier test reached the already-claimed guard
+      *through* the unreleased release, and said so in its docstring. It now asserts the
+      corrected outcome under a name that matches it. No guard coverage was lost: `ACCEPTED`
+      with a courier still bound is unreachable through the API now, so that branch is
+      reachable only as a race — which the three file-backed two-transaction tests in the
+      same module already cover. The reclaim test's docstring was updated for the same
+      reason: the property holds, the mechanism moved from `volunteer_id == caller` to
+      `volunteer_id IS NULL`.
+- [x] See `DECISIONS.md` D-41.
+
 
 ### Project health audit — 2026-09-05, documentation only `[HA-1 … HA-8]`
 

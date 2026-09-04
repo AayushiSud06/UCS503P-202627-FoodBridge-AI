@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-40. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-41. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -10,7 +10,9 @@
 > **D-38** (courier status display, I-6) as `b41c4e6`, **D-39** (overdue deadlines, I-7)
 > as `fc91091` and **D-40** (an account reads its own contact details, I-9) as `c274e99`,
 > which is HEAD. Re-verified in the project health audit of 2026-09-05, which changed no
-> source; the corrections it produced are marked in D-05, D-17, D-26 and D-35.
+> source; the corrections it produced are marked in D-05, D-17, D-26 and D-35. **D-41**
+> (courier read scope and the release's second meaning) is in the working tree,
+> uncommitted.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -611,17 +613,17 @@ it must apply this same clause and 404, per D-24. Admin verification
 (`POST|DELETE /api/admin/recipients/{id}/verify`) is untouched and stays unrestricted
 behind the admin router gate.
 
-⚠️ **This decision named the courier roster and did not fix it, and that gap is still
-open.** The first bullet above cites "the same objection the `GET /api/volunteers`
+✅ **This decision named the courier roster and did not fix it; that gap is now closed by
+D-41** (Task 21, uncommitted). The first bullet above cites "the same objection the `GET /api/volunteers`
 docstring already raises about the courier roster, on the neighbouring table" — and the
 scope was applied to `RecipientOut` only. **`GET /api/volunteers` remains role-gated and
 unscoped**: `require_roles(admin, ngo)` with no ownership clause, so every account holding
 the `ngo` role reads every courier's name, location, availability and **phone**. Because
 registration hands that role to a stranger and `is_verified` gates ranking and acceptance
 but not this endpoint, the cost of the whole roster is one throwaway email address —
-reproduced in the health audit of 2026-09-05. **No decision was ever recorded for it and no
-task was filed until now**; it is `TASKS.md` → *Next* step 1 / `HA-1`, and the fix is this
-decision's own shape applied one table over.
+reproduced in the health audit of 2026-09-05. No decision was ever recorded for it and no
+task was filed until that audit. **D-41 applies this decision's own shape one table over**,
+which is what it should have done here.
 
 ⚠️ **A second, narrower bypass of this scoping exists in `/matches`.** `RecipientOut`
 withholds `latitude`/`longitude` from a donor, and `MatchOut.distanceKm` gives them back: a
@@ -1205,8 +1207,9 @@ has no `TRANSITION_ROLES` entry, so `.get(target, set())` refuses it 403 for eve
 including admin — a dead edge, failing closed. It is a lifecycle-modelling question, not a
 security one, and is left for the Project Manager rather than resolved here.
 
-⚠️ **The release this decision authorizes does not work, and the audit that produced this
-decision could not have seen it.** The residue recorded here — "a release followed by a
+✅ **The release this decision authorizes now works — fixed by D-41** (Task 21,
+uncommitted). What was wrong, and why the audit that produced this decision could not have
+seen it: The residue recorded here — "a release followed by a
 re-acceptance increments the owning organisation's `accepted_donations` a second time and
 leaves `volunteer_id` set" — understated its own consequence. **Nothing clears
 `volunteer_id`**, so a released pickup is invisible to every other courier
@@ -1217,7 +1220,7 @@ penalty for releasing**. All three reproduced on 2026-09-05. This is not a hole 
 authorization reasoning above, which is sound and was re-verified: the audit that produced
 D-35 was bounded to *who may drive an edge*, and this is *what the edge does afterwards* —
 which is exactly the class of defect a scope like that cannot see. Fix tracked as
-`TASKS.md` → *Next* step 1 / `HA-2`; no decision here changes.
+D-41; no reasoning in this decision changes, and its tests still pass unmodified.
 
 ---
 
@@ -1432,3 +1435,91 @@ admin response for cosmetics.
 **Scope.** `schemas.UserOut`, its three frontend mirrors (`ApiUser`, `User`,
 `adapters.toUser`) and the donor profile form's initialiser. `pages/donor/DonorProfile.tsx`
 is the only screen that edits the field; `mobile/DonorProfile.tsx` lists the email only.
+
+---
+
+## D-41 · Couriers are read through the donation that connects them, and a release is not an acceptance **[documented]**
+
+**Decision.** Two corrections that share one idea — *the relationship a row already carries
+is the authority, not the role the caller holds and not the field that happens to be
+populated.*
+
+1. **`GET /api/volunteers` is scoped, not merely role-gated.**
+   `routers/organisations._visible_volunteers(user)` returns the caller's scope as a WHERE
+   clause: `None` for an administrator, the couriers on this organisation's **own**
+   donations for an `ngo`, `false()` for anyone else. The route keeps
+   `require_roles(admin, ngo)`.
+2. **`ACCEPTED` reached from `VOLUNTEER_ASSIGNED` clears `volunteer_id`, and does not
+   re-run the acceptance side effects when the donation is already bound to the accepting
+   organisation.** `donations.update_status` gates `accepted_donations += 1` and the
+   `match_score` re-freeze on `donation.recipient_id != recipient.id`.
+
+**Reasoning.**
+
+- **A role a stranger can self-assign is not an authorization boundary.** `VolunteerOut`
+  carries a courier's phone number, and `ngo` is in `SELF_SIGNUP_ROLES`, so the roster cost
+  one registration and a throwaway email address. `is_verified` does not help: it gates
+  ranking (`score_pair`) and custody (the `ACCEPTED` transition), deliberately, and never
+  reads. D-26 scoped `RecipientOut` for exactly this reason and cited this endpoint's own
+  docstring while doing it; this is that decision finished.
+- **The donation row already expresses "which couriers is this kitchen entitled to?"**
+  `Donation.recipient_id` and `Donation.volunteer_id` are both on the same row, so the scope
+  is a subquery and needed **no new relationship, column or migration**. Scoping through the
+  donation also gives the right answer over time on its own: the courier stays visible after
+  `COMPLETED`, because a finished donation is still this kitchen's record of who carried its
+  food, and disappears for a kitchen that never had a donation at all.
+- **Scoped rather than redacted.** Dropping `phone` from a non-admin response was the
+  cheaper option and was rejected: a kitchen expecting a handover has a real reason to
+  reach the courier bringing it, and a redacted field would have left the *existence* of
+  every courier readable anyway. Narrowing the set answers both.
+- **A clause, not a second `require_roles`.** The `ngo` scope is per-row, so a role gate
+  cannot express it — D-24's shape, applied to a third table. The map fails closed: a role
+  added later reads nothing until it is given a scope here.
+- **`ACCEPTED` means two different things, and D-35 already knew it.** D-35 made the
+  *authorization* depend on the source state — binding from the open pool, releasing from
+  `VOLUNTEER_ASSIGNED`. The side effects were never given the same treatment, so the
+  release ran the acceptance path: it bound a recipient that was already bound, counted a
+  second acceptance, re-froze the score, and left the courier attached. Clearing
+  `volunteer_id` is the missing half of the transition D-35 authorized.
+- **The counter had a consequence, not just a wrong value.** `accepted_donations` is the
+  denominator of `Recipient.reliability_score`, which is 15% of the match weight — so
+  counting a release as an acceptance made a kitchen's own ranking fall as a penalty for
+  releasing a courier. That is the reason this is a correctness fix rather than tidiness.
+- **`match_score` is not re-frozen on a release**, because D-30 defines it as the number
+  the accepting organisation actually decided on. Re-freezing would slide it as the
+  deadline decayed, every time a pickup changed hands — quietly rewriting the record the
+  field exists to preserve.
+- **Idempotence is keyed on the binding, not on the source state.** The test is
+  `donation.recipient_id == recipient.id`, so an administrator re-accepting on behalf of a
+  *different* organisation is still a rebind and still counts. That keeps the stand-in path
+  meaningful rather than making every second `ACCEPTED` free.
+
+**Constraints.**
+
+- **No schema change, no migration, no new endpoint, no response-shape change**;
+  `alembic check` reports no drift. `ALLOWED_TRANSITIONS`, `TRANSITION_ROLES`,
+  `OWNED_TRANSITIONS`, `_needs_ownership`, `_readable_by` and `_claim_pickup` are all
+  untouched, and every D-24/D-34/D-35 answer is unchanged and still asserted.
+- **No frontend change was required**, because no NGO screen renders the roster —
+  `AdminVolunteers` (desktop and mobile) is its only consumer, and `AppContext.load()`
+  simply receives a shorter list.
+- ⚠️ **Only the accepting organisation or an administrator can release.**
+  `TRANSITION_ROLES[ACCEPTED]` is `{ngo, admin}`, so a courier cannot hand back its own
+  pickup — existing behaviour, deliberately not changed here, and a product question rather
+  than a defect.
+- ⚠️ **An old test asserted the defect and was rewritten, not deleted.**
+  `test_courier_claim.py` reached `_claim_pickup`'s already-claimed guard *through* the
+  unreleased release, describing the bug in its own docstring as the mechanism. `ACCEPTED`
+  with a courier still bound is now unreachable through the API, so that branch is
+  reachable only as a race — which the three file-backed two-transaction tests in the same
+  module already cover, and which is the honest way to reach it.
+- **A rebind still leaves the previous organisation's counter alone.** Pre-existing
+  behaviour on the administrator path, unchanged and out of scope here.
+
+**Scope.** `routers/organisations.list_volunteers` and the `ACCEPTED` branch of
+`routers/donations.update_status`. Separately in the same change, `DonationCreate.image_url`
+gained `max_length=schemas.MAX_IMAGE_URL_LENGTH` (256 KiB) — a bound at the request
+boundary, published in the OpenAPI document like D-04's admin restriction, with the column
+left as `Text` so no migration is needed. That is a constraint rather than a decision; the
+real fix is object storage (`TASKS.md` → *Backlog → F*), and until then an unresized phone
+photo is a 422.

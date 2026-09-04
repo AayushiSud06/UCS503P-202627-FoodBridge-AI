@@ -8,6 +8,7 @@ import pytest
 
 from conftest import auth, register, register_ngo
 from foodlink.models import Recipient
+from foodlink.schemas import MAX_IMAGE_URL_LENGTH
 
 CAMPUS = {"latitude": 30.3540, "longitude": 76.3630}
 
@@ -107,6 +108,52 @@ def test_deadline_in_the_past_is_rejected(client, recipients):
         "/api/donations", json=make_donation_body(hours_ahead=-1), headers=auth(token)
     )
     assert response.status_code == 422
+
+
+def test_an_oversized_image_url_is_rejected(client, recipients):
+    """`image_url` is stored inline and returned by every donation read.
+
+    There is no upload endpoint, so the frontend sends a base64 `data:` URL and
+    the image travels in the row — which `GET /api/donations` then returns at a
+    limit of 500 on every load and after every write. The ceiling is enforced at
+    the request boundary rather than by the column, which stays `Text`.
+    """
+    token = register(client, email="d-img-big@test.com", role="donor")
+    body = make_donation_body()
+    body["imageUrl"] = "data:image/png;base64," + "A" * (MAX_IMAGE_URL_LENGTH + 1)
+
+    response = client.post("/api/donations", json=body, headers=auth(token))
+
+    assert response.status_code == 422, response.text
+    assert "imageUrl" in str(response.json()["detail"])
+
+
+def test_an_image_url_within_the_limit_is_stored_and_returned(client, recipients):
+    """The preserved half: an ordinary link and a web-sized data URL both work."""
+    token = register(client, email="d-img-ok@test.com", role="donor")
+
+    link = "https://cdn.example.com/photos/surplus-thali.jpg"
+    response = client.post(
+        "/api/donations", json={**make_donation_body(), "imageUrl": link}, headers=auth(token)
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["imageUrl"] == link
+
+    data_url = "data:image/jpeg;base64," + "B" * 200_000
+    response = client.post(
+        "/api/donations",
+        json={**make_donation_body(), "imageUrl": data_url},
+        headers=auth(token),
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["imageUrl"] == data_url
+
+    # And omitting it entirely is still fine — the column is nullable.
+    response = client.post(
+        "/api/donations", json=make_donation_body(), headers=auth(token)
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["imageUrl"] is None
 
 
 def test_matches_are_ranked_and_exclude_out_of_radius(client, recipients):

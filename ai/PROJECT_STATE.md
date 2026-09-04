@@ -2,8 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, **HEAD `c274e99`,
-> working tree clean.** The lifecycle write-authorization work is committed — D-34 as
+> Last verified against the repository: 2026-09-05, branch `master`, HEAD `68d28c5`.
+> ⚠️ **The working tree carries the uncommitted Task 21 foundation fixes** — `HA-1`,
+> `HA-2` and the `image_url` bound; 191 backend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
 > I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
@@ -13,7 +14,8 @@
 > Two audits have been run against this codebase and neither changed source: a manual QA
 > audit against `23c27f4` on 2026-09-02, and a **full project health audit against
 > `c274e99` on 2026-09-05**. The health audit's confirmed findings are issues 23–28 below
-> and tag `HA-n` in `TASKS.md`.
+> and tag `HA-n` in `TASKS.md`; **23, 24 and the `image_url` half of 13 are now fixed** in
+> the working tree.
 
 ## What this project is
 
@@ -37,11 +39,11 @@ as ML.
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
 | Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) are all done. ⚠️ **The one screen still printing invented figures is the pre-login landing page** (I-1a, and it is wider than first recorded — see issue 28) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. ⚠️ **Read scoping is *not* finished outside donations and recipients:** `GET /api/volunteers` is role-gated but unscoped (issue 23) and `/matches` discloses recipient geometry (issue 25) |
+| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients **and couriers** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed). ⚠️ Still open: `/matches` discloses recipient geometry (issue 25) and `GET /api/requirements` is unscoped by omission |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 168 tests passing (~130 s): 37 integration + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 22 rate-limit + 22 config + 8 migration |
+| Backend tests | ✅ 191 tests passing (~163 s): 39 integration + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -54,6 +56,29 @@ the same `Settings` object. The error message states both options. Tests supply 
 own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
+
+- **2026-09-05, uncommitted working tree** — **Task 21: the three defects the health audit
+  could reproduce.** `HA-1`: `GET /api/volunteers` was role-gated to `admin`/`ngo` and
+  scoped no further, so every courier's name, location and **phone number** was one
+  self-registration away from anybody — `ngo` is a self-signup role and `is_verified` gates
+  ranking and acceptance, not reads. `organisations._visible_volunteers()` now returns the
+  caller's scope as a WHERE clause in `_visible_recipients`' shape: admin unrestricted, an
+  `ngo` narrowed to the couriers on its **own** donations, everyone else nothing. No new
+  relationship was needed — the donation row already carries both foreign keys — and no
+  frontend change, because `AdminVolunteers` is the only screen that renders the roster.
+  `HA-2`: the release now releases. `update_status` clears `volunteer_id` when `ACCEPTED`
+  is reached from `VOLUNTEER_ASSIGNED`, and skips the acceptance side effects for a
+  donation already bound to the accepting organisation — so a released pickup is visible
+  and claimable to every courier, one donation counts as one acceptance however many times
+  it is released, and `match_score` keeps the value the kitchen actually decided on. The
+  state graph, the role table, `OWNED_TRANSITIONS`, `_needs_ownership` and the atomic
+  courier claim are all untouched. And `image_url` is bounded at 256 KiB
+  (`schemas.MAX_IMAGE_URL_LENGTH`) by `Field(max_length=...)`, so the limit is in the
+  OpenAPI document; the column stays `Text`, so there is no migration. 21 new tests, 12 of
+  which fail against the pre-fix code; 168 → **191 passing**; `alembic check` clean.
+  ⚠️ One existing test asserted the `HA-2` defect as intent and was **rewritten, not
+  deleted** — see `TASKS.md` → *Completed*. See `DECISIONS.md` D-41.
+
 
 - **2026-09-05, documentation only** — **Full project health audit against `c274e99`.**
   No source changed; 168 tests re-run passing, `alembic check` clean, `tsc && vite build`
@@ -433,7 +458,10 @@ stable as items are resolved, so gaps are expected.
 
 ### High — found by the health audit, 2026-09-05, each reproduced
 
-23. **`GET /api/volunteers` is role-gated but unscoped, so the whole courier roster —
+23. ✅ **Resolved (Task 21, uncommitted).** `GET /api/volunteers` is role-gated **and**
+    scoped: `_visible_volunteers()` narrows an `ngo` to the couriers on its own donations,
+    admin stays unrestricted, everyone else reads nothing. What was open —
+    **the whole courier roster —
     names, locations and *phone numbers* — is readable by any account holding the `ngo`
     role.** Registration accepts `role: "ngo"` from a stranger and the row starts
     `is_verified=False`; verification gates ranking and acceptance, not this endpoint. So
@@ -441,8 +469,12 @@ stable as items are resolved, so gaps are expected.
     Reproduced: a freshly registered, unverified NGO gets `200` and the full roster.
     ⚠️ This is the objection **D-26 wrote down and then fixed only on the neighbouring
     table** — `RecipientOut` was scoped, `VolunteerOut` was not, and no task was filed.
-    `TASKS.md` → *Next* step 1 / `HA-1`.
-24. **Releasing a pickup does not release it.** `VOLUNTEER_ASSIGNED → ACCEPTED` is legal,
+    Now covered by `test_volunteer_reads.py` (8 tests), the read-scope file this endpoint
+    never had. See `DECISIONS.md` D-41.
+24. ✅ **Resolved (Task 21, uncommitted).** The release clears `volunteer_id` and no
+    longer re-runs the acceptance side effects, so a released pickup returns to the pool
+    and one donation counts as one acceptance. What was open — **releasing a pickup did
+    not release it.** `VOLUNTEER_ASSIGNED → ACCEPTED` is legal,
     role-gated to the accepting kitchen, and described throughout this documentation as
     "the release of a pickup" — but **nothing clears `volunteer_id`**. Three consequences,
     all reproduced: `_readable_by` gives a courier `ACCEPTED AND volunteer_id IS NULL`, so
@@ -452,7 +484,8 @@ stable as items are resolved, so gaps are expected.
     side effect runs a second time, so `recipient.accepted_donations` goes 1 → 2 for one
     donation — which, since `reliability_score = 100 × completed/accepted`, means **a
     kitchen that releases a courier permanently damages its own match score** (15% of the
-    ranking weight) for doing the right thing. `TASKS.md` → *Next* step 1 / `HA-2`.
+    ranking weight) for doing the right thing. Now covered by `test_pickup_release.py`
+    (13 tests). See `DECISIONS.md` D-41.
 
 ### Medium — found by the health audit, 2026-09-05
 
@@ -563,7 +596,12 @@ longer without saying so.
     into a `Text` column. ⚠️ The health audit measured the cost: a 3 MB data URL is
     accepted and stored, and `AppContext.load()` re-fetches `limit=500` donations after
     **every** mutation, so one photo is 3 MB on every write by every user. Promoted to
-    *Next* step 1 alongside `HA-1`/`HA-2` because it is the same size of change.
+    ✅ **The length half is resolved (Task 21, uncommitted):**
+    `DonationCreate.image_url` now carries `max_length=MAX_IMAGE_URL_LENGTH` (256 KiB),
+    enforced at the request boundary and published in the OpenAPI document; the column
+    stays `Text`, so there is no migration. ⚠️ Real consequence: an unresized phone photo
+    is now a 422, and the frontend still encodes at full size. **Format validation is still
+    absent**, and object storage (`TASKS.md` → *Backlog → F*) remains the real fix.
 15. ✅ **Resolved (`fcbd03b`, I-2) — an NGO now sees its own distance to an open
     donation.** `serialize.donation_out()` still measures `distanceKm` against the
     *matched* recipient, so it is still null in the open pool — but that is no longer
@@ -667,25 +705,26 @@ credibility rather than about its correctness, and that judgement belongs in thi
 
 ## Immediate priorities
 
-1. **`HA-1` + `HA-2` + the `image_url` cap, as one change** (`TASKS.md` → *Next*, step 1).
-   Scope the courier roster, clear `volunteer_id` on release and stop the second
-   `accepted_donations` increment, and bound `image_url`. Each is a few lines; each needs a
-   regression test that does not exist yet. **S.**
-2. **Repair the matcher's scoring** (`HA-4`, `HA-5`; *Next*, step 2). De-collinearise
-   `_quantity_score`/`_capacity_score` and make the fit criterion unit-aware, with the
-   boundary unit tests *Backlog → D* already wants. No schema change. **M.**
+1. ✅ **Done, uncommitted — `HA-1` + `HA-2` + the `image_url` bound** (Task 21). Review and
+   commit. 191 backend tests pass; `alembic check` clean; no schema, migration, frontend,
+   dependency or configuration change.
+2. **Repair the matcher's scoring** (`HA-4`, `HA-5`; `TASKS.md` → *Next* step 2). This is
+   now the next implementation task. De-collinearise `_quantity_score`/`_capacity_score`
+   and make the fit criterion unit-aware, with the boundary unit tests *Backlog → D* wants.
+   No schema change. **M.**
    ⚠️ Do **not** re-tune `WEIGHTS` before this lands — tuning two collinear criteria is
    tuning noise.
-3. **Stand up a frontend test harness** (`HA-8`; *Next*, step 3). Vitest over the pure
+3. **Stand up a frontend test harness** (`HA-8`; *Next* step 3). Vitest over the pure
    modules — `lib/impact.ts`, `lib/geo.ts`, `lib/time.ts`, `lib/adapters.ts` — plus
-   `ProtectedRoute`. Every honesty invariant D-31 → D-40 established is currently held by
-   review habit alone; D-32, D-33 and D-40 each close with "Nothing tests this". **M.**
-4. Then **stop hardening and build the donor needs board** (*Blocked*) — the smallest real
+   `ProtectedRoute`. Every honesty invariant D-31 → D-40 established is still held by
+   review habit alone. **M.**
+4. **Finish the landing page** (`HA-6` / I-1a; *Next* step 4). **S.**
+5. Then **stop hardening and build the donor needs board** (*Blocked*) — the smallest real
    feature in the project and the one that gives `requirements` an audience.
 
-Sequenced behind those, unchanged: `HA-3`, the landing page (`HA-6` / I-1a), then
-*Backlog → E* (concurrency guard → Postgres → deployment configuration), which is where
-the rate-limit-sharing decision gets answered.
+Sequenced behind those, unchanged: `HA-3`, then *Backlog → E* (concurrency guard →
+Postgres → deployment configuration), which is where the rate-limit-sharing decision gets
+answered.
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

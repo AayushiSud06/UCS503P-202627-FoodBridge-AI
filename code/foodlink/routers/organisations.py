@@ -7,7 +7,7 @@ from sqlalchemy import false, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Recipient, Requirement, User, UserRole, Volunteer
+from ..models import Donation, Recipient, Requirement, User, UserRole, Volunteer
 from ..schemas import (
     RecipientOut, RecipientUpdate, RequirementCreate, RequirementOut, RequirementUpdate,
     VolunteerOut, VolunteerUpdate,
@@ -203,13 +203,61 @@ def _volunteer_out(volunteer: Volunteer) -> VolunteerOut:
     )
 
 
+def _visible_volunteers(user: User):
+    """The couriers `user` may read, as a WHERE clause — or None for all of them.
+
+    `VolunteerOut` carries a courier's phone number, so this endpoint is a
+    directory of people in exactly the sense `_visible_recipients` is, and it
+    gets the same treatment: a clause applied in the query rather than a check
+    after it.
+
+    The route's role gate is not enough on its own here. `ngo` is a self-signup
+    role, so holding it costs one registration, and `is_verified` gates ranking
+    and acceptance rather than reads — which left every courier's phone number
+    one sign-up away from anybody.
+
+    * admin — unrestricted. Vouching for organisations and staffing the roster
+      is the job, and `AdminVolunteers` is the only screen that renders it.
+    * ngo — the couriers carrying, or who have already carried, one of this
+      organisation's own donations. That is the set a kitchen has a reason to
+      contact, and the donation row is the relationship that says so, so no new
+      one had to be introduced.
+    * anyone else — nothing. Unreachable behind the route's `require_roles`, and
+      kept so a role added later reads nothing until it is given a scope here.
+    """
+    if user.role is UserRole.admin:
+        return None
+
+    if user.role is UserRole.ngo:
+        # Joined through `Recipient` rather than resolved in a second query, so
+        # an `ngo` account with no organisation row yet simply matches nothing
+        # instead of needing a separate branch.
+        own_couriers = (
+            select(Donation.volunteer_id)
+            .join(Recipient, Recipient.id == Donation.recipient_id)
+            .where(Recipient.user_id == user.id, Donation.volunteer_id.is_not(None))
+        )
+        return Volunteer.id.in_(own_couriers)
+
+    return false()
+
+
 @router.get("/volunteers", response_model=list[VolunteerOut])
 def list_volunteers(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.admin, UserRole.ngo)),
 ) -> list[VolunteerOut]:
-    """The courier roster. Restricted: it is a list of people's phone numbers."""
+    """The courier roster, scoped to the caller.
+
+    Restricted twice over: the route admits only administrators and kitchens,
+    and the query then narrows a kitchen to the couriers on its own donations.
+    It is a list of people's phone numbers, so the role gate alone was not the
+    boundary it looked like — see `_visible_volunteers` and `DECISIONS.md` D-41.
+    """
     stmt = select(Volunteer).options(selectinload(Volunteer.user))
+    scope = _visible_volunteers(user)
+    if scope is not None:
+        stmt = stmt.where(scope)
     return [_volunteer_out(v) for v in db.scalars(stmt)]
 
 

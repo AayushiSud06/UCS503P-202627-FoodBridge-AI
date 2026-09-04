@@ -204,6 +204,23 @@ class MatchOut(Schema):
 
 # ─── Donations ───────────────────────────────────────────────────────────────
 
+#: Ceiling on `image_url`, in characters, enforced at the request boundary.
+#:
+#: There is no upload endpoint and no object storage, so the frontend sends a
+#: base64 `data:` URL rather than a link and the whole image lives in the
+#: donation row — which `GET /api/donations` then returns inline, at a limit of
+#: 500, on every load and after every write. An unbounded column therefore
+#: prices one donor's photo into every other account's next request.
+#:
+#: 256 KiB of characters is about a 190 KB image: comfortable for a web-sized
+#: photo and far above any ordinary remote URL, while refusing the multi-megabyte
+#: data URLs an unresized phone camera produces. ⚠️ That is a real behavioural
+#: bound, not a formality — a raw camera capture is now rejected with a 422, and
+#: resizing before encoding (or object storage, `TASKS.md` → *Backlog → F*) is
+#: what lifts it.
+MAX_IMAGE_URL_LENGTH = 262_144
+
+
 class DonationCreate(Schema):
     food_name: str = Field(min_length=1, max_length=160)
     category: str
@@ -216,7 +233,7 @@ class DonationCreate(Schema):
     longitude: float = Field(ge=-180, le=180)
     prepared_at: datetime | None = None
     pickup_deadline: datetime
-    image_url: str | None = None
+    image_url: str | None = Field(default=None, max_length=MAX_IMAGE_URL_LENGTH)
 
 
 class StatusEventOut(Schema):
