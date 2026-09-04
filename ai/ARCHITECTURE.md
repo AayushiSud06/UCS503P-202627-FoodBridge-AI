@@ -1,9 +1,9 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on 2026-09-02, through the
-> match-score consistency commit (`23c27f4`), and re-checked in the QA audit of the same
-> date — which changed no source and is recorded in `TASKS.md`.
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05, at HEAD `c274e99`**
+> (the project health audit, which changed no source and is recorded in `TASKS.md`).
+> Earlier verification points: `23c27f4` on 2026-09-02, and the QA audit of the same date.
 
 ## Shape
 
@@ -150,6 +150,20 @@ the *release* of a pickup, and belongs to the organisation already holding the d
 otherwise any kitchen could re-accept a delivery in flight and the binding side effect
 would move `recipient_id` on to it. See `DECISIONS.md` D-35.
 
+⚠️ **The release is authorized correctly and does not actually work.** No code path clears
+`Donation.volunteer_id`, so after `VOLUNTEER_ASSIGNED → ACCEPTED` the row is `ACCEPTED`
+with a courier still attached. Three consequences, all reproduced: the pickup is
+**invisible to every other courier** (`_readable_by` gives a volunteer
+`ACCEPTED AND volunteer_id IS NULL`); no other courier can claim it (`_claim_pickup`'s
+`volunteer_id IS NULL OR volunteer_id = :courier` fails, answering
+`409 Another courier has already claimed this pickup`, which is untrue); and the acceptance
+side effect runs a second time, so the kitchen's `accepted_donations` goes 1 → 2 for one
+donation and its `reliability_score` — 15% of the ranking weight — **drops as a penalty for
+releasing a courier**. Only the original courier can ever re-claim it. Fix tracked as
+`TASKS.md` → *Next* step 1 / `HA-2`. Note that the released state **is** reachable, which
+is why D-38's `COURIER_STAGE` handling of an `ACCEPTED` donation naming a courier is
+correct; what is missing is the way out of it.
+
 **Every edge of the state graph has been audited against both tables** (Task 14). The
 transitions acting on an already-bound donation without an ownership scope are
 `ACCEPTED → EXPIRED` (admin-only, whose scope is unrestricted anyway) and
@@ -227,14 +241,28 @@ row only; donor and volunteer → none. `RecipientOut` carries a contact person 
 phone, so the list is a directory of people. Denial here is an empty list rather than a
 403 — unlike `GET /volunteers`, which role-gates. See `DECISIONS.md` D-26.
 
-⚠️ **`GET /api/requirements` is the one unscoped cross-organisation read left.** It takes
-`Depends(get_current_user)` with no role gate and no ownership clause, so every
-authenticated caller receives every organisation's active requirements including
-`recipientName` — and `AppContext.load()` fetches it for every role, so a donor's client
-already holds them. This is **consistent with D-26**, which scoped `RecipientOut` because
-it carries `contact_person` and `phone` and explicitly recorded that organisation *names*
-are already public here; `RequirementOut` carries no contact details. It is nonetheless
-unscoped by omission rather than by a recorded decision — see `TASKS.md` → *Blocked*.
+⚠️ **Read scoping is finished for donations and recipients, and not elsewhere.** Three
+cross-organisation reads remain open, and they are not equally serious:
+
+1. **`GET /api/volunteers` is role-gated but unscoped, and this is the serious one.**
+   `require_roles(admin, ngo)` and no ownership clause, so `VolunteerOut` — name, location,
+   availability and **phone** — is returned in full to every account holding the `ngo` role.
+   Registration hands that role to a stranger and the row starts `is_verified=False`;
+   verification gates ranking and acceptance, **not this endpoint**. The docstring raises
+   the objection ("it is a list of people's phone numbers") and the scope was never
+   narrowed. D-26 applied exactly this fix to the neighbouring table and stopped there.
+   Tracked as `TASKS.md` → *Next* step 1 / `HA-1`.
+2. **`GET /api/requirements` is unscoped by omission.** `Depends(get_current_user)`, no role
+   gate, no ownership clause, so every authenticated caller receives every organisation's
+   active requirements including `recipientName` — and `AppContext.load()` fetches it for
+   every role, so a donor's client already holds them. This is **consistent with D-26**,
+   which scoped `RecipientOut` because it carries `contact_person` and `phone` and expressly
+   recorded that organisation *names* are already public here; `RequirementOut` carries no
+   contact details. Defensible, but never decided — see `TASKS.md` → *Blocked*.
+3. **`GET /donations/{id}/matches` discloses recipient coordinates.** `MatchOut.distanceKm`
+   is a real measurement to a named organisation, so a donor who reads `200 []` from
+   `GET /api/recipients` by design can post three donations at pins of its choosing and
+   trilaterate any verified kitchen exactly. `TASKS.md` → *Backlog → A* / `HA-3`.
 
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
@@ -262,8 +290,8 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 | Group | Endpoints |
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
-| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30) |
-| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (admin+ngo only) · `GET|PATCH /volunteers/me` |
+| donations | `POST /donations` (auto-ranks on create) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). ⚠️ `/matches` returns named organisations with real distances — see `HA-3` |
+| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and unscoped within that — see `HA-1`**) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
 | meta | `GET /health` (does **not** touch the DB) |
@@ -301,6 +329,17 @@ missing coordinates, beyond `MAX_MATCH_RADIUS_KM` (default 8).
 (cold-start prior), else `100 × completed/accepted`.
 Returns per-criterion sub-scores plus human-readable `reasons` — the score is never a
 bare number.
+
+⚠️ **Two of the five criteria do not carry the weight the table implies** (health audit,
+2026-09-05; `TASKS.md` → *Next* step 2). `_quantity_score` and `_capacity_score` take the
+same two arguments and are monotone in the same ratio `r = quantity / capacity` in opposite
+directions, so together they evaluate to `30 + 5r` out of a possible 45 — **45% of the
+published weight moves five points across the whole feasible range**, then drops 11.5
+points at `r = 1`. And neither reads `Donation.unit`, while `Recipient.capacity` is meals
+per day: 100 Kg and 100 Meals score identically. Ranking is therefore decided in practice
+by distance (25%) and deadline (15%), `reliability_score` being the flat `85` prior for any
+kitchen under three acceptances. **The structure is sound and is not what needs changing —
+the two functions are.**
 
 **Swap point:** replacing `score_pair` alone would substitute a learned ranker; the
 router and response shape do not change.
@@ -398,7 +437,8 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — 162 in total. `test_donation_reads.py` (13) and
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **168 in total**
+(~130 s, almost entirely real bcrypt hashing). `test_donation_reads.py` (13) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
 contact details.

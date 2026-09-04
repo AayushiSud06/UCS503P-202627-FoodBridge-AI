@@ -1,12 +1,12 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
-> committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are
-> the I-4 notification-honesty pass (`6863451`), the I-5 trust/verification pass
-> (`6c82739`), the I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix
-> (`fc91091`) and the I-8 match-criteria wording fix (`ed56bd5`). On top of those the
-> working tree carries the **uncommitted** I-9 donor-profile binding fix described under
-> *Backlog → I*. Context: `PROJECT_STATE.md`.
+> Verified against the repository on 2026-09-05, at **HEAD `c274e99`, working tree clean**.
+> The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
+> ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
+> (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
+> fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the I-8 match-criteria wording
+> fix (`ed56bd5`) and the I-9 donor-profile binding fix (`c274e99`, now HEAD).
+> Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -19,7 +19,9 @@
 > `§x` = another section of that guide · `D-n` = `DECISIONS.md` · `repo` = a gap verified
 > directly in the source and not recorded anywhere else · `QA-n` = finding *n* of the
 > manual QA audit of 2026-09-02, whose classifications are recorded in **Group I** and in
-> *Blocked*.
+> *Blocked* · `HA-n` = finding *n* of the **project health audit of 2026-09-05**, which
+> changed no source and whose six confirmed defects carry that tag below. Every `HA-n` was
+> reproduced against a throwaway database rather than inferred.
 >
 > **Estimates.** Hour figures are the roadmap's own (§22); where it gives none, the bucket
 > is **S** (under an hour), **M** (a few hours), **L** (a day or more). All are for
@@ -30,83 +32,122 @@
 ## Current
 
 **Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`. 168 backend tests pass; `tsc --noEmit` and
-`tsc && vite build` are clean.
+markers in `code/foodlink/` or `frontend/src/`. Verified at HEAD `c274e99`: 168 backend
+tests pass (~130 s), `alembic check` reports no drift, `tsc && vite build` is clean, and
+`git status` is empty.
 
-**Uncommitted in the working tree (2026-09-04): I-9, the donor profile's field bindings.**
-`User.phone` was writable — through registration and `PATCH /auth/me` — but absent from
-`UserOut`, the only view an account gets of itself, so the donor form saved a number it
-could never read back and started every session with the field blank. `UserOut` now
-carries `phone`, and the form initialises from it. One schema field, its three frontend
-mirrors, and one initialiser — see *Backlog → I*. **Two of the three claims the audit
-filed under I-9 were wrong**, and are corrected there.
+**I-9 is committed as `c274e99`** — the working tree no longer carries it. With it, **every
+group-I item except I-1a is closed**, and I-1a has been superseded by `HA-6` (see *Next*,
+step 4): the health audit found the landing page fabricates in two places rather than one,
+which makes it an implementation again rather than only a decision.
 
-The seven-item hardening sequence — signing key → migrations → donation read scope →
-CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
-first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
-match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
+The seven-item hardening sequence — signing key → migrations → donation read scope → CI →
+recipient read scope → auth rate limiting → courier claim race — is finished, as is the
+first item out of *Backlog → F* (requirement `PATCH`) and the QA-reported match-score
+discrepancy (`23c27f4`). See *Completed*.
 
-**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`), I-5 (`6c82739`),
-I-6 (`b41c4e6`), I-7 (`fc91091`) and I-8 (`ed56bd5`) are committed; I-9 is done and sitting
-uncommitted in the working tree** (2026-09-04). With it **every group-I item except I-1a is
-closed**, and I-1a is a decision, not an implementation. I-9: an account can now read the
-phone number it is allowed to write, and the donor profile form initialises from it
-(`DECISIONS.md` D-40). I-8: the explainability panel's *Recipient Capacity* and
-*Pickup Availability* captions now describe what `_capacity_score` and `_deadline_score`
-actually compute. I-7: `StatusTimeline` marks the current step *Overdue* and names the time
-the pickup window closed, in the four statuses where the food has not been collected yet
-(`DECISIONS.md` D-39). I-6: the NGO accepted-donations courier line is chosen by the
-donation's status instead of by the presence of a courier name, so a `COMPLETED` donation
-no longer reads as one still being carried (`DECISIONS.md` D-38). I-4: the ten dead
-notification toggles are gone from
-all four profile screens and the claims around them are reworded to what the system does
-(`DECISIONS.md` D-36). I-5: the fabricated donor
-verification badge and the FSSAI compliance panel are gone, and "verified" now appears only
-where `Recipient.is_verified` backs it (`DECISIONS.md` D-37). I-1: the six per-role impact surfaces and two dashboards no longer
-print invented figures, computed from one module for desktop and `/m/*` (`DECISIONS.md`
-D-32). I-2: the routing, travel-time and live-GPS claims are gone, invented distance
-fallbacks are replaced by an unavailable state, and one selector decides which
-server-provided straight-line distance a screen shows (`DECISIONS.md` D-33). See
-*Backlog → I* for exactly what changed in each. Nothing else is in progress.
-
-**A manual QA audit was run on 2026-09-02** across twelve observations. It changed no
-source code — its output is this list. Its central result: **the backend is broadly
-honest and the frontend is not.** Every server-side number the audit traced is derived
-from real rows through code that says what it does; a large amount of interface text
-claims capability the system does not have — requirement-aware matching, live GPS
-tracking, notification delivery, FSSAI verification, and impact figures padded with
-literals. That body of work is now **Group I**, and the four questions it could not
-answer from the code are in *Blocked*. See *Completed → QA audit* for the classification
-of all twelve.
+**What changed on 2026-09-05: the health audit.** It changed no source and re-ran every
+check unmodified. Its result reverses the shape of the previous one: the QA audit of
+2026-09-02 found *the backend honest and the frontend not*, and group I fixed the
+description. The health audit found six defects **in the running system**, five of which
+none of these four files carried. They are `HA-1` … `HA-6` below and they are what *Next*
+now holds. Nothing about the architecture, the authorization model or the decision log was
+found unsound — none of the six needs a schema change or an architectural change.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-**Empty — still a Project Manager call**, and neither the QA audit nor the Task 14
-lifecycle audit promoted anything into it. (The `CANCELLED` ownership gap that sat here
-briefly was folded into the D-34 change itself, and the `ACCEPTED` takeover Task 14 found
-into the D-35 change — see *Completed*.)
-What the audit did change is what the list looks like when that call is made:
+**No longer empty.** These four steps are the health audit's confirmed defects in the order
+it recommended, and they are a bounded list rather than an open-ended hardening programme:
+its strategic conclusion is that everything *after* step 4 is unbuilt infrastructure rather
+than broken behaviour, and should be sequenced with the deployment it serves rather than
+ahead of it. **Promotion into *Current* is still a Project Manager call.**
 
-- **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
-  D-31 records why an interface claim the system cannot honour is a defect in a project
-  whose evaluation rests on evidence. Most of its items are **S**, and the two a demo
-  audience sees first (I-1, I-2) are now both done, as are I-3, I-4 and I-5.
-- **Group E is still the largest block and is still ungated** — the courier claim was
-  the last correctness prerequisite for Postgres, and it landed in `e919f7b`.
-- **Group F is unchanged and confirmed.** QA independently re-observed all three
-  match-score follow-ups; they are real and they are still small.
+### Step 1 — the three demonstrated defects, as one change
 
-**The audit's own recommended order**, offered as analysis and not as a commitment:
-~~**I-1** (impact figures)~~ and ~~**I-2** (live-GPS and routing claims)~~ **— both done,
-2026-09-03**, ~~**I-3** (requirement matching claims)~~, ~~**I-4** (notification
-settings)~~ and ~~**I-5** (verification and compliance badges)~~ **— all done 2026-09-04**
-→ **F**
-(the three match-score follow-ups, one sitting) → **E** (Postgres, once the demo-facing
-claims are true). The reasoning is in *Group I*'s header:
-the cheapest way to stop over-claiming is to stop printing the claims, and that has to
-happen before or alongside deciding which of them to actually build (*Blocked*).
+`[HA-1 · HA-2 · B-6 · R-19 · S-6]` — **S**, roughly half a day including tests. Grouped
+because each is a few lines and each needs a regression test that does not exist yet.
+
+- [ ] **`HA-1` · Scope `GET /api/volunteers`.** It is gated by `require_roles(admin, ngo)`
+      (`code/foodlink/routers/organisations.py:209`) and applies **no ownership scope**, so
+      `VolunteerOut` — name, location, availability and **phone** — is returned in full to
+      any account holding the `ngo` role. Registration accepts `role: "ngo"` from a stranger
+      and the row starts `is_verified=False`; verification gates ranking and acceptance, not
+      this endpoint. Reproduced: a freshly registered, unverified NGO receives `200` and the
+      whole roster. ⚠️ This is **D-26's own recorded objection, applied to `RecipientOut`
+      and never to `VolunteerOut`.** The shape to follow is `_visible_recipients`: a WHERE
+      clause — admin unrestricted, an `ngo` seeing only the couriers bound to its own
+      donations, everyone else nothing. `AppContext.optional()` already treats a narrow
+      result as ordinary. Dropping `phone` from the non-admin response is the cheaper
+      alternative. `pages/admin/AdminVolunteers.tsx` is the only screen wanting the full
+      roster.
+- [ ] **`HA-2` · Clear `volunteer_id` when a pickup is released, and stop the second
+      `accepted_donations` increment.** `VOLUNTEER_ASSIGNED → ACCEPTED` is legal, role-gated
+      to the accepting kitchen and described throughout this documentation as a release —
+      but nothing clears `volunteer_id`, so the "released" pickup is **invisible to every
+      other courier** (`_readable_by` requires `volunteer_id IS NULL`), unclaimable by them
+      (`_claim_pickup` answers `409 Another courier has already claimed this pickup`, which
+      is not true), and re-runs the acceptance side effect — taking the kitchen's
+      `accepted_donations` from 1 to 2 for one donation and therefore **lowering its own
+      `reliability_score`**, 15% of the ranking weight, as a penalty for releasing a
+      courier. All three reproduced. The side effect should be skipped when
+      `donation.recipient_id` already equals the caller's organisation. Regression test:
+      after a release a *different* courier can see and claim the pickup, and the counter
+      did not move — the property the existing D-35 tests do not assert, which is how this
+      survived an authorization audit of the same edge.
+- [ ] **Bound `image_url`.** Unchanged in substance from group A, promoted here because it
+      is the same size of change and the audit measured its cost: a 3 MB base64 data URL is
+      accepted (`code/foodlink/models.py:219`; `schemas.DonationCreate.image_url` has no
+      `max_length`), and `AppContext.load()` re-reads `limit=500` donations after **every**
+      mutation, so one photo is 3 MB on every write by every user. This is the cheap guard;
+      object storage (group F) remains the real fix. `[B-6 · R-19 · S-6 · HA-7]`
+
+### Step 2 — repair the matcher's scoring
+
+`[HA-4 · HA-5 · R-13 · D-05]` — **M**. No schema change and no API change; `matching.py`
+and its tests.
+
+- [ ] **`HA-4` · `_quantity_score` and `_capacity_score` are the same input inverted.** Both
+      take `(quantity, capacity)` and are monotone in the same ratio `r = quantity /
+      capacity`, in opposite directions, so their weighted contribution is
+      `0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r`: **45% of the published weight moves five
+      points across the entire feasible range**, then drops 11.5 points at `r = 1`. Ranking
+      is therefore decided in practice by distance (25%) and deadline (15%), since
+      `reliability_score` is the flat `85` cold-start prior for any kitchen under three
+      acceptances. Since I-8 the explainability panel captions both correctly, which makes
+      two collinear bars read as two independent criteria.
+- [ ] **`HA-5` · The fit criterion compares mixed units.** `Donation.quantity` is a count in
+      `Donation.unit` (Meals · Kg · Boxes · Pieces); `Recipient.capacity` is meals per day;
+      `matching.py` never reads `unit`. Measured: 100 Kg and 100 Meals score identically
+      (88), 5 Boxes scores 83. `lib/impact.ts` carries a prominent warning about this exact
+      hazard for display totals; the matcher has no equivalent guard.
+- [ ] Land the boundary unit tests group D already wants **with** this change, including one
+      asserting the two criteria are not collinear — it fails today, which is the point.
+      ⚠️ **Do not re-tune `WEIGHTS` before this lands** (`Backlog → G`, `R-31`): tuning two
+      collinear criteria is tuning noise.
+
+### Step 3 — a frontend test harness
+
+`[HA-8 · R-14]` — **M**.
+
+- [ ] Vitest + Testing Library, seeded with the modules that are pure and that carry the
+      arithmetic behind every honesty decision: `lib/impact.ts`, `lib/geo.ts`, `lib/time.ts`
+      and `lib/adapters.ts`, plus `components/ProtectedRoute.tsx`. Add the step to `ci.yml`.
+      The rationale is already recorded three times — D-32, D-33 and D-40 each close with
+      "Nothing tests this" — and `tsc` is the only frontend gate, so a type-correct
+      behavioural regression passes CI today. Fix the dead `npm run lint` script while in
+      `package.json` (group H).
+
+### Step 4 — `HA-6` · finish the landing page
+
+`[HA-6 · QA-4 · repo]` — **S**. Supersedes I-1a, which was scoped too narrowly. Detail in
+*Backlog → I*.
+
+**Then stop hardening.** The audit's recommended first product feature is the **donor needs
+board** (*Blocked*): **S**, no endpoint or schema change, over data `AppContext.load()`
+already fetches for every role. `HA-3` (the `/matches` distance disclosure, group A) and
+*Backlog → E* (concurrency guard → Postgres → deployment configuration) sequence behind it.
 
 ---
 
@@ -125,9 +166,24 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       client-side only; nothing can invalidate an issued token. `[R-11 · S-4 · D-13]` — ~4 h
 - [ ] Issue `PRAGMA foreign_keys = ON` for SQLite through a connection event listener —
       declared foreign keys are unenforced on the default configuration. `[R-15 · S-5 · D-08]` — **S**
-- [ ] Validate and length-cap `image_url` — an unconstrained `Text` column
-      (`code/foodlink/models.py:219`) receiving base64 data URLs from the frontend. This is
-      the cheap guard; the real fix is object storage (group F). `[B-6 · R-19 · S-6]` — **S**
+- [ ] ⬆️ **Promoted to *Next* step 1** — validate and length-cap `image_url`, an
+      unconstrained `Text` column (`code/foodlink/models.py:219`) receiving base64 data URLs
+      from the frontend. The cheap guard; object storage (group F) is the real fix.
+      `[B-6 · R-19 · S-6 · HA-7]` — **S**
+- [ ] ⬆️ **Promoted to *Next* step 1** — `HA-1`: scope `GET /api/volunteers`, which returns
+      every courier's phone number to any account holding the `ngo` role, verified or not.
+      `[HA-1 · D-26 · repo]` — **S**
+- [ ] **`HA-3` · `GET /donations/{id}/matches` gives back the recipient coordinates D-26
+      withholds.** A donor reads `200 []` from `GET /api/recipients` by design, then posts
+      three donations at pins of its own choosing and trilaterates any verified kitchen from
+      `MatchOut.distanceKm`. Reproduced: recovered `(30.3600, 76.3700)` exactly, first try.
+      Whether it matters is a product judgement — a community kitchen's address is often
+      public, a shelter's may not be — but it is a demonstrated bypass of a scoping decision
+      made on purpose, so it should be answered rather than left unrecorded. Cheapest
+      mitigation: round `MatchOut.distance_km` to ~0.5 km, which no screen and no score
+      notices (the UI shows one decimal; `_distance_score` decays linearly over 8 km).
+      ⚠️ **Do not remove the field** — I-2/D-33 depends on it for every NGO distance shown.
+      `[HA-3 · D-26 · D-33]` — **S**
 - [ ] Security headers + CSP (and HSTS wherever TLS terminates). Nothing is sent today. A
       CSP is the single largest mitigation available for the localStorage-token choice the
       project has deliberately accepted (D-13). `[R-21 · S-7]` — **S**
@@ -140,6 +196,20 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 ### B. Correctness & reliability
 
+- [ ] ⬆️ **Promoted to *Next* step 1** — `HA-2`: clear `volunteer_id` when a pickup is
+      released and stop the second `accepted_donations` increment. Releasing a pickup
+      currently strands it: no other courier can see or claim it, and the owning kitchen's
+      `reliability_score` drops for having released. `[HA-2 · D-35 · D-38 · repo]` — **S**
+- [ ] ⬆️ **Promoted to *Next* step 2** — `HA-4`/`HA-5`: the matcher's `quantity` and
+      `capacity` criteria are algebraically collinear (45% of the weight moves 5 points),
+      and the fit ratio compares `Donation.quantity` against `Recipient.capacity` without
+      reading `Donation.unit`. `[HA-4 · HA-5 · D-05 · R-13]` — **M**
+- [ ] Skip explicit nulls in `PATCH /recipients/me` and `PATCH /volunteers/me`. Both assign
+      an explicit `null` straight to a non-nullable column, so `{"name": null}` raises an
+      uncaught `IntegrityError` — and because no exception handler exists the response has
+      no body and `api.ts` renders it as *"Cannot reach the FoodLink server"*. Reproduced.
+      `RequirementUpdate` already skips nulls (D-29); these two were left as out of scope.
+      `[repo · HA]` — **S**
 - [ ] Global exception handler returning a correlation id. `main.py` registers no
       `exception_handler`, and `frontend/src/lib/api.ts` maps a bodiless 5xx to
       `NetworkError` — so an unhandled 500 reaches the user as *"Cannot reach the FoodLink
@@ -170,7 +240,8 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 ### D. Testing
 
-- [ ] Unit tests for `matching.py`'s scoring functions at their boundaries —
+- [ ] ⬆️ **Promoted to *Next* step 2, and widened** — unit tests for `matching.py`'s
+      scoring functions at their boundaries —
       `_quantity_score` at the overflow ratio, `_deadline_score` on negative slack, the
       reliability cliff at 3 accepted donations. Partially started: one test in
       `test_match_score_consistency.py` calls `score_pair` directly with an injected `now`
@@ -178,9 +249,11 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       only through the API. `[R-13]` — **M**
 - [ ] Round-trip test for `UtcDateTime`. The decorator exists to prevent one specific
       timezone bug (D-09) and has no direct test. `[§14.4]` — **S**
-- [ ] Frontend tests (Vitest + Testing Library), starting with `ProtectedRoute`. 84 files
-      under `frontend/src`, zero tests — `tsc` in `npm run build` is the only frontend gate
-      in CI, so a type-correct behavioural regression passes. `[R-14]` — **L**
+- [ ] ⬆️ **Promoted to *Next* step 3** — frontend tests (Vitest + Testing Library),
+      starting with the pure modules and `ProtectedRoute`. 84 files under `frontend/src`,
+      zero tests; `tsc` in `npm run build` is the only frontend gate in CI, so a
+      type-correct behavioural regression passes. `[R-14 · HA-8]` — **M** for the harness
+      plus the pure modules, **L** for meaningful component coverage
 - [x] ~~Concurrency test for the courier claim.~~ Done with the fix — see *Completed*.
       `test_courier_claim.py` opens the window deterministically against a file-backed
       database. `[§14.4]`
@@ -243,14 +316,14 @@ Places where a shipped feature is incomplete — not new ideas.
 > unchanged by the QA audit** against `23c27f4`. They are independent of each other and
 > small enough to take in one sitting.
 
-- [ ] Show an NGO the distance to a donation it has not accepted yet.
-      `serialize.donation_out()` measures `distanceKm` against the **matched** recipient
-      (`code/foodlink/serialize.py:21`), so it is null for everything in the open pool.
-      `mobile/NGOAvailable.tsx:100` therefore reads "– km" for every row and its *Nearest*
-      sort (`?? 99`, line 24) is a no-op; desktop `DonationCard.tsx:58` quietly falls back
-      to the location string instead. The figure already exists per-viewer as
-      `viewerMatch.distanceKm` (D-30); this is wiring, not computation.
-      `[repo · QA-8]` — **S**
+- [x] ~~Show an NGO the distance to a donation it has not accepted yet.~~ **Done as part
+      of I-2 (`fcbd03b`)** and confirmed by the health audit — this entry was left open by
+      mistake. `serialize.donation_out()` still measures `distanceKm` against the *matched*
+      recipient, so it is still null in the open pool, but no screen reads it directly any
+      more: `lib/geo.displayDistanceKm` prefers `viewerMatch.distanceKm` (D-30, D-33) and
+      `DonationCard`, `DonationRow` and `mobile/NGOAvailable` (list, sort **and** sheet) all
+      go through it. The "– km" rows and the `?? 99` no-op sort are both gone.
+      `[repo · QA-8 · HA]`
 - [ ] Record the match score on the `MATCHED` event rather than reading the column later.
       `adapters.activityMessage` (`frontend/src/lib/adapters.ts:213`) renders
       "Matched … at {matchScore}%", and acceptance overwrites `match_score`, so the line
@@ -285,7 +358,9 @@ Places where a shipped feature is incomplete — not new ideas.
       this decision is no longer urgent, only open. `[R-30 · QA-1]`
 - [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
 - [ ] Tune the matching weights against real outcome data; revisit the 85 reliability
-      prior. `[R-31]`
+      prior. ⚠️ **Blocked on *Next* step 2** (`HA-4`): two of the five criteria are
+      currently collinear, so re-weighting before they are separated is tuning noise.
+      `[R-31 · HA-4]`
 - [ ] Recurring donation schedules. `Requirement.daily_recurring` exists on the recipient
       side; donations have no equivalent. ⚠️ **The recipient-side flag is storage only:**
       `models.py:293` declares it, `RequirementOut` echoes it, and the NGO UI renders a
@@ -308,6 +383,10 @@ Places where a shipped feature is incomplete — not new ideas.
 - [ ] Resolve the duplicate `foodlink.db`. Both `./foodlink.db` and `./code/foodlink.db`
       exist because the default SQLite URL is relative to the working directory — a
       recurring "my data vanished" trap. `[B-5 · D-08]` — **S**
+- [ ] Fix or delete the dead `npm run lint` script. `frontend/package.json` declares an
+      `eslint` invocation, but eslint is in neither `devDependencies` nor
+      `package-lock.json` and no config file exists, so the script fails if run. CI does not
+      call it, which is why nothing has noticed. `[HA · repo]` — **S**
 - [ ] Audit the remaining unanchored `.gitignore` patterns. `8386371` anchored `lib/`, but
       `build/`, `dist/` and `var/` still match at any depth — `git check-ignore` confirms
       that `frontend/src/build/`, `frontend/src/dist/` and `frontend/src/var/` would each be
@@ -346,15 +425,29 @@ Places where a shipped feature is incomplete — not new ideas.
       `DECISIONS.md` D-32; verified in the running app against the dev database for a donor,
       an NGO and a courier on desktop and `/m/*`.
 
-- [ ] **I-1a · The public landing page still prints four invented platform statistics.**
-      `[repo]` — **S**, and it needs a decision first. `pages/Landing.tsx:8-13` renders
-      `1,240+` meals redistributed, `32` partner organisations, `56` active volunteers and
-      `84` successful pickups as facts. (The first is the same literal I-1 removed from
-      `NGOImpact`.) I-1 did not touch it because it is not a per-role impact surface and
-      because the fix is not free: `GET /api/metrics` is `Depends(get_current_user)`, so a
-      pre-login page cannot read the real figures without either a public metrics endpoint
-      or a public subset of one — a scope decision, and D-26's neighbour. Cheap honest
-      options that need no backend change: delete the strip, or relabel it as illustrative.
+- [ ] **I-1a / `HA-6` · The public landing page still prints invented platform figures —
+      in two places, not one.** `[repo · QA-4 · HA-6]` — **S**, *Next* step 4.
+      ⚠️ **This entry was scoped too narrowly and the health audit widened it.** Three sites,
+      all in `pages/Landing.tsx`:
+
+      1. `:8-13` — the four-stat strip: `1,240+` meals redistributed, `32` partner
+         organisations, `56` active volunteers, `84` successful pickups, rendered as facts.
+         (The first is the same literal I-1 removed from `NGOImpact`.)
+      2. `:163-181` — **the block I-1a did not record**: a card with a pulsing green dot
+         captioned **"Live this term"**, printing `1,240+`, "meals redistributed across 32
+         partner NGOs" and **"18% more than last month"**. This is D-31's worst category — a
+         literal wearing a measurement's clothes, under an indicator asserting liveness — on
+         the only page anyone sees before logging in.
+      3. `HOW_IT_WORKS` — "Meals saved and community impact update **in real time** on every
+         dashboard." Nothing updates in real time; there is no polling, no SSE and no
+         WebSocket anywhere (`ARCHITECTURE.md` constraint 7).
+
+      **It no longer needs a decision first.** The original entry was blocked on whether any
+      metric may be read without authentication, because `GET /api/metrics` is
+      `Depends(get_current_user)`. Both honest options need no backend change and no
+      decision: delete the figures, or relabel the section as illustrative. A public metrics
+      endpoint remains a separate, optional question (D-26's neighbour) and should not hold
+      this up.
 
 - [x] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **done,
       commit `fcbd03b`, 2026-09-03.** The audit's findings were all confirmed against
@@ -554,7 +647,7 @@ Places where a shipped feature is incomplete — not new ideas.
       already carries a comment saying so — and renaming it was left alone as out of scope.
 
 - [x] **I-9 · Fix the donor profile form's field wiring.** `[QA-12 · repo]` — **done,
-      uncommitted working tree, 2026-09-04.** Each of the audit's three claims was checked
+      commit `c274e99`, 2026-09-04.** Each of the audit's three claims was checked
       against the source before anything was changed, and **two of them were wrong**:
 
       * *"The input labelled Email Address is bound to `profile.operatingHours`"* — **not
@@ -649,9 +742,12 @@ settled. They sit here rather than in *Backlog* so that nobody implements one by
   behave in a way the project wants? If yes, it is a read-only page over data the client
   already has — **S**, and no endpoint changes. Two things to settle alongside: whether the
   board should be scoped by radius rather than shown platform-wide, and whether
-  `GET /api/requirements` should gain an explicit scope decision of its own now that it is
-  the one unscoped cross-organisation read left (it is defensible, but it is currently
-  unscoped by omission rather than by a recorded decision).
+  `GET /api/requirements` should gain an explicit scope decision of its own, since it is
+  unscoped by omission rather than by a recorded decision (it is defensible: `RequirementOut`
+  carries a name and a need, no contact details). ⚠️ It is **not** the only unscoped
+  cross-organisation read, as this entry used to say — `GET /api/volunteers` (`HA-1`) and
+  `/matches` (`HA-3`) are the other two, and the first of them is a real defect rather than
+  an open question.
 
 - **Should there be a real, exportable impact report?** `[QA-4 · repo]`
   ✅ **The misleading half is closed:** I-1 deleted both stub buttons (2026-09-03), so
@@ -695,6 +791,44 @@ external.
 ---
 
 ## Completed (verified in the repository)
+
+### Project health audit — 2026-09-05, documentation only `[HA-1 … HA-8]`
+
+Documentation only. **No source file was changed**, no schema touched, no dependency added;
+168 backend tests re-run passing, `alembic check` clean, `tsc && vite build` clean, working
+tree left empty. A full architecture, security, database, API-contract, matching, frontend,
+testing and deployment review against HEAD `c274e99`.
+
+- [x] **The architecture, the authorization model and the decision log were checked and
+      largely cleared.** Every edge of the donation state graph was re-derived against
+      `ALLOWED_TRANSITIONS`, `TRANSITION_ROLES` and `_needs_ownership` and **no remaining
+      unscoped write on a bound donation was found** — D-34/D-35 hold. No privilege
+      escalation was found: `SELF_SIGNUP_ROLES` blocks `admin` in the *schema*, the admin
+      router is gated once at router level, the self-service schemas omit privileged fields
+      by shape, and `get_current_user` ignores the token's `role`. Verdict: **no major
+      blocker; nothing architectural to fix.**
+- [x] **Six defects confirmed, each reproduced rather than inferred**, and five of them were
+      carried by none of the four AI files: `HA-1` (courier roster readable by any
+      self-registered account), `HA-2` (releasing a pickup strands it and double-increments
+      `accepted_donations`), `HA-3` (`/matches` discloses recipient coordinates), `HA-4`
+      (two of five match criteria collinear), `HA-5` (matcher compares mixed units), `HA-6`
+      (the landing page fabricates in two places, not one). They are in *Next* and
+      *Backlog → A/B/I*; `PROJECT_STATE.md` carries them as issues 23–28.
+- [x] **Documentation reconciled against the source.** Corrections applied across all four
+      files: stale HEAD/provenance (I-9 recorded as uncommitted when it is `c274e99`);
+      `ARCHITECTURE.md`'s test count (162 → 168) and its claim that `GET /api/requirements`
+      was "the one unscoped cross-organisation read left" (it is not — `HA-1` and `HA-3`);
+      the release-behaviour description; D-17's "37 tests" (integration subset, not the
+      total); D-26's courier-roster objection, which was recorded and never implemented; and
+      one already-closed group-F item still listed open (the NGO open-pool distance, closed
+      by I-2).
+- [x] ⚠️ **One earlier audit claim was checked and stands retracted**, alongside the two
+      I-9 already retracted: nothing here re-opens them. The QA audit's *"Email Address
+      input bound to `operatingHours`"* was a misread; the real defect was the write-only
+      `User.phone` that I-9 fixed (D-40).
+- [x] ⚠️ **Nothing was promoted into *Current*.** The audit recommends an order and *Next*
+      records it as a recommendation; the promotion is a Project Manager call.
+
 
 ### Lifecycle authorization audit (Task 14) — committed `efd5fd8` `[repo]`
 - [x] **Every edge of `ALLOWED_TRANSITIONS` enumerated against `TRANSITION_ROLES` and

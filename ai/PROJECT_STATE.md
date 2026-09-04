@@ -2,15 +2,18 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
-> write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
-> follow-up as `efd5fd8` — as are the I-4 notification-honesty pass (`6863451`), the I-5
-> trust/verification pass (`6c82739`), the I-6 courier status-display fix (`b41c4e6`), the
-> I-7 overdue-deadline fix (`fc91091`) and the I-8 match-criteria wording fix (`ed56bd5`).
-> On top of those the working tree carries the **uncommitted** I-9 donor-profile binding
-> fix described below. A QA audit was run
-> against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
-> `TASKS.md`.
+> Last verified against the repository: 2026-09-05, branch `master`, **HEAD `c274e99`,
+> working tree clean.** The lifecycle write-authorization work is committed — D-34 as
+> `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
+> notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
+> I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
+> I-8 match-criteria wording fix (`ed56bd5`) and the I-9 donor-profile binding fix
+> (`c274e99`, now HEAD).
+>
+> Two audits have been run against this codebase and neither changed source: a manual QA
+> audit against `23c27f4` on 2026-09-02, and a **full project health audit against
+> `c274e99` on 2026-09-05**. The health audit's confirmed findings are issues 23–28 below
+> and tag `HA-n` in `TASKS.md`.
 
 ## What this project is
 
@@ -32,9 +35,9 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) are all done. ⚠️ **The one screen still printing invented figures is the pre-login landing page** (I-1a, and it is wider than first recorded — see issue 28) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
+| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. ⚠️ **Read scoping is *not* finished outside donations and recipients:** `GET /api/volunteers` is role-gated but unscoped (issue 23) and `/matches` discloses recipient geometry (issue 25) |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
@@ -51,6 +54,18 @@ the same `Settings` object. The error message states both options. Tests supply 
 own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
+
+- **2026-09-05, documentation only** — **Full project health audit against `c274e99`.**
+  No source changed; 168 tests re-run passing, `alembic check` clean, `tsc && vite build`
+  clean. It confirmed the architecture, the authorization model and the decision log as
+  broadly sound, and found **five defects none of the four AI files carried**, each
+  reproduced against a throwaway database rather than inferred: the courier roster is
+  readable by any self-registered account (23), releasing a pickup strands it (24),
+  `/matches` discloses recipient coordinates (25), and two of the matcher's five criteria
+  are collinear (26) and dimensionally invalid (27). It also found the landing page
+  fabricates more than I-1a recorded (28). All six are in `TASKS.md` under the tag `HA-n`;
+  none is architectural, and none needs a schema change. **Verdict: no major blocker —
+  close 23, 24 and the `image_url` cap, then the matcher, then switch to product work.**
 
 - **2026-09-04, commit `551c96d`** — **Lifecycle write authorization: the
   four transitions that acted on a donation without checking whose it was.**
@@ -76,7 +91,7 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **I-9: an account can read the phone number it
+- **2026-09-04, commit `c274e99`** — **I-9: an account can read the phone number it
   is allowed to write.** The audit filed three claims here and two were wrong: the donor
   form's *Email Address* input has been bound to `profile.email` since the first commit, at
   the audit's own commit included, and that value is rendered — both were verified with
@@ -384,42 +399,91 @@ the existing screens did not need rewriting — only the data source changed.
 
 ## Current development focus
 
-**Nothing is in progress, and `TASKS.md` → *Next* is still empty** — the `CANCELLED`
-ownership gap found while fixing the other three was folded into the same change (D-34)
-rather than left open. But what would fill the list has changed. The seven-step hardening sequence — signing-key configuration, migrations,
-donation read scoping, CI, recipient read scoping, authentication rate limiting, courier
-claim race — is complete, and the requirement lifecycle was the first item taken out of
-*Backlog → F*. Every unscoped read of personal contact data is closed, bcrypt is no longer
-the only bound on a credential-stuffing run, and the one correctness defect that had to be
-fixed before Postgres is fixed.
+**`TASKS.md` → *Next* is no longer empty.** The seven-step hardening sequence —
+signing-key configuration, migrations, donation read scoping, CI, recipient read scoping,
+authentication rate limiting, courier claim race — is complete, and group I (the nine
+interface claims the QA audit found the system could not honour) is complete except the
+landing page. What replaced them is the health audit's six confirmed findings, and unlike
+group I they are **defects in the running system, not in its description**.
 
-**The QA audit added a body of work that did not exist on the list before**, and it is not
-optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
-honour — invented impact figures, live-GPS text over a component with no GPS, matching
-promises the matcher does not keep, dead notification settings, unearned verification
-badges. **All nine are now done** — I-1 (the largest) through I-9 — leaving only the
-I-1a residue on the landing page, which is a decision rather than an implementation.
-D-31 explains why that ranks as hardening in this project specifically: the platform's
-argument is that its numbers are evidence, and fabricated ones sitting beside real ones
-cost more here than they would elsewhere.
+**The next task is `HA-1` + `HA-2` + the `image_url` cap, taken together as one small
+change** (`TASKS.md` → *Next*, step 1). They are grouped because each is a few lines, each
+has a matching regression test that does not exist yet, and two of them are the only
+findings in the audit that are both reproducible and currently exploitable. After that,
+step 2 repairs the matcher's scoring (`HA-4`, `HA-5`) — the project's headline feature,
+which today spends 45% of its published weight on two criteria that cancel.
 
-**The order is still a Project Manager call.** Two things worth carrying into it. First,
-group I is cheap and demo-facing: it is what an evaluator sees in the first five minutes,
-and most of it is deletion and rewording rather than construction. Second, *Backlog → E*
-(Postgres, then deployment configuration) remains the largest block of unbuilt work and is
-no longer gated by anything in the codebase — while groups A and B still hold several
-sub-hour items (SQLite foreign-key enforcement, an `image_url` cap, a readiness probe)
-that would not displace it.
+**Then stop hardening.** The audit's strategic conclusion is that the remaining backlog
+splits into things that are *broken* (steps 1–3 of *Next*, two to three days) and things
+that are merely *unbuilt* — Postgres, deployment, logging, pagination. The second group is
+infrastructure for a deployment that does not exist yet and should be sequenced *with* that
+deployment rather than ahead of it. The recommended first product feature is the **donor
+needs board** (*Blocked*): **S**, no endpoint or schema change, over data
+`AppContext.load()` already fetches for every role.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional expansion
-and cleanup) or *Blocked*, which now holds **eight** open decisions: the original four,
-plus the four the audit opened — road distance, requirement-aware matching, a donor needs
+and cleanup) or *Blocked*, which holds **eight** open decisions: the original four, plus
+the four the QA audit opened — road distance, requirement-aware matching, a donor needs
 board, and a real impact report. None of it has been committed to.
 
 ## Known issues and blockers
 
 **Nothing blocks development or local use.** Ordered by severity; numbering is kept
 stable as items are resolved, so gaps are expected.
+
+### High — found by the health audit, 2026-09-05, each reproduced
+
+23. **`GET /api/volunteers` is role-gated but unscoped, so the whole courier roster —
+    names, locations and *phone numbers* — is readable by any account holding the `ngo`
+    role.** Registration accepts `role: "ngo"` from a stranger and the row starts
+    `is_verified=False`; verification gates ranking and acceptance, not this endpoint. So
+    the cost of reading every courier's phone number is one throwaway email address.
+    Reproduced: a freshly registered, unverified NGO gets `200` and the full roster.
+    ⚠️ This is the objection **D-26 wrote down and then fixed only on the neighbouring
+    table** — `RecipientOut` was scoped, `VolunteerOut` was not, and no task was filed.
+    `TASKS.md` → *Next* step 1 / `HA-1`.
+24. **Releasing a pickup does not release it.** `VOLUNTEER_ASSIGNED → ACCEPTED` is legal,
+    role-gated to the accepting kitchen, and described throughout this documentation as
+    "the release of a pickup" — but **nothing clears `volunteer_id`**. Three consequences,
+    all reproduced: `_readable_by` gives a courier `ACCEPTED AND volunteer_id IS NULL`, so
+    the donation becomes **invisible to every other courier**; `_claim_pickup`'s
+    `volunteer_id IS NULL OR volunteer_id = :courier` means only the original courier can
+    ever take it again and anyone else gets a `409` that is not true; and the acceptance
+    side effect runs a second time, so `recipient.accepted_donations` goes 1 → 2 for one
+    donation — which, since `reliability_score = 100 × completed/accepted`, means **a
+    kitchen that releases a courier permanently damages its own match score** (15% of the
+    ranking weight) for doing the right thing. `TASKS.md` → *Next* step 1 / `HA-2`.
+
+### Medium — found by the health audit, 2026-09-05
+
+25. **`GET /donations/{id}/matches` gives back the recipient coordinates D-26 withholds.**
+    A donor reads `[]` from `GET /api/recipients` by design, then posts three donations at
+    pins of their choosing and trilaterates any verified kitchen from `MatchOut.distanceKm`.
+    Reproduced: recovered `(30.3600, 76.3700)` exactly, first try. Whether it matters is a
+    product judgement — a community kitchen's address is often public, a shelter's may not
+    be — but it is a demonstrated bypass of a scoping decision made on purpose. `HA-3`.
+26. **Two of the matcher's five criteria are the same input inverted.** `_quantity_score`
+    and `_capacity_score` take the same two arguments and are monotone in the same ratio
+    `r = quantity / capacity`, in opposite directions:
+    `0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r`. So 45% of the published weight moves
+    **five points across the entire feasible range**, then falls off an 11.5-point cliff at
+    `r = 1`. In practice the ranking is decided by distance (25%) and deadline (15%) —
+    reliability is the flat `85` prior for any kitchen under three acceptances. The
+    explainability panel renders them as two independent bars, which since I-8 are captioned
+    accurately and are still one number reflected. `HA-4`.
+27. **The matcher compares `Donation.quantity` against `Recipient.capacity` without reading
+    `Donation.unit`.** `quantity` is a count in Meals · Kg · Boxes · Pieces; `capacity` is
+    meals per day. Measured: 100 Kg and 100 Meals score identically (88); 5 Boxes scores 83.
+    `lib/impact.ts` carries a prominent warning about exactly this mixed-unit hazard for
+    display totals — the matcher has no equivalent guard. `HA-5`.
+28. **The landing page fabricates more than I-1a recorded.** Beyond the four-stat strip at
+    `pages/Landing.tsx:8-13`, there is a second block at `:163-181` — a card with a pulsing
+    green dot captioned **"Live this term"**, printing `1,240+`, "meals redistributed across
+    32 partner NGOs" and **"18% more than last month"** — plus `HOW_IT_WORKS`'s claim that
+    impact updates "**in real time** on every dashboard". This is D-31's worst category (a
+    literal wearing a measurement's clothes) on the only page seen before login. `HA-6`.
+
+### Resolved, and earlier open items (1–22)
 
 ✅ **Resolved:** the insecure default JWT signing key. `config.py` is now fail-closed —
 a missing `FOODLINK_SECRET_KEY` raises `ConfigurationError` during import (before
@@ -468,7 +532,7 @@ SQLite's serialised writes make that inert today; on Postgres two concurrent tra
 on one donation can both succeed and append two events. Tracked in `TASKS.md` →
 *Backlog → D*.
 
-### Medium
+#### Medium — earlier
 6. **Expiry sweep has no scheduler.** `POST /api/admin/maintenance/expire` must be
    called manually, so the expiry-loss metric currently **understates** reality.
 7. **`GET /api/metrics` loads the whole donations table plus all events into memory**
@@ -487,7 +551,7 @@ left open shows a score computed when it loaded. That is deliberate (agreement b
 surfaces was the point) but the value is a *live* score, so nothing should cache it
 longer without saying so.
 
-### Low / correctness oddities
+#### Low / correctness oddities
 10. **A donation accepted but never delivered is stuck forever** — the sweep only
     touches `AVAILABLE` and `MATCHED`. Undecided whether intentional.
 11. **Revoking verification mid-lifecycle has no effect** on an already-accepted
@@ -496,12 +560,16 @@ longer without saying so.
     relative to the working directory — a recurring "my data vanished" trap. Both are
     now stamped at head; only `code/foodlink.db` holds data (10 users, 6 donations).
 13. `image_url` has no length or format validation; frontend sends base64 data URLs
-    into a `Text` column.
-15. **`serialize.donation_out()` computes `distanceKm` against the *matched* recipient,
-    so it is null for every donation an NGO is still deciding on** — the lists show
-    "– km", and mobile's *Nearest* sort is therefore a no-op on the available list. The
-    figure now exists per-viewer inside `viewerMatch.distanceKm`; wiring it up was left
-    out of the match-score fix as unrelated to the score.
+    into a `Text` column. ⚠️ The health audit measured the cost: a 3 MB data URL is
+    accepted and stored, and `AppContext.load()` re-fetches `limit=500` donations after
+    **every** mutation, so one photo is 3 MB on every write by every user. Promoted to
+    *Next* step 1 alongside `HA-1`/`HA-2` because it is the same size of change.
+15. ✅ **Resolved (`fcbd03b`, I-2) — an NGO now sees its own distance to an open
+    donation.** `serialize.donation_out()` still measures `distanceKm` against the
+    *matched* recipient, so it is still null in the open pool — but that is no longer
+    what the screens read. `lib/geo.displayDistanceKm` prefers `viewerMatch.distanceKm`
+    (D-30, D-33), and `DonationCard`, `DonationRow` and `mobile/NGOAvailable` (list, sort
+    and sheet) all go through it. The "– km" symptom and the `?? 99` no-op sort are gone.
 16. **A donation's `MATCHED` activity line reads the current `match_score`**
     (`adapters.activityMessage`), which acceptance overwrites — so "Matched X at 94%"
     silently becomes "at 79%" afterwards. Recording the score on the event would fix it;
@@ -511,7 +579,7 @@ longer without saying so.
 14. An unhandled 500 reaches the user as "Cannot reach the FoodLink server" because
     `api.ts` maps a bodiless 5xx to `NetworkError` — a crash looks like an outage.
 
-### Claims the interface makes that the code cannot honour (QA audit, 2026-09-02)
+#### Claims the interface makes that the code cannot honour (QA audit, 2026-09-02)
 
 Full evidence and per-item scope in `TASKS.md` → *Backlog → I*; the principle is
 `DECISIONS.md` D-31. Listed here because severity is a judgement about the project's
@@ -550,12 +618,14 @@ credibility rather than about its correctness, and that judgement belongs in thi
     Donor" badge and the "FSSAI Hygiene Standards Compliant" panel are gone from a role the
     data model has **no** verification concept for. `NGOProfile`, which always read the real
     `me.isVerified`, is unchanged and remains the model the rest now follows.
-22. **Smaller, same family:** "En route on vehicle" renders on a `COMPLETED` donation
-    because the line ignores `status`; `StatusTimeline` shows "Matched · Current" with no
-    hint that the deadline passed, though `lib/time.ts` already computes "Overdue"; three
-    screens hard-code seeded identities ("College Central Mess", "Aarav") for every account;
-    the explainability panel mis-describes two of its five criteria; the donor profile's
-    "Email Address" input is bound to `operatingHours`.
+22. ✅ **Resolved — the smaller items of the same family.** "En route on vehicle" on a
+    `COMPLETED` donation (I-2, then I-6 made the whole line status-driven); `StatusTimeline`
+    showing "Matched · Current" past the deadline (I-7); the hard-coded seeded identities
+    (I-1); the two mis-described criteria in the explainability panel (I-8). ⚠️ The audit's
+    sixth claim here — *"the donor profile's Email Address input is bound to
+    `operatingHours`"* — **was wrong and is retracted**: that input has read `profile.email`
+    since the first commit. The real defect was a **write-only `User.phone`**, fixed by I-9
+    (D-40).
 
 ## Technical debt
 
@@ -583,6 +653,10 @@ credibility rather than about its correctness, and that judgement belongs in thi
   line is documented in `DECISIONS.md` D-07.
 - TypeScript wire types in `lib/api.ts` mirror the Pydantic schemas **by hand**. A
   backend rename is a silent runtime break, not a compile error.
+- **One more write-only field, the same shape I-9 fixed one table over:**
+  `VolunteerUpdate` writes `latitude`/`longitude` and `VolunteerOut` does not return them,
+  so a courier can set a base location it can never read back. D-40's rule — a field the
+  holder may write must appear in the schema the holder reads — has not been applied here.
 - No structured logging anywhere; no `logging` configuration in the app.
 - A retired requirement has no reader: `GET /api/requirements` is active-only, so
   reopening one is possible through the API but not through the UI (`TASKS.md` → *Backlog
@@ -593,22 +667,25 @@ credibility rather than about its correctness, and that judgement belongs in thi
 
 ## Immediate priorities
 
-1. Decide what follows the hardening sequence — *Next* is empty and nothing has been
-   promoted into it. **Group I is finished** (I-1 through I-9), so the audit's suggested
-   order now points at the three group-F match-score follow-ups in one sitting → group E.
-   I-1a (the landing page's invented statistics) is the small residue I-1 left, and it is
-   the one group-I item that cannot simply be implemented: it needs a decision on whether
-   any metric may be read without authentication.
-2. Answer at least the cheap half of the four decisions the audit opened
-   (`TASKS.md` → *Blocked*). Three of them — road distance, requirement-aware matching, a
-   real impact report — can be answered "not now" at zero cost, because group I removes the
-   claim either way; for the impact report that is now literally true, since I-1 has already
-   deleted both stub buttons. Only the donor needs board is a "yes/no build it" question,
-   and it is **S** if yes.
-3. Decide whether the rate-limit counter has to be shared, when deployment is
-   designed — it is per-process today (`TASKS.md` → *Backlog → E*)
-4. Extend the claim's concurrency guard to the remaining lifecycle transitions before
-   Postgres lands, for the same reason the claim itself was fixed first
+1. **`HA-1` + `HA-2` + the `image_url` cap, as one change** (`TASKS.md` → *Next*, step 1).
+   Scope the courier roster, clear `volunteer_id` on release and stop the second
+   `accepted_donations` increment, and bound `image_url`. Each is a few lines; each needs a
+   regression test that does not exist yet. **S.**
+2. **Repair the matcher's scoring** (`HA-4`, `HA-5`; *Next*, step 2). De-collinearise
+   `_quantity_score`/`_capacity_score` and make the fit criterion unit-aware, with the
+   boundary unit tests *Backlog → D* already wants. No schema change. **M.**
+   ⚠️ Do **not** re-tune `WEIGHTS` before this lands — tuning two collinear criteria is
+   tuning noise.
+3. **Stand up a frontend test harness** (`HA-8`; *Next*, step 3). Vitest over the pure
+   modules — `lib/impact.ts`, `lib/geo.ts`, `lib/time.ts`, `lib/adapters.ts` — plus
+   `ProtectedRoute`. Every honesty invariant D-31 → D-40 established is currently held by
+   review habit alone; D-32, D-33 and D-40 each close with "Nothing tests this". **M.**
+4. Then **stop hardening and build the donor needs board** (*Blocked*) — the smallest real
+   feature in the project and the one that gives `requirements` an audience.
+
+Sequenced behind those, unchanged: `HA-3`, the landing page (`HA-6` / I-1a), then
+*Backlog → E* (concurrency guard → Postgres → deployment configuration), which is where
+the rate-limit-sharing decision gets answered.
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

@@ -7,9 +7,10 @@
 > **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`. **D-34**/**D-35**
 > (lifecycle write authorization) are committed as `551c96d` and `efd5fd8`, **D-36**
 > (notifications, I-4) as `6863451`, **D-37** (verification wording, I-5) as `6c82739`,
-> **D-38** (courier status display, I-6) as `b41c4e6` and **D-39** (overdue deadlines, I-7)
-> as `fc91091`; **D-40** (an account reads its own contact details, I-9) is in the working
-> tree, uncommitted.
+> **D-38** (courier status display, I-6) as `b41c4e6`, **D-39** (overdue deadlines, I-7)
+> as `fc91091` and **D-40** (an account reads its own contact details, I-9) as `c274e99`,
+> which is HEAD. Re-verified in the project health audit of 2026-09-05, which changed no
+> source; the corrections it produced are marked in D-05, D-17, D-26 and D-35.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -111,6 +112,19 @@ means replacing `score_pair` only; the router and the response shape do not chan
 **Constraints.** Weights are judgement, not tuned against outcomes. The 20 km/h travel
 constant and haversine straight-line distance are approximations (no routing API).
 ⚠️ **Never describe this system as AI/ML** — the repo name is misleading.
+
+⚠️ **Two of the five criteria do not behave as five criteria** (health audit, 2026-09-05).
+`_quantity_score` and `_capacity_score` take the same `(quantity, capacity)` and are
+monotone in the same ratio `r` in opposite directions, so their weighted contribution is
+`0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r` — **45% of the published weight moves five
+points across the entire feasible range**, then drops 11.5 at `r = 1`. And neither reads
+`Donation.unit`, though `quantity` is a count in Meals · Kg · Boxes · Pieces while
+`capacity` is meals per day: 100 Kg and 100 Meals score identically. So "a marker can
+verify it by hand" still holds and "five weighted criteria" does not — the explainability
+panel renders two collinear bars as two independent ones, which since I-8 are individually
+captioned correctly. **The decision stands and the structure is not what needs changing;
+the two functions are.** `TASKS.md` → *Next* step 2 (`HA-4`, `HA-5`). Re-tuning `WEIGHTS`
+(`R-31`) is blocked behind it.
 
 ---
 
@@ -304,8 +318,14 @@ check — new self-service endpoints must follow the same discipline.
 
 ## D-17 · Integration tests only, no mocks **[documented]**
 
-**Decision.** All 37 tests exercise the full HTTP stack against in-memory SQLite via
-`StaticPool` and `app.dependency_overrides[get_db]`.
+**Decision.** The **37 integration tests** — `test_api.py` (15) and `test_auth_admin.py`
+(22) — exercise the full HTTP stack against in-memory SQLite via `StaticPool` and
+`app.dependency_overrides[get_db]`, with no mocks. ⚠️ **37 is the integration subset, not
+the suite**: the backend suite is **168 tests** at HEAD `c274e99`, the rest being the
+read-scope, lifecycle-authorization, requirement-lifecycle, courier-claim,
+match-score-consistency, rate-limit, config and migration files added since. Those follow
+the same no-mocks discipline; the config, rate-limit and matching-boundary tests are the
+deliberate exceptions that call the module directly.
 
 **Reasoning** (`conftest.py`): `StaticPool` "keeps one in-memory database alive across
 connections, which the request/test boundary would otherwise discard." The admin fixture
@@ -313,8 +333,11 @@ notes the API "has no path to a first administrator by design, so tests reach in
 database exactly as `create-admin` does, then authenticate normally through the API" —
 respecting the security boundary rather than bypassing it.
 
-**Constraints.** ~19 s runtime, almost entirely real bcrypt hashing. Zero unit tests —
-`matching.py` is pure and only tested through HTTP. Zero frontend tests.
+**Constraints.** ~130 s runtime for the full 168, almost entirely real bcrypt hashing (the
+original 37 ran in ~19 s). `matching.py` is still reached almost entirely through HTTP —
+one test in `test_match_score_consistency.py` calls `score_pair` directly with an injected
+`now`, and the individual `_*_score` helpers have no direct test at all, which is how the
+collinearity in D-05 went unnoticed. Zero frontend tests.
 
 ---
 
@@ -587,6 +610,25 @@ resolves the caller's organisation out of the list rather than from `/me`. No in
 it must apply this same clause and 404, per D-24. Admin verification
 (`POST|DELETE /api/admin/recipients/{id}/verify`) is untouched and stays unrestricted
 behind the admin router gate.
+
+⚠️ **This decision named the courier roster and did not fix it, and that gap is still
+open.** The first bullet above cites "the same objection the `GET /api/volunteers`
+docstring already raises about the courier roster, on the neighbouring table" — and the
+scope was applied to `RecipientOut` only. **`GET /api/volunteers` remains role-gated and
+unscoped**: `require_roles(admin, ngo)` with no ownership clause, so every account holding
+the `ngo` role reads every courier's name, location, availability and **phone**. Because
+registration hands that role to a stranger and `is_verified` gates ranking and acceptance
+but not this endpoint, the cost of the whole roster is one throwaway email address —
+reproduced in the health audit of 2026-09-05. **No decision was ever recorded for it and no
+task was filed until now**; it is `TASKS.md` → *Next* step 1 / `HA-1`, and the fix is this
+decision's own shape applied one table over.
+
+⚠️ **A second, narrower bypass of this scoping exists in `/matches`.** `RecipientOut`
+withholds `latitude`/`longitude` from a donor, and `MatchOut.distanceKm` gives them back: a
+donor reads `200 []` here by design, then posts three donations at pins of its choosing and
+trilaterates any verified organisation from the three distances — recovered exactly in the
+same audit. `TASKS.md` → *Backlog → A* / `HA-3`. Rounding the serialised distance is the
+cheap answer; removing the field is not, because I-2/D-33 depends on it.
 
 ---
 
@@ -1162,6 +1204,20 @@ graph is now accounted for, and the conclusion is recorded in `ARCHITECTURE.md`.
 has no `TRANSITION_ROLES` entry, so `.get(target, set())` refuses it 403 for every role
 including admin — a dead edge, failing closed. It is a lifecycle-modelling question, not a
 security one, and is left for the Project Manager rather than resolved here.
+
+⚠️ **The release this decision authorizes does not work, and the audit that produced this
+decision could not have seen it.** The residue recorded here — "a release followed by a
+re-acceptance increments the owning organisation's `accepted_donations` a second time and
+leaves `volunteer_id` set" — understated its own consequence. **Nothing clears
+`volunteer_id`**, so a released pickup is invisible to every other courier
+(`_readable_by` requires `volunteer_id IS NULL`), unclaimable by them (`_claim_pickup`
+answers `409 Another courier has already claimed this pickup`, which is false), and
+re-runs the acceptance side effect, so the kitchen's `reliability_score` **falls as a
+penalty for releasing**. All three reproduced on 2026-09-05. This is not a hole in the
+authorization reasoning above, which is sound and was re-verified: the audit that produced
+D-35 was bounded to *who may drive an edge*, and this is *what the edge does afterwards* —
+which is exactly the class of defect a scope like that cannot see. Fix tracked as
+`TASKS.md` → *Next* step 1 / `HA-2`; no decision here changes.
 
 ---
 
