@@ -186,6 +186,18 @@ immediate mid-session suspension and immediate role changes.
 **Four authorization layers:** role (`require_roles`) → ownership (query scoping /
 explicit comparison) → lifecycle legality → trust (`is_verified`).
 
+**The whole trust model is one boolean, and it means one specific thing.**
+`Recipient.is_verified` (`models.py:165`) records that **a FoodLink administrator vouched
+that this organisation is real and is where it claims to be** — nothing about hygiene,
+food safety, licensing or any external certifier. It exists on `Recipient` only: there is
+no donor and no volunteer verification anywhere in the data model. It defaults to `false`
+at registration, is writable *only* by `POST|DELETE /admin/recipients/{id}/verify`, and is
+deliberately not settable through `PATCH /recipients/me` — an organisation does not vouch
+for itself. Two things read it: `matching.score_pair` refuses to rank an unverified
+organisation, and the `ACCEPTED` transition refuses to let one take custody. The UI may
+therefore say "verified" of a recipient and of nobody else, and may not dress it up as
+certification. See `DECISIONS.md` D-37.
+
 **Donation reads are scoped server-side** by `routers/donations._readable_by()`, which
 returns the caller's read scope as a SQLAlchemy WHERE clause (`None` for admin). The
 list, the lookup by id and `/matches` all apply the same clause, so an id the caller

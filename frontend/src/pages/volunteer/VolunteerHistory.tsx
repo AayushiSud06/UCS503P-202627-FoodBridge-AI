@@ -60,7 +60,7 @@ export default function VolunteerHistory() {
                 <div>
                   <span className="text-gray-400 block text-[11px]">DELIVERED AT</span>
                   <span className="font-medium">
-                    {d.deliveredAt ? new Date(d.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Verified Delivery'}
+                    {d.deliveredAt ? new Date(d.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not recorded'}
                   </span>
                 </div>
               </div>

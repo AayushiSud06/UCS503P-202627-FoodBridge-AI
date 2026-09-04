@@ -129,7 +129,7 @@ export default function MatchAnalysisPanel({
             <ShieldCheck size={18} />
           </div>
           <div>
-            <p className="text-xs font-bold text-emerald-950">Verified Recipient Organization</p>
+            <p className="text-xs font-bold text-emerald-950">Admin-verified recipient organisation</p>
             <p className="text-[11px] text-emerald-700">Historical intake reliability rating: {analysis.reliabilityScore}%</p>
           </div>
         </div>

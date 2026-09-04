@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, ShieldCheck, Check, Save } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Building2, Info, Save } from 'lucide-react';
 import { useCurrentUser, useAuth } from '../../context/AuthContext';
 import { useAction } from '../../lib/hooks';
 import PasswordCard from '../../components/PasswordCard';
@@ -42,7 +42,7 @@ export default function DonorProfile() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Donor Profile & Settings</h1>
-        <p className="text-gray-500 mt-1">Manage institutional details, kitchen safety badges, and pickup locations.</p>
+        <p className="text-gray-500 mt-1">Manage institutional details, contact information, and pickup locations.</p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
@@ -55,8 +55,8 @@ export default function DonorProfile() {
               </div>
               <div>
                 <h2 className="font-bold text-gray-900">{profile.organization || user.name}</h2>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  <ShieldCheck size={12} /> Verified Institutional Donor
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+                  <Building2 size={12} /> Donor account
                 </span>
               </div>
             </div>
@@ -129,14 +129,16 @@ export default function DonorProfile() {
           </div>
         </div>
 
-        {/* Safety & Compliance */}
+        {/* Safe handling — guidance, not a finding about this kitchen */}
         <div className="card p-6 space-y-4">
-          <h2 className="section-title border-b border-gray-100 pb-3">Food Safety & Quality Compliance</h2>
-          <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-3">
-            <Check size={18} className="text-emerald-600 mt-0.5 shrink-0" />
-            <div className="text-xs text-emerald-900 leading-relaxed">
-              <p className="font-bold text-sm text-emerald-950 mb-1">FSSAI Hygiene Standards Compliant</p>
-              This kitchen conforms to safe surplus handling protocols: food is stored at recommended temperatures, labeled with preparation times, and packaged in food-grade containers.
+          <h2 className="section-title border-b border-gray-100 pb-3">Safe Handling Guidance</h2>
+          <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
+            <Info size={18} className="text-amber-600 mt-0.5 shrink-0" />
+            <div className="text-xs text-amber-900 leading-relaxed">
+              <p className="font-bold text-sm text-amber-950 mb-1">Before you list surplus</p>
+              Store food at the recommended temperature, label it with its preparation time,
+              and pack it in food-grade containers. FoodLink does not inspect kitchens or
+              assess hygiene, so the receiving organisation relies on you for this.
             </div>
           </div>
 

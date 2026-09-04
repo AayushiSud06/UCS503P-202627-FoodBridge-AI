@@ -1,9 +1,9 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
-> committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8`. On top
-> of those the working tree carries the **uncommitted** I-4 notification-honesty pass
-> described under *Backlog → I*.
+> committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8`, and
+> the I-4 notification-honesty pass as `6863451`. On top of those the working tree carries
+> the **uncommitted** I-5 trust/verification pass described under *Backlog → I*.
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -40,11 +40,12 @@ CI → recipient read scope → auth rate limiting → courier claim race — is
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 (`e8a8178`), I-2 (`fcbd03b`) and I-3 (`b5e09ee`) are committed; I-4 is done and
-sitting uncommitted in the working tree** (2026-09-04). I-4: the ten dead notification
-toggles are gone from all four profile screens and the "notified / dispatch alert /
-will be offered pickups" claims around them are reworded to what the system does
-(`DECISIONS.md` D-36); real volunteer availability is untouched and re-verified. I-1: the six per-role impact surfaces and two dashboards no longer
+**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`) and I-4 (`6863451`) are committed;
+I-5 is done and sitting uncommitted in the working tree** (2026-09-04). I-4: the ten dead
+notification toggles are gone from all four profile screens and the claims around them are
+reworded to what the system does (`DECISIONS.md` D-36). I-5: the fabricated donor
+verification badge and the FSSAI compliance panel are gone, and "verified" now appears only
+where `Recipient.is_verified` backs it (`DECISIONS.md` D-37). I-1: the six per-role impact surfaces and two dashboards no longer
 print invented figures, computed from one module for desktop and `/m/*` (`DECISIONS.md`
 D-32). I-2: the routing, travel-time and live-GPS claims are gone, invented distance
 fallbacks are replaced by an unavailable state, and one selector decides which
@@ -74,7 +75,7 @@ What the audit did change is what the list looks like when that call is made:
 - **Group I now exists and did not before.** It is hardening, not polish: `DECISIONS.md`
   D-31 records why an interface claim the system cannot honour is a defect in a project
   whose evaluation rests on evidence. Most of its items are **S**, and the two a demo
-  audience sees first (I-1, I-2) are now both done, as are I-3 and I-4.
+  audience sees first (I-1, I-2) are now both done, as are I-3, I-4 and I-5.
 - **Group E is still the largest block and is still ungated** — the courier claim was
   the last correctness prerequisite for Postgres, and it landed in `e919f7b`.
 - **Group F is unchanged and confirmed.** QA independently re-observed all three
@@ -82,8 +83,9 @@ What the audit did change is what the list looks like when that call is made:
 
 **The audit's own recommended order**, offered as analysis and not as a commitment:
 ~~**I-1** (impact figures)~~ and ~~**I-2** (live-GPS and routing claims)~~ **— both done,
-2026-09-03**, ~~**I-3** (requirement matching claims)~~ and ~~**I-4** (notification
-settings)~~ **— both done 2026-09-04** → **F**
+2026-09-03**, ~~**I-3** (requirement matching claims)~~, ~~**I-4** (notification
+settings)~~ and ~~**I-5** (verification and compliance badges)~~ **— all done 2026-09-04**
+→ **F**
 (the three match-score follow-ups, one sitting) → **E** (Postgres, once the demo-facing
 claims are true). The reasoning is in *Group I*'s header:
 the cheapest way to stop over-claiming is to stop printing the claims, and that has to
@@ -406,7 +408,7 @@ Places where a shipped feature is incomplete — not new ideas.
       asks for.
 
 - [x] **I-4 · Stop offering notification settings that reach nothing.** `[QA-5 · repo]` —
-      **done, uncommitted working tree, 2026-09-04.** Confirmed against the source first:
+      **done, commit `6863451`, 2026-09-04.** Confirmed against the source first:
       the backend contains no occurrence of `notif`, `sms`, `smtp`, `twilio`, `sendgrid`,
       `fcm` or `websocket` — there is no delivery mechanism of any kind to wire a
       preference to.
@@ -436,16 +438,33 @@ Places where a shipped feature is incomplete — not new ideas.
       the change — toggling it in the mobile UI wrote `is_available = 0` to the database.
       Nothing was replaced with `localStorage`, a mock, or a new endpoint.
 
-- [ ] **I-5 · Remove or ground the donor verification badges.** `[QA-6 · repo]` — **S**
-      `is_verified` exists on `Recipient` only (`models.py:165`); there is **no donor
-      verification concept anywhere in the data model**, no FSSAI field, and no evidence
-      store. `pages/donor/DonorProfile.tsx:61` shows an unconditional *"Verified
-      Institutional Donor"* badge and line 140 an unconditional *"FSSAI Hygiene Standards
-      Compliant"* panel; `mobile/DonorProfile.tsx:37` repeats the first. A self-registered
-      account one minute old displays both. The correct model already exists next door:
-      `pages/ngo/NGOProfile.tsx:86` and `mobile/NGOProfile.tsx:33` read the real
-      `me.isVerified` and show *"Awaiting verification"* when it is false. Building donor
-      verification is a much larger piece of work and is not proposed here.
+- [x] **I-5 · Remove or ground the donor verification badges.** `[QA-6 · repo]` — **done,
+      uncommitted working tree, 2026-09-04.** The whole trust model was mapped from the
+      source first and is one boolean: `Recipient.is_verified`, meaning *"an administrator
+      vouched that this organisation is real and is where it claims to be"* — default
+      `false`, writable only by `POST|DELETE /admin/recipients/{id}/verify`, deliberately
+      not settable through `PATCH /recipients/me`, read by exactly two consumers
+      (`matching.score_pair` and the `ACCEPTED` gate). No donor or volunteer verification
+      exists anywhere in the model; no FSSAI field, provider, upload path or evidence store
+      exists at all.
+
+      **Removed:** the unconditional *"Verified Institutional Donor"* badge
+      (`pages/donor/DonorProfile.tsx`) and its mobile twin *"Verified donor"*
+      (`mobile/DonorProfile.tsx`) → a neutral *"Donor account"* chip with a `Building2`
+      icon; the *"FSSAI Hygiene Standards Compliant"* panel → **Safe Handling Guidance**,
+      the same advice reframed as guidance addressed to the donor and stating plainly that
+      *"FoodLink does not inspect kitchens or assess hygiene"*; the page subtitle's *"kitchen
+      safety badges"*; and `VolunteerHistory`'s *"Verified Delivery"* fallback for a missing
+      timestamp → *"Not recorded"*. `MatchAnalysis`'s *"Verified Recipient Organization"* is
+      true by construction (`score_pair` returns `None` for an unverified recipient) but now
+      names the authority: *"Admin-verified recipient organisation"*.
+
+      **Preserved unchanged:** every genuine recipient surface — both `NGOProfile`s, both
+      `NGOImpact`s, `NGOAvailableDonations`, `AdminOrganizations` — all of which already
+      render conditionally from `me.isVerified`. Both states were exercised in the running
+      app: a seeded kitchen shows *"Verified recipient"*, a freshly registered one shows
+      *"Awaiting verification"*. No backend, schema, seed or API change. See `DECISIONS.md`
+      D-37.
 
 - [ ] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **S**,
       and **mostly overtaken by I-2.** The line prints whenever `volunteerName` is set, with
@@ -679,7 +698,7 @@ existing items in F and G.
 | 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint is already open and the client already fetches it | *Blocked* |
 | 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
 | 5 | Notification settings send nothing | **Misleading UI claim** — 10 dead toggles, 4 screens | ✅ toggles and claims removed by I-4 · delivery itself → `R-28` |
-| 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | I-5 |
+| 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | ✅ both removed by I-5 · D-37 |
 | 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | I-7 · sweep → group E · `B-1` unchanged |
 | 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |
 | 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · residue → I-6 |

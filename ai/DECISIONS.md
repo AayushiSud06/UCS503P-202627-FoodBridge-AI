@@ -1202,3 +1202,54 @@ same false claim with a longer lifetime.
 
 **Scope.** The four profile screens and the two donation-creation surfaces. Real
 notification delivery remains unbuilt and unscheduled (`TASKS.md` `R-28`).
+
+---
+
+## D-37 · One verification boolean, one meaning, one entity **[documented]**
+
+**Decision.** `Recipient.is_verified` means exactly *"a FoodLink administrator vouched that
+this organisation is real and is where it claims to be."* The interface may say "verified"
+of a **recipient organisation** and of no other entity, must render it from the field
+rather than unconditionally, and may not restate it as certification, compliance, hygiene
+or institutional validation. The fabricated donor claims are removed; the genuine recipient
+ones are kept as they were. This is D-31 applied to trust language (QA observation 6,
+tracked as I-5).
+
+**Reasoning.**
+
+- **The semantics come from the code, not the name.** `verify_recipient`'s own docstring
+  defines it as a human judgement that a kitchen is real and located where it says.
+  Nothing in the repository connects it to FSSAI, hygiene, licensing or any external
+  body — there is no such field, provider, upload path or evidence store. Two consumers
+  read it and both are about eligibility, not quality: `matching.score_pair` will not rank
+  an unverified organisation, and the `ACCEPTED` transition will not let one take custody.
+- **It is scoped to one entity, so the badge is too.** `is_verified` lives on `Recipient`.
+  There is no donor and no volunteer verification in the model at all, which made
+  *"Verified Institutional Donor"* — rendered unconditionally, so a self-registered account
+  one minute old wore it — a claim with nothing behind it on both the desktop and mobile
+  donor profiles.
+- **"FSSAI Hygiene Standards Compliant" was the more serious of the two**, because it
+  names a real Indian food-safety authority and asserted that *"This kitchen conforms"*.
+  The platform performs no inspection of any kind. The **handling advice** in that panel is
+  worth keeping, so it is reframed as guidance addressed to the donor rather than a finding
+  the platform has made about them, and now says plainly that FoodLink does not inspect
+  kitchens or assess hygiene.
+- **The shield icon was half the claim.** A `ShieldCheck` in a green pill reads as a seal
+  whatever the words beside it say, so the donor chip carries a neutral `Building2` and
+  grey styling; the compliance panel's tick becomes an `Info`. Nothing else about the
+  layout changed.
+- **A missing value is not a verification.** `VolunteerHistory` printed *"Verified
+  Delivery"* as the fallback when `deliveredAt` was null — inventing a trust claim out of
+  absent data. It now says "Not recorded".
+- **Seed data was left alone.** The three demo kitchens carry `is_verified=True`, which is
+  an accurate representation of the field: an administrator vouched for them. Removing it
+  would misrepresent the model rather than correct it, and no fake record was added.
+
+**Constraints.** No backend, schema, migration, endpoint or seed change; no verification
+provider, no upload workflow, no hardcoded boolean introduced to light a badge. Donor
+verification is not proposed — building it is a far larger piece of work than making the
+claim honest.
+
+**Scope.** Trust, verification and compliance wording only. The recipient verification
+flow itself — registration default, the admin toggle, the two hard gates — is unchanged and
+was verified working in both states.

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { Building2, LogOut } from 'lucide-react';
 import { useAuth, useCurrentUser } from '../context/AuthContext';
 import { MSection, MDetail } from './parts';
 
@@ -28,9 +28,9 @@ export default function DonorProfile() {
         <div className="min-w-0">
           <h2 className="font-display font-semibold text-lg text-gray-900 truncate">{user.name}</h2>
           <p className="text-sm text-gray-500 truncate">aayushi@thapar.edu</p>
-          <span className="mt-1.5 m-chip bg-emerald-50 text-emerald-700">
-            <ShieldCheck size={12} />
-            Verified donor
+          <span className="mt-1.5 m-chip bg-gray-100 text-gray-600">
+            <Building2 size={12} />
+            Donor account
           </span>
         </div>
       </section>

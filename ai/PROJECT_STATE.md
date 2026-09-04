@@ -4,9 +4,10 @@
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
 > write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
-> follow-up as `efd5fd8`. On top of those the working tree carries the **uncommitted** I-4
-> notification-honesty pass described below. A QA audit was run against `23c27f4` on
-> 2026-09-02; it changed no source and its conclusions are in `TASKS.md`.
+> follow-up as `efd5fd8` — as is the I-4 notification-honesty pass (`6863451`). On top of
+> those the working tree carries the **uncommitted** I-5 trust/verification pass described
+> below. A QA audit was run against `23c27f4` on 2026-09-02; it changed no source and its
+> conclusions are in `TASKS.md`.
 
 ## What this project is
 
@@ -72,7 +73,25 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **I-4: the interface no longer offers
+- **2026-09-04, uncommitted working tree** — **I-5: "verified" now means the one thing the
+  database actually records.** The trust model was mapped before anything was edited, and
+  it is a single boolean: `Recipient.is_verified` — *an administrator vouched that this
+  organisation is real and is where it claims to be*. It exists on `Recipient` only,
+  defaults to `false`, is writable only by the admin verify endpoints, and is read by
+  `matching.score_pair` (unverified organisations are not ranked) and the `ACCEPTED` gate
+  (they cannot take custody). There is **no** donor or volunteer verification in the model,
+  and no FSSAI field, provider or evidence store anywhere. **No backend, schema or seed
+  change.** Removed from the donor profile on both desktop and mobile: the unconditional
+  *"Verified Institutional Donor"* / *"Verified donor"* badge — worn by a self-registered
+  account one minute old — now a neutral *"Donor account"* chip; and the *"FSSAI Hygiene
+  Standards Compliant"* panel, reframed as **Safe Handling Guidance** that keeps the
+  handling advice and states plainly that FoodLink does not inspect kitchens or assess
+  hygiene. Also `VolunteerHistory`'s *"Verified Delivery"* fallback for a **missing**
+  timestamp → *"Not recorded"*, and `MatchAnalysis`'s badge → *"Admin-verified recipient
+  organisation"*. Every genuine recipient surface is untouched; both `is_verified` states
+  were exercised in the running app. See `DECISIONS.md` D-37.
+
+- **2026-09-04, commit `6863451`** — **I-4: the interface no longer offers
   notifications it cannot send.** Verified first that there is nothing to wire to: the
   backend contains no occurrence of `notif`, `sms`, `smtp`, `twilio`, `sendgrid`, `fcm` or
   `websocket`. **No backend file changed.** All ten dead toggles removed across four
@@ -311,8 +330,8 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest), I-2, I-3 and I-4 are done**; five remain, all **S**, plus the
-small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
+badges. **I-1 (the largest), I-2, I-3, I-4 and I-5 are done**; four remain, all **S**, plus
+the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
 
@@ -456,13 +475,13 @@ credibility rather than about its correctness, and that judgement belongs in thi
     hard-coded `0.8 km` leg and the 10 km/h estimate that contradicted the backend's 20 km/h
     were deleted rather than corrected: no travel time is serialised to the client at all.
     See `DECISIONS.md` D-33.
-21. **Verification and notification settings that are pure display.** Donor screens show an
-    unconditional "Verified Institutional Donor" and "FSSAI Hygiene Standards Compliant"
-    for a role the data model has **no** verification concept for (`is_verified` exists on
-    `Recipient` only) — still open as I-5. The notification half is **fixed**: the ten
-    `useState` toggles across four profile screens, one of them promising to "Auto-accept
-    best match", are removed (I-4, D-36). Contrast `NGOProfile`, which reads the real
-    `me.isVerified` correctly.
+21. ✅ **Resolved 2026-09-04 — verification and notification settings that
+    were pure display.** The notification half went with I-4 (`6863451`, D-36): ten `useState` toggles
+    across four profile screens, one of them promising to "Auto-accept best match". The
+    verification half went with I-5 (uncommitted, D-37): the unconditional "Verified Institutional
+    Donor" badge and the "FSSAI Hygiene Standards Compliant" panel are gone from a role the
+    data model has **no** verification concept for. `NGOProfile`, which always read the real
+    `me.isVerified`, is unchanged and remains the model the rest now follows.
 22. **Smaller, same family:** "En route on vehicle" renders on a `COMPLETED` donation
     because the line ignores `status`; `StatusTimeline` shows "Matched · Current" with no
     hint that the deadline passed, though `lib/time.ts` already computes "Overdue"; three
