@@ -1,10 +1,13 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-33. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-38. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
-> **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`.
+> **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`. **D-34**/**D-35**
+> (lifecycle write authorization) are committed as `551c96d` and `efd5fd8`, **D-36**
+> (notifications, I-4) as `6863451` and **D-37** (verification wording, I-5) as `6c82739`;
+> **D-38** (courier status display, I-6) is in the working tree, uncommitted.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1253,3 +1256,41 @@ claim honest.
 **Scope.** Trust, verification and compliance wording only. The recipient verification
 flow itself — registration default, the admin toggle, the two hard gates — is unchanged and
 was verified working in both states.
+
+---
+
+## D-38 · Lifecycle status decides the state shown; a courier's name is only assignment **[documented]**
+
+**Decision.** On the NGO accepted-donations screen the courier/dispatch line is chosen by
+the donation's `status`, never by whether `volunteerName` is populated. The name is
+assignment information — *who is carrying, or carried, this food* — and is shown in every
+status that binds a courier, `COMPLETED` included; the *state* beside it comes from the
+status alone. This is D-31 applied to lifecycle display (QA observation 9, tracked as I-6);
+no new status was introduced to express it.
+
+**Reasoning.**
+
+- **A courier stays attached to the record after the handover.** `volunteer_id` is written
+  by `_claim_pickup` and no transition clears it, so it is populated for the whole of
+  `PICKED_UP → DELIVERED → COMPLETED`. Reading it as "a courier is on the road" made a
+  finished delivery describe itself in the present tense on a screen whose list includes
+  `COMPLETED`.
+- **The field is not even proof of a *current* assignment.** `ALLOWED_TRANSITIONS` permits
+  `VOLUNTEER_ASSIGNED → ACCEPTED`, and that release leaves `volunteer_id` in place, so an
+  `ACCEPTED` donation can name a courier who is no longer carrying it while the pickup is
+  back in the open pool. Status is the only authority for either reading.
+- **Shaped like the badge it sits beside.** `COURIER_STAGE` is a total
+  `Record<DonationStatus, …>`, the same shape as `StatusBadge`'s `STATUS_CONFIG`, so a new
+  lifecycle state is a compile error rather than a silently wrong caption.
+- **The name is kept, because losing it would lose a real fact.** A completed donation
+  showing *"Delivered — receipt confirmed"* still names the courier, and the handover
+  schematic still labels its courier node with them. The fix removes a false state claim,
+  not the assignment record.
+
+**Constraints.** No backend, schema, migration or lifecycle change; no new status; no
+courier-assignment logic touched. The captions are display strings only — nothing reads
+them back.
+
+**Scope.** `frontend/src/pages/ngo/NGOAcceptedDonations.tsx`. The donor's equivalent block
+(`pages/donor/DonationDetails.tsx`) and `mobile/NGOAccepted.tsx` print the courier's name
+with no state claim attached, so neither carries the defect and neither was changed.

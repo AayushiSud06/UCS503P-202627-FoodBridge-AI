@@ -10,6 +10,36 @@ import { displayDistanceKm } from '../../lib/geo';
 import EmptyState from '../../components/EmptyState';
 import { Link } from 'react-router-dom';
 import { formatClock } from '../../lib/time';
+import type { Donation, DonationStatus } from '../../types';
+
+/**
+ * What the courier line reads at each point of the lifecycle.
+ *
+ * Keyed on the donation's status and never on the mere presence of
+ * `volunteerName`: a courier stays attached to the record after the handover,
+ * so a populated name says who carried the food, not that somebody is
+ * carrying it right now. `courierBound` is whether the lifecycle actually
+ * binds a courier to this donation — before the claim the field can still
+ * hold a courier who was released back to `ACCEPTED`, and after `COMPLETED`
+ * it holds the one who finished the run.
+ */
+const COURIER_STAGE: Record<DonationStatus, { caption: string; courierBound: boolean }> = {
+  AVAILABLE:          { caption: 'Open to nearby couriers',             courierBound: false },
+  MATCHED:            { caption: 'Open to nearby couriers',             courierBound: false },
+  ACCEPTED:           { caption: 'Open to nearby couriers',             courierBound: false },
+  VOLUNTEER_ASSIGNED: { caption: 'Courier assigned, heading to pickup', courierBound: true },
+  PICKED_UP:          { caption: 'Collected — on the way to you',      courierBound: true },
+  DELIVERED:          { caption: 'Handed over at your kitchen',         courierBound: true },
+  COMPLETED:          { caption: 'Delivered — receipt confirmed',      courierBound: true },
+  CANCELLED:          { caption: 'Donation cancelled',                  courierBound: false },
+  EXPIRED:            { caption: 'Expired before it was claimed',       courierBound: false },
+};
+
+/** The courier this donation's status says is carrying it, or carried it. */
+function assignedCourierName(donation: Donation): string | undefined {
+  if (!COURIER_STAGE[donation.status].courierBound) return undefined;
+  return donation.volunteerName ?? 'Assigned courier';
+}
 
 export default function NGOAcceptedDonations() {
   const donations = useDonations();
@@ -131,10 +161,10 @@ export default function NGOAcceptedDonations() {
                   <div className="bg-gray-50 p-3.5 rounded-xl space-y-1">
                     <span className="text-gray-400 font-medium">COURIER DISPATCH</span>
                     <p className="font-bold text-gray-900 text-sm">
-                      {selected.volunteerName ? selected.volunteerName : 'Pending Volunteer Assignment'}
+                      {assignedCourierName(selected) ?? 'Pending Volunteer Assignment'}
                     </p>
                     <p className="text-gray-600 flex items-center gap-1">
-                      <Truck size={12} /> {selected.volunteerName ? 'Courier assigned' : 'Open to nearby couriers'}
+                      <Truck size={12} /> {COURIER_STAGE[selected.status].caption}
                     </p>
                   </div>
                 </div>
@@ -150,7 +180,7 @@ export default function NGOAcceptedDonations() {
                         : (selected.recipientName ?? 'Your kitchen')
                     }
                     distanceKm={displayDistanceKm(selected) ?? undefined}
-                    volunteerLocation={selected.volunteerName ?? 'Courier not yet assigned'}
+                    volunteerLocation={assignedCourierName(selected) ?? 'Courier not yet assigned'}
                   />
                 </div>
 

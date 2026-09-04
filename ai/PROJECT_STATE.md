@@ -4,10 +4,11 @@
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-04, branch `master`. The lifecycle
 > write-authorization work is committed — D-34 as `551c96d`, the D-35 ownership-takeover
-> follow-up as `efd5fd8` — as is the I-4 notification-honesty pass (`6863451`). On top of
-> those the working tree carries the **uncommitted** I-5 trust/verification pass described
-> below. A QA audit was run against `23c27f4` on 2026-09-02; it changed no source and its
-> conclusions are in `TASKS.md`.
+> follow-up as `efd5fd8` — as are the I-4 notification-honesty pass (`6863451`) and the I-5
+> trust/verification pass (`6c82739`). On top of those the working tree carries the
+> **uncommitted** I-6 courier status-display fix described below. A QA audit was run
+> against `23c27f4` on 2026-09-02; it changed no source and its conclusions are in
+> `TASKS.md`.
 
 ## What this project is
 
@@ -29,7 +30,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3) and notification claims (I-4) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5) and the NGO courier status line (I-6) are now honest; ⚠️ several *other* screens still **claim capability the backend does not have** (QA audit; `TASKS.md` → *Backlog → I*) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has now been audited against the role and ownership tables |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -73,7 +74,21 @@ own key in `conftest.py` and need no setup.
   change. 14 new tests (four fail against the pre-fix code); 148 → 162 passing, no
   existing test modified. See `DECISIONS.md` D-34.
 
-- **2026-09-04, uncommitted working tree** — **I-5: "verified" now means the one thing the
+- **2026-09-04, uncommitted working tree** — **I-6: the NGO courier line follows the
+  donation's status, not the presence of a name.** `pages/ngo/NGOAcceptedDonations.tsx`
+  picked both the courier name and the "COURIER DISPATCH" caption from `volunteerName`
+  alone, on a screen that lists `COMPLETED` donations — so a finished delivery still
+  described a courier in the present tense, and an `ACCEPTED` donation whose courier had
+  been released still named them (`volunteer_id` is set by the claim and no transition
+  clears it). A `COURIER_STAGE` map, total over `DonationStatus` in the same shape as
+  `StatusBadge`'s `STATUS_CONFIG`, now supplies the caption per status, and the name is
+  shown only in the statuses that actually bind a courier — kept for `COMPLETED`, where it
+  is the record of who carried the food. No new status, no backend, schema or lifecycle
+  change; one frontend file. Verified in the running app against a scratch database holding
+  every case: accepted-without-courier, accepted-with-released-courier, volunteer-assigned,
+  picked-up, delivered and completed-with-courier. See `DECISIONS.md` D-38.
+
+- **2026-09-04, commit `6c82739`** — **I-5: "verified" now means the one thing the
   database actually records.** The trust model was mapped before anything was edited, and
   it is a single boolean: `Recipient.is_verified` — *an administrator vouched that this
   organisation is real and is where it claims to be*. It exists on `Recipient` only,
@@ -330,7 +345,7 @@ fixed before Postgres is fixed.
 optional polish. `TASKS.md` → *Backlog → I* covered nine interface claims the system cannot
 honour — invented impact figures, live-GPS text over a component with no GPS, matching
 promises the matcher does not keep, dead notification settings, unearned verification
-badges. **I-1 (the largest), I-2, I-3, I-4 and I-5 are done**; four remain, all **S**, plus
+badges. **I-1 (the largest), I-2, I-3, I-4, I-5 and I-6 are done**; three remain, all **S**, plus
 the small I-1a residue on the landing page. D-31 explains why that ranks as hardening in
 this project specifically: the platform's argument is that its numbers are evidence, and
 fabricated ones sitting beside real ones cost more here than they would elsewhere.
@@ -478,7 +493,7 @@ credibility rather than about its correctness, and that judgement belongs in thi
 21. ✅ **Resolved 2026-09-04 — verification and notification settings that
     were pure display.** The notification half went with I-4 (`6863451`, D-36): ten `useState` toggles
     across four profile screens, one of them promising to "Auto-accept best match". The
-    verification half went with I-5 (uncommitted, D-37): the unconditional "Verified Institutional
+    verification half went with I-5 (`6c82739`, D-37): the unconditional "Verified Institutional
     Donor" badge and the "FSSAI Hygiene Standards Compliant" panel are gone from a role the
     data model has **no** verification concept for. `NGOProfile`, which always read the real
     `me.isVerified`, is unchanged and remains the model the rest now follows.

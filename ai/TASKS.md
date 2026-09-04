@@ -1,10 +1,10 @@
 # TASKS — FoodLink / FoodBridge-AI
 
 > Verified against the repository on 2026-09-04. The lifecycle write-authorization work is
-> committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8`, and
-> the I-4 notification-honesty pass as `6863451`. On top of those the working tree carries
-> the **uncommitted** I-5 trust/verification pass described under *Backlog → I*.
-> Context: `PROJECT_STATE.md`.
+> committed — D-34 as `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are
+> the I-4 notification-honesty pass (`6863451`) and the I-5 trust/verification pass
+> (`6c82739`). On top of those the working tree carries the **uncommitted** I-6 courier
+> status-display fix described under *Backlog → I*. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
 > repository. Everything under *Current / Next / Backlog / Blocked* is **recommended or
@@ -28,22 +28,27 @@
 ## Current
 
 **Nothing in progress.** No feature branch, no partial implementation, no TODO/FIXME
-markers in `code/foodlink/` or `frontend/src/`. 162 backend tests pass; the frontend
-`tsc && vite build` is clean (unchanged by the current work, which is backend-only).
+markers in `code/foodlink/` or `frontend/src/`. 162 backend tests pass (untouched by the
+current work, which is frontend-only); `tsc --noEmit` and `tsc && vite build` are clean.
 
-**Uncommitted in the working tree (2026-09-04): lifecycle write authorization.** Four
-transitions accepted any account holding the right role, whatever donation it named —
-see *Completed*. One security fix, one new test file, no schema change.
+**Uncommitted in the working tree (2026-09-04): I-6, the courier line on the NGO
+accepted-donations screen.** `NGOAcceptedDonations.tsx` derived its dispatch text from
+`volunteerName` alone, so a `COMPLETED` donation still read as one a courier was holding.
+The line is now keyed on `status`. One frontend file, no backend or schema change — see
+*Backlog → I*.
 
 The seven-item hardening sequence — signing key → migrations → donation read scope →
 CI → recipient read scope → auth rate limiting → courier claim race — is finished, the
 first item out of *Backlog → F* (requirement `PATCH`) is done, and the QA-reported
 match-score discrepancy is closed and committed (`23c27f4`); see *Completed*.
 
-**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`) and I-4 (`6863451`) are committed;
-I-5 is done and sitting uncommitted in the working tree** (2026-09-04). I-4: the ten dead
-notification toggles are gone from all four profile screens and the claims around them are
-reworded to what the system does (`DECISIONS.md` D-36). I-5: the fabricated donor
+**I-1 (`e8a8178`), I-2 (`fcbd03b`), I-3 (`b5e09ee`), I-4 (`6863451`) and I-5 (`6c82739`)
+are committed; I-6 is done and sitting uncommitted in the working tree** (2026-09-04).
+I-6: the NGO accepted-donations courier line is chosen by the donation's status instead of
+by the presence of a courier name, so a `COMPLETED` donation no longer reads as one still
+being carried (`DECISIONS.md` D-38). I-4: the ten dead notification toggles are gone from
+all four profile screens and the claims around them are reworded to what the system does
+(`DECISIONS.md` D-36). I-5: the fabricated donor
 verification badge and the FSSAI compliance panel are gone, and "verified" now appears only
 where `Recipient.is_verified` backs it (`DECISIONS.md` D-37). I-1: the six per-role impact surfaces and two dashboards no longer
 print invented figures, computed from one module for desktop and `/m/*` (`DECISIONS.md`
@@ -439,7 +444,7 @@ Places where a shipped feature is incomplete — not new ideas.
       Nothing was replaced with `localStorage`, a mock, or a new endpoint.
 
 - [x] **I-5 · Remove or ground the donor verification badges.** `[QA-6 · repo]` — **done,
-      uncommitted working tree, 2026-09-04.** The whole trust model was mapped from the
+      commit `6c82739`, 2026-09-04.** The whole trust model was mapped from the
       source first and is one boolean: `Recipient.is_verified`, meaning *"an administrator
       vouched that this organisation is real and is where it claims to be"* — default
       `false`, writable only by `POST|DELETE /admin/recipients/{id}/verify`, deliberately
@@ -466,16 +471,30 @@ Places where a shipped feature is incomplete — not new ideas.
       *"Awaiting verification"*. No backend, schema, seed or API change. See `DECISIONS.md`
       D-37.
 
-- [ ] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **S**,
-      and **mostly overtaken by I-2.** The line prints whenever `volunteerName` is set, with
-      no reference to `status`, on a screen whose list includes `COMPLETED` — so a finished
-      delivery showed *"En route on vehicle"*, a courier still driving. I-2 had to change
-      that string anyway (it also asserted a live position nothing tracks) and it now reads
-      **"Courier assigned"**, which is true in every status where a courier is bound. The
-      false reading is gone. What remains is the smaller original ask: the line is still
-      status-*neutral* rather than status-*aware*, so it does not distinguish assigned from
-      collected from delivered. That is a refinement, not a defect. The donor's equivalent
-      block (`DonationDetails.tsx:101`) is already status-neutral and right.
+- [x] **I-6 · Make the courier line follow the donation's status.** `[QA-9 · repo]` — **done,
+      uncommitted working tree, 2026-09-04.** `pages/ngo/NGOAcceptedDonations.tsx` chose both
+      the courier name and the dispatch caption from `volunteerName` alone, on a screen whose
+      list includes `COMPLETED`. I-2 had already replaced the worst string (*"En route on
+      vehicle"*) with *"Courier assigned"*, but the residue was a real misreading: that
+      present-tense line, under a "COURIER DISPATCH" heading, was still the last thing a
+      finished delivery said about itself, and an `ACCEPTED` donation whose courier was released
+      still named that courier — `volunteer_id` is set by the claim and no transition clears
+      it (`routers/donations.py`).
+
+      **Changed:** a module-level `COURIER_STAGE`, total over `DonationStatus` in the same
+      shape as `StatusBadge`'s `STATUS_CONFIG`, gives each status a caption and a
+      `courierBound` flag; the caption is read from it, and `assignedCourierName()` returns
+      the name only where the lifecycle actually binds a courier. `ACCEPTED` → *"Open to
+      nearby couriers"*, `VOLUNTEER_ASSIGNED` → *"Courier assigned, heading to pickup"*,
+      `PICKED_UP` → *"Collected — on the way to you"*, `DELIVERED` → *"Handed over at your
+      kitchen"*, `COMPLETED` → *"Delivered — receipt confirmed"*. The courier's name is kept
+      in every bound state, `COMPLETED` included, and still labels the handover schematic's
+      courier node. No new status, no backend change, no lifecycle change. See `DECISIONS.md`
+      D-38.
+
+      The donor's equivalent block (`DonationDetails.tsx:101`) and `mobile/NGOAccepted.tsx`
+      print the courier's name with no state claim attached, so neither carries the defect
+      and neither was touched.
 
 - [ ] **I-7 · Surface "overdue" where the deadline has passed.** `[QA-7 · repo]` — **S**
       `lib/time.ts` already computes it — `deadlineStatus()` returns the label *"Overdue"*
@@ -701,7 +720,7 @@ existing items in F and G.
 | 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | ✅ both removed by I-5 · D-37 |
 | 7 | Past-deadline donation still "Matched — Current" | **Acceptable state, incomplete display** — the row *is* `MATCHED`; the sweep is unscheduled (group E) | I-7 · sweep → group E · `B-1` unchanged |
 | 8 | Three match-score follow-ups | **Confirmed still open, unchanged** | group F, all three re-verified |
-| 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · residue → I-6 |
+| 9 | "En route" on a completed donation | **Confirmed bug** — the line ignores `status` | ✅ false claim removed by I-2 · line made status-aware by I-6 |
 | 10 | "LIVE CORRIDOR TRACKING" / "Live GPS" | **Misleading UI claim** — no GPS, no routing, no map in the repository | ✅ I-2 |
 | 11 | "Daily Recurring" requirements | **Storage only** — the flag is written and displayed, never acted on | ✅ relabelled "Needed daily" by I-3 · real recurrence → `R-35` |
 | 12 | Other findings | Hard-coded seed identities on three screens; two wrong criterion descriptions in the explainability panel; the donor "Email Address" input bound to `operatingHours` | I-1, I-8, I-9 |
