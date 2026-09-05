@@ -41,6 +41,15 @@ export interface Toast {
 
 interface AppState {
   donations: Donation[];
+  /**
+   * Standing needs, exactly as the server scoped them for this account.
+   *
+   * For an `ngo` this includes its own **retired** needs, because the portal
+   * has to list what it may reopen; for every other role the server sends
+   * active rows only and refuses the flag that would change that. Read it
+   * through `useRequirements` (the active board, what almost every screen
+   * wants) or `useAllRequirements` (the retired ones too).
+   */
   requirements: NGORequirement[];
   recipients: Recipient[];
   volunteers: Volunteer[];
@@ -90,6 +99,12 @@ interface AppContextValue {
    * needed. The record is kept, not deleted, and stops being listed.
    */
   retireRequirement: (id: string) => Promise<void>;
+  /**
+   * Put one of your own retired requirements back on the board. The same
+   * endpoint and the same single flag as retiring it (D-29) — there is no
+   * separate reopen operation and no second lifecycle state.
+   */
+  reopenRequirement: (id: string) => Promise<void>;
   updateDonationStatus: (
     id: string,
     status: DonationStatus,
@@ -151,7 +166,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       [donations, requirements, recipients, volunteers, metrics, ownVolunteer] = await Promise.all([
         api.listDonations({ limit: 500 }),
-        optional(api.listRequirements()),
+        // A kitchen reads its own retired needs too, so the portal can list
+        // and reopen them. The flag is scoped by the server, not by this call:
+        // it never widens *whose* needs come back, and a donor asking for it
+        // would still be served the active board (D-44).
+        optional(api.listRequirements({ includeInactive: user?.role === 'ngo' })),
         optional(api.listRecipients()),
         // The roster is closed to couriers, so a volunteer reads only their
         // own record. Exactly one of these two returns anything.
@@ -235,6 +254,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [load],
   );
 
+  // And back again, through the same field on the same endpoint. Nothing was
+  // deleted when it left the board, so nothing has to be recreated.
+  const reopenRequirement = useCallback(
+    async (id: string) => {
+      await api.updateRequirement(Number(id), { isActive: true });
+      await load();
+    },
+    [load],
+  );
+
   const updateDonationStatus = useCallback(
     async (
       id: string,
@@ -276,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createRequirement,
       updateRequirement,
       retireRequirement,
+      reopenRequirement,
       updateDonationStatus,
       setRecipientVerified,
       setAvailability,
@@ -284,7 +314,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       state, load, createDonation, createRequirement, updateRequirement, retireRequirement,
-      updateDonationStatus, setRecipientVerified, setAvailability, showToast, dismissToast,
+      reopenRequirement, updateDonationStatus, setRecipientVerified, setAvailability,
+      showToast, dismissToast,
     ],
   );
 
@@ -325,7 +356,29 @@ export function useActivity() {
   return useApp().state.activity;
 }
 
+/**
+ * The active demand board.
+ *
+ * Every screen that shows a *board* — the donor needs board, the mobile NGO
+ * home — means the needs that are open now, so that stays what the plain hook
+ * answers and the retired rows are opt-in through `useAllRequirements`. This
+ * filter is presentation and not a security boundary: the server never sends a
+ * donor an inactive row in the first place, whatever the client asks for. It is
+ * defence in depth in the same way D-44 kept the portal's own `myRecipient`
+ * filter after the endpoint started scoping by role.
+ */
 export function useRequirements() {
+  const requirements = useApp().state.requirements;
+  return useMemo(() => requirements.filter(r => r.isActive), [requirements]);
+}
+
+/**
+ * Every standing need the server returned for this account, retired ones
+ * included where it sent them — which is an `ngo` reading its own board, and
+ * nobody else. The NGO requirements portal is the one screen that wants the
+ * history, because reopening a need needs it listed first.
+ */
+export function useAllRequirements() {
   return useApp().state.requirements;
 }
 

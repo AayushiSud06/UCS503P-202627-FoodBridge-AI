@@ -10,7 +10,9 @@ These cover the scope itself, in the shape `test_recipient_reads.py` and
 `test_volunteer_reads.py` already use for the neighbouring tables: an admin
 reads everything, a donor reads the **verified** organisations' needs, a kitchen
 reads its own, a courier reads nothing, and retirement still removes a
-requirement from every board it was on.
+requirement from every board it was on — except from its owner's, which may ask
+for its retired needs as well. That listing is the reader D-29 recorded as
+missing, and it is what lets the portal reopen one.
 
 `test_requirement_lifecycle.py` covers who may *change* one; this file is only
 about who may see one.
@@ -42,15 +44,29 @@ def post_requirement(client, token: str, **overrides) -> dict:
     return response.json()
 
 
-def board(client, token: str) -> list[dict]:
-    """What `GET /api/requirements` shows this caller."""
-    response = client.get("/api/requirements", headers=auth(token))
+def board(client, token: str, *, include_inactive: bool = False) -> list[dict]:
+    """What `GET /api/requirements` shows this caller.
+
+    `include_inactive` is the query the NGO portal sends so it can list — and
+    reopen — what it has retired. It is passed explicitly rather than defaulted
+    away, so every test states which listing it is asserting about.
+    """
+    params = {"includeInactive": "true"} if include_inactive else None
+    response = client.get("/api/requirements", params=params, headers=auth(token))
     assert response.status_code == 200, response.text
     return response.json()
 
 
-def board_ids(client, token: str) -> set[int]:
-    return {r["id"] for r in board(client, token)}
+def board_ids(client, token: str, *, include_inactive: bool = False) -> set[int]:
+    return {r["id"] for r in board(client, token, include_inactive=include_inactive)}
+
+
+def retire(client, token: str, requirement_id: int) -> None:
+    """Take a requirement off the board the only way the API offers (D-29)."""
+    response = client.patch(
+        f"/api/requirements/{requirement_id}", json={"isActive": False}, headers=auth(token)
+    )
+    assert response.status_code == 200, response.text
 
 
 @pytest.fixture
@@ -231,6 +247,165 @@ def test_a_retired_requirement_is_invisible_to_every_role(client, db_session, bo
     assert verified_req["id"] not in board_ids(client, donor)
     assert verified_req["id"] not in board_ids(client, verified)
     assert verified_req["id"] not in board_ids(client, admin)
+
+
+# ─── Retired needs, for the organisation that owns them ──────────────────────
+#
+# D-29 kept the row on retirement and left it with no reader: the flag was
+# writable and the listing was active-only, so reopening was API-only. These
+# cover the reader it now has. The rule the whole section turns on is that
+# `includeInactive` widens the *lifecycle* filter and never the scope — it is
+# applied beside D-44's clause rather than instead of it.
+
+
+def test_an_ngo_can_read_its_own_retired_requirement_when_it_asks(client, db_session):
+    kitchen, _ = register_ngo(client, db_session, email="reopen-own@test.com", org="My Kitchen")
+    still_open = post_requirement(client, kitchen, foodType="Cooked lunch")
+    closed = post_requirement(client, kitchen, foodType="Dry rations")
+    retire(client, kitchen, closed["id"])
+
+    assert board_ids(client, kitchen) == {still_open["id"]}
+    assert board_ids(client, kitchen, include_inactive=True) == {still_open["id"], closed["id"]}
+
+
+def test_a_retired_requirement_reports_itself_as_inactive(client, db_session):
+    """The portal tells the two apart by the field, so the field has to arrive."""
+    kitchen, _ = register_ngo(
+        client, db_session, email="inactive-flag@test.com", org="Flag Kitchen"
+    )
+    closed = post_requirement(client, kitchen)
+    retire(client, kitchen, closed["id"])
+
+    assert [r["isActive"] for r in board(client, kitchen, include_inactive=True)] == [False]
+
+
+def test_an_ngo_asking_for_inactive_still_sees_only_its_own(client, db_session):
+    """The flag must not become a way round the ownership clause.
+
+    Both kitchens are verified and both have retired a need, so ownership is
+    the only thing separating them here.
+    """
+    mine, _ = register_ngo(client, db_session, email="mine-inactive@test.com", org="My Kitchen")
+    theirs, _ = register_ngo(
+        client, db_session, email="their-inactive@test.com", org="Rival Kitchen"
+    )
+    my_req = post_requirement(client, mine)
+    their_req = post_requirement(client, theirs, foodType="Dry rations")
+    retire(client, mine, my_req["id"])
+    retire(client, theirs, their_req["id"])
+
+    assert board_ids(client, mine, include_inactive=True) == {my_req["id"]}
+    assert board_ids(client, theirs, include_inactive=True) == {their_req["id"]}
+
+
+def test_a_reopened_requirement_returns_to_every_board_it_was_on(client, db_session, board_of_two):
+    """`isActive: true` is the whole of reopening — the same field, the other way."""
+    verified, verified_req, _, _ = board_of_two
+    donor = register(client, email="donor-reopen@test.com", role="donor")
+    retire(client, verified, verified_req["id"])
+    assert verified_req["id"] not in board_ids(client, donor)
+
+    response = client.patch(
+        f"/api/requirements/{verified_req['id']}",
+        json={"isActive": True},
+        headers=auth(verified),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["isActive"] is True
+
+    assert verified_req["id"] in board_ids(client, verified)
+    assert verified_req["id"] in board_ids(client, donor)
+
+
+def test_a_donor_cannot_read_a_retired_requirement_even_by_asking(client, board_of_two):
+    """The flag is a permission, not a filter the caller simply chooses.
+
+    A retired need is not an offer and a donor has no action on one, so the
+    donor-facing listing stays active-only whatever the query string says.
+    """
+    verified, verified_req, _, _ = board_of_two
+    donor = register(client, email="donor-asking@test.com", role="donor")
+    retire(client, verified, verified_req["id"])
+
+    assert board(client, donor, include_inactive=True) == []
+
+
+def test_a_donor_asking_for_inactive_still_reads_the_active_board(client, board_of_two):
+    """Refusing the flag must not also cost a donor the needs that are open."""
+    verified, verified_req, _, _ = board_of_two
+    donor = register(client, email="donor-still-active@test.com", role="donor")
+    also_open = post_requirement(client, verified, foodType="Fruit")
+    retire(client, verified, verified_req["id"])
+
+    assert board_ids(client, donor, include_inactive=True) == {also_open["id"]}
+
+
+def test_an_admin_can_read_retired_requirements_platform_wide(client, db_session, board_of_two):
+    """Unrestricted stays unrestricted, and now spans the lifecycle as well."""
+    verified, verified_req, unverified, unverified_req = board_of_two
+    admin = admin_token(client, db_session)
+    retire(client, verified, verified_req["id"])
+    retire(client, unverified, unverified_req["id"])
+
+    assert board_ids(client, admin) == set()
+    assert board_ids(client, admin, include_inactive=True) == {
+        verified_req["id"],
+        unverified_req["id"],
+    }
+
+
+def test_a_courier_asking_for_inactive_still_reads_nothing(client, board_of_two):
+    """The scope is empty for a courier, so the flag has nothing to widen."""
+    verified, verified_req, _, _ = board_of_two
+    courier = register(client, email="courier-inactive@test.com", role="volunteer")
+    retire(client, verified, verified_req["id"])
+
+    assert board(client, courier, include_inactive=True) == []
+
+
+def test_the_listing_is_active_only_unless_the_flag_is_sent(client, db_session):
+    """The default is unchanged: every existing caller sees exactly what it did."""
+    kitchen, _ = register_ngo(
+        client, db_session, email="default-req@test.com", org="Default Kitchen"
+    )
+    closed = post_requirement(client, kitchen)
+    retire(client, kitchen, closed["id"])
+
+    assert board(client, kitchen) == []
+    # An explicit `false` is the same request as sending nothing at all.
+    response = client.get(
+        "/api/requirements", params={"includeInactive": "false"}, headers=auth(kitchen)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+
+
+def test_retired_needs_are_ordered_newest_first_alongside_active_ones(client, db_session):
+    """One list, one order. The portal splits it by state; the server does not.
+
+    Backdated for the reason `test_a_donor_reads_the_board_newest_first` gives:
+    SQLite resolves `CURRENT_TIMESTAMP` to whole seconds, so three rows posted
+    together would tie and test the insertion order instead of the `ORDER BY`.
+    """
+    from datetime import datetime, timedelta, timezone as tz
+
+    from foodlink.models import Requirement
+
+    kitchen, _ = register_ngo(
+        client, db_session, email="order-inactive@test.com", org="Order Kitchen"
+    )
+    oldest = post_requirement(client, kitchen, foodType="Posted first")
+    middle = post_requirement(client, kitchen, foodType="Posted second")
+    newest = post_requirement(client, kitchen, foodType="Posted third")
+    retire(client, kitchen, middle["id"])
+
+    now = datetime.now(tz.utc)
+    for requirement_id, age_hours in ((oldest["id"], 48), (middle["id"], 24), (newest["id"], 1)):
+        db_session.get(Requirement, requirement_id).created_at = now - timedelta(hours=age_hours)
+    db_session.commit()
+
+    listed = board(client, kitchen, include_inactive=True)
+    assert [r["id"] for r in listed] == [newest["id"], middle["id"], oldest["id"]]
 
 
 # ─── Verification state on the response ──────────────────────────────────────

@@ -428,7 +428,19 @@ export const api = {
   updateMyRecipient: (body: Partial<Omit<ApiRecipient, 'id' | 'isVerified'>>) =>
     request<ApiRecipient>('/api/recipients/me', { method: 'PATCH', body }),
 
-  listRequirements: () => request<ApiRequirement[]>('/api/requirements'),
+  /**
+   * Standing needs, scoped to the caller by the server (D-44).
+   *
+   * `includeInactive` widens the *lifecycle* filter and never the scope: an NGO
+   * asking for it receives its **own** retired needs alongside its active ones,
+   * so the portal can reopen one. The server refuses the flag outright for a
+   * donor, so the needs board stays active-only whatever the client sends.
+   */
+  listRequirements: ({ includeInactive = false }: { includeInactive?: boolean } = {}) =>
+    request<ApiRequirement[]>(
+      `/api/requirements${includeInactive ? '?includeInactive=true' : ''}`,
+    ),
+
   createRequirement: (body: {
     foodType: string;
     quantityNeeded: number;
@@ -444,7 +456,8 @@ export const api = {
    *
    * `isActive: false` is how a requirement is both retired and marked
    * fulfilled — the server keeps one lifecycle flag and the row survives
-   * either way. A retired requirement drops out of `listRequirements`.
+   * either way. A retired requirement drops out of `listRequirements` unless
+   * its owner asks for `includeInactive`; `isActive: true` puts it back.
    */
   updateRequirement: (
     id: number,

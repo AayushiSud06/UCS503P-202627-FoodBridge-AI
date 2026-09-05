@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-45. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-46. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -14,9 +14,10 @@
 > (courier read scope and the release's second meaning) is committed as `e7032ea`.
 > **D-42** (matcher unit comparability and the absolute headroom criterion) is committed as
 > `a9f190b` and **D-43** (the frontend test harness) as `f33aeae`, which is HEAD.
-> **D-44** (requirement read scope and the donor needs board) is committed as `e72d4c2`,
-> which is HEAD. **D-45** (match distance is scoped to the organisation it describes,
-> `HA-3`) is **uncommitted in the working tree**.
+> **D-44** (requirement read scope and the donor needs board) is committed as `e72d4c2`
+> and **D-45** (match distance is scoped to the organisation it describes, `HA-3`) as
+> `883bcee`, which is HEAD. **D-46** (retired requirements get a reader, and the lifecycle
+> filter is a second axis) is **uncommitted in the working tree**.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -818,11 +819,11 @@ organisation's id answers 404.
 
 **Constraints.**
 
-- ⚠️ **A retired requirement has no reader.** `GET /api/requirements` returns active rows
-  only and gained no `includeInactive` parameter, so the UI cannot list or reopen one —
-  reopening is API-only. Preserving the read contract was the smaller change; a scoped
-  parameter (an organisation's *own* inactive rows) is the shape to add if the history is
-  ever wanted on screen.
+- ~~⚠️ **A retired requirement has no reader.**~~ **Answered by D-46 (Task 27):** the
+  scoped parameter this constraint described — an organisation's *own* inactive rows —
+  is now `GET /api/requirements?includeInactive=true`, and the NGO portal lists and
+  reopens from it. Nothing about the lifecycle itself changed: still one flag, still one
+  endpoint, still no `status` column.
 - **Fulfilment is a UI word, not a stored one.** The NGO portal's "Mark fulfilled" and a
   need that simply lapsed produce the identical row. Anything that later needs to tell
   them apart needs a schema change, and this decision is what it would be revisiting.
@@ -1764,8 +1765,9 @@ to a new surface — a screen may only claim what the system can honour.
   `Donation.latitude/longitude` belong to a *donation*, not to the person). Filtering
   would need either a donor location on the account or a "near this donation" board, and
   both are product decisions. `TASKS.md` → *Backlog*.
-- **A retired requirement still has no reader** (D-29). Scoping narrows the board; it
-  does not add a way to see what has left it.
+- ~~**A retired requirement still has no reader** (D-29).~~ Scoping narrowed the board
+  and did not add a way to see what had left it; **D-46 added one**, on an axis
+  independent of this scope.
 - **One existing test changed.**
   `test_requirement_lifecycle.test_retiring_one_requirement_leaves_the_rest_of_the_board_alone`
   asserted that a rival kitchen's requirement stayed on *this* caller's board, which was
@@ -1869,3 +1871,67 @@ blurred.
   `ApiMatch.distanceKm` / `MatchAnalysis.distanceKm` are `number | null` to match.
   `displayDistanceKm` already coalesced, so no screen changed; `geo.test.ts` gained the
   case where a match carries no distance of its own.
+
+---
+
+## D-46 · The lifecycle filter is a second axis, and a donor is not on it **[documented]**
+
+**Decision.** `GET /api/requirements` takes **`includeInactive`** (default `false`).
+When it is true *and* `routers/organisations._may_read_inactive(user)` allows — **admin
+and ngo only** — the `is_active` term is dropped from the query. Everything else is
+unchanged: `_visible_requirements()` (D-44) is still applied, still decides *whose* needs
+come back, and is never consulted about the flag. Reopening stays
+`PATCH /api/requirements/{id}` with `isActive: true` (D-29): no new endpoint, no
+`status` column, no migration. On the client, `AppContext` sends the flag for an `ngo`
+account and nobody else; `useRequirements()` now returns the **active** needs and the new
+`useAllRequirements()` returns the whole slice, which `pages/ngo/NGORequirements.tsx` is
+the only screen to read.
+
+**Reasoning.**
+
+- **D-29 wrote the shape and D-44 left it open.** Both recorded the same ⚠️: the row
+  survives retirement and nothing can read it, so reopening was API-only, and D-29 named
+  the fix — "a scoped parameter (an organisation's *own* inactive rows)". This is that
+  parameter, built as described rather than redesigned.
+- **Two filters, not one widened filter.** The obvious implementation is to let
+  `includeInactive` relax the WHERE clause and trust the scope to hold. It does hold —
+  but a *permission* to read history and a *scope* of whose history are different
+  questions, and folding them into one clause means a future change to either can silently
+  answer the other. `_may_read_inactive()` is therefore a separate predicate applied to a
+  separate term, and the tests assert the pairing directly: an NGO asking for inactive
+  rows still gets exactly its own.
+- **A donor is refused the flag rather than filtered afterwards.** The needs board is a
+  board of what is open now (D-44). A retired need is not an offer, there is no donor
+  action on one, and the client is not the boundary — so the server ignores the parameter
+  for a donor instead of relying on the page not to render what it was sent. `?includeInactive=true`
+  as a donor returns the ordinary active board, not an error: it is the same board, asked
+  for differently.
+- **An administrator gets it because unrestricted already means unrestricted.** Nothing
+  on an admin screen reads requirements today, so this is consistency rather than a
+  feature; withholding it would have been the special case needing a reason.
+- **One slice, two selectors — not two sources of truth.** `state.requirements` is still
+  filled by one fetch and re-read after every write. Splitting the *fetch* would have
+  given the portal a second copy of the same rows that could disagree with the first;
+  splitting the *selector* costs a `useMemo` and keeps the boards reading exactly what
+  the server sent. `useRequirements()` keeping its old meaning is what left the mobile
+  NGO home and the donor board untouched.
+- **The client filter is not the security boundary and does not pretend to be.** A donor
+  never receives an inactive row, so `useRequirements()`'s filter is presentation — the
+  same defence-in-depth position D-44 gave the portal's `myRecipient` filter.
+
+**Constraints.**
+
+- **`isActive` is now meaningfully false on the client**, where the type previously said
+  it was "always true through the list endpoint". Only the NGO requirements portal ever
+  sees a false one; the comment on `NGORequirement.isActive` was corrected to say so.
+- **Fulfilment is still a UI word** (D-29). A reopened need is indistinguishable from one
+  that was never retired, and a retired need cannot say *why* — so the retired card says
+  "off the demand board" and does not claim anything was fulfilled.
+- **A retired need is not editable from the portal**, only reopenable. The server would
+  accept an edit; offering both actions on a card that is off the board is a product
+  question nobody has asked, and reopening then editing is the same two steps.
+- **No schema change:** `alembic check` reports no drift.
+- Requirements still do not influence matching, and reopening one still attaches it to
+  nothing.
+
+---

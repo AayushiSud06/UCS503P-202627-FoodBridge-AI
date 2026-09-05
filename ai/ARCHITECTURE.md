@@ -1,10 +1,12 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05**, at HEAD `9b11353`
-> **plus the uncommitted Task 25 changes** in the working tree — requirement read scope and
-> the donor needs board (D-44), `TASKS.md` → *Current*. Earlier verification points: the
-> project health audit at `c274e99`, and `23c27f4` on 2026-09-02.
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05**, at HEAD `883bcee`
+> (Task 26, the match-distance privacy fix, D-45) **plus the uncommitted Task 27 changes**
+> in the working tree — retired requirements gain a reader and the NGO portal a reopen
+> action (D-46), `TASKS.md` → *Current*. Task 25's donor needs board and requirement read
+> scope (D-44) are committed as `e72d4c2`. Earlier verification points: the project health
+> audit at `c274e99`, and `23c27f4` on 2026-09-02.
 
 ## Shape
 
@@ -70,7 +72,7 @@ layer** — deliberate, see D-07.
 | `context/AuthContext.tsx` | Identity: boot token→user exchange, sign in/up/out, 401 handling with a `useRef` re-entrancy guard. |
 | `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. |
 | `components/ProtectedRoute.tsx` | Route guard. **UX affordance, not a security control.** |
-| `pages/` (30 files) | Desktop portals: `donor/`, `ngo/`, `volunteer/`, `admin/`. `donor/DonorNeedsBoard.tsx` (`/donor/needs`) is the read-only demand board — `useRequirements()`, no API call of its own. |
+| `pages/` (30 files) | Desktop portals: `donor/`, `ngo/`, `volunteer/`, `admin/`. `donor/DonorNeedsBoard.tsx` (`/donor/needs`) is the read-only demand board — `useRequirements()` (active only), no API call of its own. `ngo/NGORequirements.tsx` is the one screen on `useAllRequirements()`, so it can list and reopen retired needs. |
 | `mobile/` (26 files) | Phone layouts at `/m/*` with an inner `MobileRole` guard. |
 | `types/index.ts` | App-side domain types (`DonationStatus` union, etc.). |
 
@@ -245,6 +247,15 @@ list rather than a 403, following `GET /recipients`. `RequirementOut` also now c
 **`isVerified`**, read live from `Recipient.is_verified` — no column and no migration. The
 NGO portals keep their client-side `myRecipient` filter as defence in depth.
 
+**The lifecycle filter is a second, independent axis** (Task 27, D-46).
+`GET /requirements?includeInactive=true` adds retired rows for a caller
+`routers/organisations._may_read_inactive()` allows — admin and ngo — and is ignored for a
+donor or a courier, whose listing stays active-only whatever the query string says. It is
+applied *beside* `_visible_requirements()` and never instead of it, so asking for history
+can never widen whose history it is: an NGO reads its own retired needs and no other
+organisation's. Reopening remains `PATCH /requirements/{id}` with `isActive: true` — one
+flag, one endpoint, no new status column (D-29).
+
 **Match distances are scoped a third time, per row.** `GET /donations/{id}/matches` used
 to disclose recipient coordinates: `MatchOut.distanceKm` was a real measurement to a named
 organisation, so a donor who reads `200 []` from `GET /api/recipients` by design could post
@@ -285,7 +296,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
 | donations | `POST /donations` (auto-ranks on create; `imageUrl` capped at `schemas.MAX_IMAGE_URL_LENGTH` = 256 KiB) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). `/matches` returns named organisations, with a real distance only on the caller's own row (D-45) |
-| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET /requirements` **(role-scoped; a donor reads verified organisations' needs, an ngo its own)** · `POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and scoped within that** — an ngo sees only its own donations' couriers) · `GET|PATCH /volunteers/me` |
+| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET /requirements` **(role-scoped; a donor reads verified organisations' needs, an ngo its own)** · `?includeInactive=true` adds retired rows for admin/ngo only · `POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and scoped within that** — an ngo sees only its own donations' couriers) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
 | meta | `GET /health` (does **not** touch the DB) |
@@ -493,12 +504,16 @@ first), and a cancel from a terminal state still gets 409 (so does the owner's).
 `test_requirement_lifecycle.py` (15) covers the requirement lifecycle as an ownership
 boundary: who may revise, retire and reopen a requirement, that another organisation's id
 is a 404, and that a retired one leaves `GET /api/requirements` without being deleted.
-`test_requirement_reads.py` (14) covers the read side (D-44): admin sees every active
-need, a donor sees verified organisations' needs and not an unverified one's, an ngo sees
-its own and not a rival's, a courier sees none, a retired need is invisible to all three,
-and `isVerified` tracks the organisation — verifying one flips the flag on its existing
-requirements with nothing backfilled. One of them backdates rows through the session
-because `created_at` is second-resolution, so it tests the `ORDER BY` and not a tie.
+`test_requirement_reads.py` (24) covers the read side (D-44, D-46): admin sees every
+active need, a donor sees verified organisations' needs and not an unverified one's, an ngo
+sees its own and not a rival's, a courier sees none, a retired need is invisible to all
+three by default, and `isVerified` tracks the organisation — verifying one flips the flag
+on its existing requirements with nothing backfilled. Ten more pin `includeInactive`: an
+NGO reads its own retired needs and still not a rival's, an administrator reads them
+platform-wide, a **donor is refused the flag** and keeps the active board, a courier still
+reads nothing, and the default listing is byte-for-byte what it was. Two of them backdate
+rows through the session because `created_at` is second-resolution, so they test the
+`ORDER BY` and not a tie.
 `test_match_score_consistency.py` (11) pins the frozen/live distinction: two kitchens at
 different distances read one donation, and what the list gives each of them has to equal
 what `/matches` gives the same organisation. It also asserts the frozen number is *not*
@@ -553,11 +568,21 @@ it was not given). Both are D-31 held at a boundary.
 and a wire type that drifts from the backend fails to compile rather than failing
 silently.
 
-**Three things are stubbed, all of them boundaries into the page under test:** `fetch` in
-the api suite, `useAuth` in the route-guard suite, and `useRequirements`/`useLoadState` in
-the needs-board suite. `HOME_PATH` stays real, and so does `toRequirement` — the board's
-fixtures go through the real adapter from the real wire shape. Nothing else is mocked;
-there is no component-level test double anywhere in the suite.
+`pages/ngo/__tests__/NGORequirements.test.tsx` (8) and
+`context/__tests__/requirements.test.tsx` (7) cover the requirement lifecycle on screen
+(D-46). The first holds the portal's contract: a retired need is visibly retired, reopen
+appears only on one, reopening calls the shared update path, and the card moves once the
+reload lands. The second holds the boundary the shared slice created — `includeInactive`
+is requested for an `ngo` and for nobody else, `useRequirements` drops inactive rows while
+`useAllRequirements` keeps them, and the **real** `DonorNeedsBoard` rendered through the
+**real** provider shows none of them.
+
+**Four things are stubbed, all of them boundaries into the page under test:** `fetch` in
+the api suite, `useAuth` in the route-guard suite, `useRequirements`/`useLoadState` in the
+needs-board suite, and `api`/`useAuth` in the requirements-slice suite. `HOME_PATH` stays
+real, and so does `toRequirement` — every requirement fixture goes through the real adapter
+from the real wire shape. Nothing else is mocked; there is no component-level test double
+anywhere in the suite.
 
 ⚠️ **`npm test` is not yet a CI step** — `ci.yml` still runs only `npm run build`. See
 `TASKS.md` → *Backlog → D*.

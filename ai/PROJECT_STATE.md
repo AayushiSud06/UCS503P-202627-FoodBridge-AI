@@ -2,15 +2,16 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, HEAD `e72d4c2`
-> (Task 25: the donor needs board and the requirement read scope, D-44). The Task 22
-> matcher correction is committed as `a9f190b`, the Task 23 test harness as `f33aeae` and
-> the Task 24 landing-page correction as `9b11353`. ⚠️ **The working tree carries the
-> uncommitted Task 26 match-distance privacy fix** — `HA-3`/D-45: a match now describes
-> the reader's own organisation from its real position and every other from a ~1 km
-> surrogate, so `/matches` is no longer a coordinate oracle for a donor. Three source
-> files, three schema/type widenings, one new backend test file; 242 backend and 59
-> frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
+> Last verified against the repository: 2026-09-05, branch `master`, HEAD `883bcee`
+> (Task 26: the match-distance privacy fix, `HA-3`/D-45). Task 25's donor needs board and
+> requirement read scope (D-44) are committed as `e72d4c2`, the Task 22 matcher correction
+> as `a9f190b`, the Task 23 test harness as `f33aeae` and the Task 24 landing-page
+> correction as `9b11353`. ⚠️ **The working tree carries the uncommitted Task 27
+> requirement-reopen work** — `F-1`/D-46: `GET /api/requirements` takes `includeInactive`,
+> which adds retired rows for an admin or for an NGO's **own** organisation and is refused
+> for a donor, and the NGO portal lists retired needs and reopens one through the existing
+> PATCH. Two backend files, four frontend files, two new frontend test files; 252 backend
+> and 74 frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
 > I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
@@ -21,8 +22,8 @@
 > audit against `23c27f4` on 2026-09-02, and a **full project health audit against
 > `c274e99` on 2026-09-05**. The health audit's confirmed findings are issues 23–28 below
 > and tag `HA-n` in `TASKS.md`. **23, 24 and the `image_url` half of 13 are fixed in
-> `e7032ea`; 26 and 27 in `a9f190b`; 28 in `9b11353`; 25 (`HA-3`) is fixed in the working
-> tree.** All six confirmed findings are now answered. ⚠️ The `HA-3` fix left two named
+> `e7032ea`; 26 and 27 in `a9f190b`; 28 in `9b11353`; 25 (`HA-3`) in `883bcee`.** All six
+> confirmed findings are now answered. ⚠️ The `HA-3` fix left two named
 > residuals — `HA-3a` (ranking membership is still an oracle at the 8 km gate) and
 > `HA-3b` (`match_score` and `DonationOut.distanceKm`) — recorded in `TASKS.md` →
 > *Backlog → A* rather than treated as closed.
@@ -47,14 +48,14 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example. **Donors now have a read-only Needs Board** at `/donor/needs` over the existing requirement flow (Task 25, D-44) — it claims no fulfilment, no commitment and no statistic it was not given |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example. **Donors now have a read-only Needs Board** at `/donor/needs` over the existing requirement flow (Task 25, D-44) — it claims no fulfilment, no commitment and no statistic it was not given, and it stays **active-only**. The NGO requirements portal now lists its own **retired** needs in their own section and reopens one through the existing PATCH (Task 27, D-46) |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients, couriers **and standing requirements** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed), and `GET /api/requirements` is scoped by role (D-44: donor → verified recipients' needs, ngo → its own, volunteer → none, admin → all), closing the last read that was open by omission. ⚠️ Still open: `/matches` discloses recipient geometry (issue 25) |
+| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients, couriers **and standing requirements** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed), and `GET /api/requirements` is scoped by role (D-44: donor → verified recipients' needs, ngo → its own, volunteer → none, admin → all), closing the last read that was open by omission. Its `includeInactive` parameter (D-46) is a **second, independent** axis — it drops the `is_active` term for an admin or an ngo and is ignored for a donor or a courier, and never widens whose needs come back. `/matches` no longer discloses recipient geometry (issue 25, D-45); ⚠️ the named residuals `HA-3a`/`HA-3b` remain |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 242 tests passing (~205 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 14 requirement-read-scope + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + **12 match-distance-privacy** + 22 rate-limit + 22 config + 8 migration |
-| Frontend tests | ✅ 59 tests passing (~2 s): 14 donor-needs-board + 9 adapters + 8 time + 8 api-client + 6 impact + **5 geo** + 5 route-guard + 4 landing. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 8 of 85 files under `frontend/src` — a foundation, not a sweep |
+| Backend tests | ✅ 252 tests passing (~177 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + **24 requirement-read-scope** + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + **12 match-distance-privacy** + 22 rate-limit + 22 config + 8 migration |
+| Frontend tests | ✅ 74 tests passing (~2 s): 14 donor-needs-board + 9 adapters + **8 ngo-requirements** + 8 time + 8 api-client + **7 requirements-slice** + 6 impact + 5 geo + 5 route-guard + 4 landing. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 10 of 85 files under `frontend/src` — a foundation, not a sweep |
 | CI | ✅ GitHub Actions runs the backend tests, the frontend build and `alembic check`. ⚠️ **The frontend test suite is not a CI step yet** — the frontend job still runs `npm run build` only |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |
@@ -67,7 +68,22 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-05, uncommitted working tree** — **Task 26: a match distance belongs to the
+- **2026-09-05, uncommitted working tree** — **Task 27: a retired requirement gets a
+  reader.** `[F-1 · D-46]` D-29 kept the row on retirement and left it unreadable, so
+  reopening was API-only; D-44 then narrowed the board without adding a way to see what
+  had left it. `GET /api/requirements` now takes **`includeInactive`**, which drops the
+  `is_active` term for an administrator or for an NGO's **own** organisation and is
+  **refused for a donor** — the needs board stays a board of what is open now, whatever
+  the query string says. The flag is applied *beside* the D-44 scope and never instead of
+  it, so asking for history cannot widen whose history it is. On the client one fetch and
+  one slice still feed everything: `useRequirements()` is now the **active** needs (so the
+  donor board and the mobile NGO home are untouched) and the new `useAllRequirements()` is
+  read by the NGO requirements portal alone, which shows retired needs in their own
+  section with a single **Reopen** action — `PATCH` with `isActive: true`, the same field
+  and route that retires one. No schema change, no migration, no status column, no new
+  endpoint.
+
+- **2026-09-05, committed `883bcee`** — **Task 26: a match distance belongs to the
   organisation it describes.** `[HA-3 · D-45]` `GET /donations/{id}/matches` was a
   coordinate oracle: a donor reads `[]` from `GET /api/recipients` by design (D-26), then
   posted three donations at pins of their choosing and trilaterated any verified kitchen.
@@ -549,14 +565,20 @@ deployment rather than ahead of it. Its recommended first product feature — th
 needs board** — **is now built** (Task 25). It cost one endpoint scope, one serialised
 field, one page and two test files; no schema change and no migration.
 
-**`HA-3` followed it as Task 26** and is the last of the health audit's six confirmed
-findings. The disclosure was larger than this file recorded — `distanceKm` was the
+**`HA-3` followed it as Task 26** (`883bcee`) and is the last of the health audit's six
+confirmed findings. The disclosure was larger than this file recorded — `distanceKm` was the
 coarsest of four readings, not the only one — and the mitigation `TASKS.md` proposed
 (rounding to ~0.5 km) would not have closed it, because rounding boundaries sit at known
 distances. What was done instead is recorded as D-45. It is also the first fix here that
 names what it does *not* close: the 8 km eligibility gate is itself an oracle, and the
 answer to that is abuse-limiting on donation creation (`HA-3a`), not another distance
 format.
+
+**Task 27 then closed `F-1`,** the product gap D-29 and D-44 had both recorded as a ⚠️:
+a retired requirement had no reader, so the one lifecycle flag the model keeps was
+writable in both directions but visible in only one. It cost a query parameter, a
+predicate beside the existing scope, a second selector over the existing slice and a
+section on one page — no schema change and no second source of truth.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional expansion
 and cleanup) or *Blocked*, which now holds **seven** open decisions: the original four,
@@ -601,7 +623,7 @@ stable as items are resolved, so gaps are expected.
 
 ### Medium — found by the health audit, 2026-09-05
 
-25. ✅ **Resolved (Task 26, uncommitted).** `GET /donations/{id}/matches` used to give
+25. ✅ **Resolved (Task 26, `883bcee`).** `GET /donations/{id}/matches` used to give
     back the recipient coordinates D-26 withholds: a donor reads `[]` from `GET
     /api/recipients` by design, then posted three donations at pins of their choosing and
     trilaterated any verified kitchen from `MatchOut.distanceKm` — reproduced, recovering
@@ -864,12 +886,17 @@ credibility rather than about its correctness, and that judgement belongs in thi
    `isVerified`, and `/donor/needs` renders the board read-only over the existing
    `useRequirements()` flow. `requirements` finally has an audience — without gaining any
    influence over matching, which is still a separate *Blocked* question.
-6. ✅ **Done, uncommitted — the `/matches` distance disclosure** (Task 26, `HA-3`, D-45).
-   Review and commit. A match describes the reader's own organisation from its real
-   position and every other from a ~1 km surrogate; `MatchOut.distanceKm` is nullable and
-   null for those rows. **242 backend and 59 frontend tests pass**, `tsc --noEmit` and
-   `npm run build` clean. No schema change, no migration, no change to weights, radius or
-   eligibility.
+6. ✅ **Done, committed `883bcee` — the `/matches` distance disclosure** (Task 26,
+   `HA-3`, D-45). A match describes the reader's own organisation from its real position
+   and every other from a ~1 km surrogate; `MatchOut.distanceKm` is nullable and null for
+   those rows. No change to weights, radius or eligibility.
+7. ✅ **Done, uncommitted — reopening retired requirements** (Task 27, `F-1`, D-46).
+   Review and commit. `GET /api/requirements?includeInactive=true` serves an admin or an
+   NGO's own organisation and is refused for a donor; the NGO portal lists retired needs
+   and reopens one through the existing PATCH. **252 backend and 74 frontend tests pass**,
+   `tsc --noEmit` and `npm run build` clean, `alembic check` reports no drift, and the
+   flow was verified in the browser against the seeded database. No schema change and no
+   new endpoint.
 
 Sequenced behind those: *Backlog → E* (concurrency guard → Postgres → deployment
 configuration), which is where the rate-limit-sharing decision gets answered — and which

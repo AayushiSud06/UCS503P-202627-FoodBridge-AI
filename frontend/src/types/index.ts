@@ -163,7 +163,12 @@ export interface NGORequirement {
   urgency: 'High' | 'Medium' | 'Low';
   dailyRecurring: boolean;
   notes: string;
-  /** Always true through the list endpoint, which is active-only. */
+  /**
+   * False once the need has been retired — met, or no longer wanted. The
+   * listing is active-only unless the owning organisation asks for its own
+   * retired needs (`includeInactive`), so this is only ever false on the NGO
+   * requirements portal, which is where reopening happens.
+   */
   isActive: boolean;
   /** ISO instant the need was posted, for the "posted 3h ago" line. */
   createdAt: string;

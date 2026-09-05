@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import false, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -168,24 +168,56 @@ def _visible_requirements(user: User):
     return false()
 
 
+def _may_read_inactive(user: User) -> bool:
+    """Whether `includeInactive` means anything for this caller.
+
+    The flag widens the **lifecycle** filter and never the scope. It is applied
+    beside `_visible_requirements` rather than instead of it, so a kitchen
+    asking for retired rows still reaches only its own organisation's; the
+    ownership term is untouched and D-44 still decides *whose* needs a caller
+    sees. What this decides is only whether the past is part of the answer.
+
+    * admin — yes. Platform-wide visibility already spans the whole table.
+    * ngo — yes, inside its own scope. D-29 kept the row on retirement and left
+      it with no reader; the portal is that reader, and reopening needs a list
+      to reopen from.
+    * donor — **no, whatever the query string says.** The needs board is a
+      board of what is open now: a retired need is not an offer, and a donor
+      has no action on one. That is why this is a permission rather than a
+      filter the caller simply chooses.
+    * volunteer — no, and `_visible_requirements` returns nothing anyway.
+    """
+    return user.role in (UserRole.admin, UserRole.ngo)
+
+
 @router.get("/requirements", response_model=list[RequirementOut])
 def list_requirements(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    include_inactive: bool = Query(
+        default=False,
+        alias="includeInactive",
+        description="Also return retired needs, for callers entitled to read them",
+    ),
 ) -> list[RequirementOut]:
-    """Active standing needs, scoped to the caller.
+    """Standing needs, scoped to the caller; active only unless asked otherwise.
 
-    Newest first, active only, and now narrowed by role — see
-    `_visible_requirements` and `DECISIONS.md` D-44. Denial here is an empty
-    list rather than a 403, following `GET /recipients`: there is no id to
-    confirm or deny, only a board that is empty for this caller.
+    Newest first, narrowed by role — see `_visible_requirements` and
+    `DECISIONS.md` D-44. Denial here is an empty list rather than a 403,
+    following `GET /recipients`: there is no id to confirm or deny, only a board
+    that is empty for this caller.
+
+    `includeInactive=true` adds retired rows for a caller `_may_read_inactive`
+    allows, and is ignored for everyone else — the two filters are independent,
+    so asking for history can never widen whose history it is.
     """
     stmt = (
         select(Requirement)
         .options(selectinload(Requirement.recipient))
-        .where(Requirement.is_active.is_(True))
         .order_by(Requirement.created_at.desc())
     )
+    if not (include_inactive and _may_read_inactive(user)):
+        stmt = stmt.where(Requirement.is_active.is_(True))
     scope = _visible_requirements(user)
     if scope is not None:
         stmt = stmt.where(scope)
@@ -238,7 +270,10 @@ def update_requirement(
     need that no longer applies are both simply off the board. The row is kept
     either way, so the demand history survives. `GET /api/requirements` already
     filters on the same flag, so a retired requirement leaves the board without
-    anything else changing — and `isActive: true` puts it back.
+    anything else changing — and `isActive: true` puts it back. The owning
+    organisation can list what it has retired through `includeInactive`, so
+    reopening is now something the portal can offer rather than an API-only
+    operation.
     """
     requirement = _own_requirement_or_404(db, _own_recipient(db, user), requirement_id)
     for field, value in body.model_dump(exclude_unset=True).items():

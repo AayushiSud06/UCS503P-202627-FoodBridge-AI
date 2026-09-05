@@ -1,10 +1,11 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05. HEAD is `e72d4c2` (Task 25: the donor
-> needs board and the requirement read scope, D-44); the working tree carries the
-> **uncommitted Task 26 match-distance privacy fix** (`HA-3`, D-45) described under
-> *Current*. Task 22's matcher correction is committed as `a9f190b`, Task 23's frontend
-> test harness as `f33aeae` and Task 24's landing-page correction as `9b11353`.
+> Verified against the repository on 2026-09-05. HEAD is `883bcee` (Task 26: the
+> match-distance privacy fix, `HA-3`, D-45); the working tree carries the **uncommitted
+> Task 27 requirement-reopen work** (`F-1`, D-46) described under *Current*. Task 25's
+> donor needs board and requirement read scope (D-44) are committed as `e72d4c2`, Task
+> 22's matcher correction as `a9f190b`, Task 23's frontend test harness as `f33aeae` and
+> Task 24's landing-page correction as `9b11353`.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
@@ -36,76 +37,56 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 26 — the match-distance privacy fix, complete.**
-Task 25 is now committed (`e72d4c2`) and its entry has moved to *Completed*.
+**Uncommitted in the working tree: Task 27 — reopening retired requirements, complete.**
+Task 26 is now committed (`883bcee`) and its entry has moved to *Completed*.
 
-### Task 26 — `HA-3` · match distance is scoped to the organisation it describes `[HA-3 · D-26 · D-33 · D-45]`
+### Task 27 — `F-1` · a retired requirement gets a reader, and the portal a reopen action `[F-1 · D-29 · D-44 · D-46]`
 
-**A donor can no longer read a verified kitchen's coordinates out of
-`GET /api/donations/{id}/matches`.** The ranking is unchanged — same weights, same 8 km
-radius, same eligibility gates, same candidates for every reader — and so is every number
-an organisation reads about *itself*. **No schema change and no migration.**
+**An NGO can now see and reopen its own retired needs.** D-29 kept the row on retirement
+and left it unreadable, so reopening was API-only; D-44 narrowed the board without adding
+a way to see what had left it. Both ⚠️s are answered by the parameter D-29 itself
+described. **No schema change, no migration, no new status column, no new endpoint.**
 
-- **The mitigation this list previously proposed was wrong and has been replaced.**
-  Rounding `distance_km` to ~0.5 km does not close the disclosure: the boundaries of a
-  rounded value sit at known distances, so moving the pin until one flips recovers a
-  circle of known radius about the kitchen, and three of those still give the exact point.
-- **`distanceKm` was also not the only reading.** `distance_score` resolves to 80 m,
-  `deadline_score` (which subtracts a distance-derived travel estimate) to ~400 m, and
-  `overall_score` — a weighted sum of both — to ~320 m. A serialization-only fix cannot
-  reach the three scores, because they are *computed from* the distance rather than
-  carrying it.
-- **What was done instead.** `matching.score_pair(..., blur_location=True)` snaps the
-  recipient's coordinates to `LOCATION_BLUR_GRID_DEG` (0.01°, ≈ 1 km) and scores the
-  pairing against that surrogate, so every figure a non-owning reader can measure is an
-  exact function of one fixed point. `MatchOut.distanceKm` is `None` for such a row, and
-  the distance sentence in `reasons` drops its figure. Eligibility is still decided on the
-  true position, *before* the blur.
-- **The scope lives in the router,** `donations._precise_distance_scope`, in the shape
-  `_readable_by` already uses: `None` for an administrator, `{own recipient id}` for an
-  `ngo`, empty for a donor or a courier. An `ngo` is scoped for its *peers* — registration
-  hands that role to any address, which is the D-41 lesson.
-- **D-33 is untouched.** `DonationOut.viewerMatch` is always the caller's own organisation
-  and is never blurred, and the four internal rankings that freeze `Donation.match_score`
-  — two in `routers/donations`, two in `seed.py` — pass no scope and stay exact.
-- **The gate is above the blur, verified by mutation.** All three `return None` branches
-  (verification, coordinates, radius) run on the true `haversine_km`; the blur is applied
-  only afterwards. Moving it above the gate fails the two boundary tests and the
-  same-eligible-set test, and nothing else. The sort is on the blurred score, so ordering
-  is not a channel either.
-- **Contract widened:** `MatchOut.distanceKm` is `float | None`; `ApiMatch.distanceKm` and
-  `MatchAnalysis.distanceKm` are `number | null`. `displayDistanceKm` already coalesced,
-  so **no screen changed** — the analysis panel draws the scores and the reasons, never
-  this field.
-- **Tests.** New `code/tests/test_match_distance_privacy.py` (12): the three readings the
-  audit found; the disclosure floor stated directly (two kitchens ~600 m apart in one cell
-  give a donor whole rows that compare equal, which settles the ordering channel too); the
-  `deadline_score`/`overall_score` pair exercised at a one-hour deadline, where the
-  criterion is off its ceiling and actually carries the distance; the organisation's own
-  distance; the `viewerMatch` path; and **both directions of the 8 km gate** — a kitchen
-  8.02 km away whose surrogate is 7.52 km away stays out, and one 7.98 km away whose
-  surrogate is 8.46 km away stays in. One existing test —
-  `test_api.test_a_nearer_kitchen_outranks_a_further_one` — read the ranking through
-  `distanceKm` as a donor and now reads it through `distanceScore`. `geo.test.ts` gained
-  the null-distance case.
+- **The lifecycle filter became a second, independent axis.**
+  `GET /api/requirements?includeInactive=true` drops the `is_active` term when
+  `organisations._may_read_inactive(user)` allows — **admin and ngo only**. It is applied
+  *beside* `_visible_requirements()` (D-44), never instead of it, so asking for history
+  cannot widen whose history it is. `_visible_requirements` itself is unchanged.
+- **A donor is refused the flag, not filtered after it.** The donor listing stays
+  active-only whatever the query string says; the needs board is a board of what is open
+  now. A courier's scope is empty either way. The default listing is byte-for-byte what
+  it was for every caller.
+- **Reopening is the existing PATCH.** `isActive: true` on
+  `PATCH /api/requirements/{id}`, the same field and route retiring already used (D-29).
+  `AppContext.reopenRequirement` mirrors `retireRequirement`; no new client method.
+- **One slice, two selectors — not a second source of truth.** `AppContext` sends
+  `includeInactive` for an `ngo` account and nobody else. `useRequirements()` now returns
+  the **active** needs, so the donor needs board and the mobile NGO home are untouched;
+  the new `useAllRequirements()` returns the whole slice and `pages/ngo/NGORequirements.tsx`
+  is its only reader. The client filter is presentation — the server never sends a donor
+  an inactive row.
+- **The portal shows retired needs in their own section**, set back, chipped *Retired*,
+  saying "off the demand board", with a single **Reopen** action. The active card keeps
+  Edit and Mark fulfilled exactly as they were; the two states share one card component.
+  Nothing claims a need was *fulfilled* rather than simply retired — the row cannot tell
+  the two apart (D-29) and the card does not pretend it can.
+- **`NGORequirement.isActive` can now be false on the client**, where its comment said it
+  was "always true through the list endpoint". Corrected in `frontend/src/types/index.ts`.
+- **Tests.** `test_requirement_reads.py` gained 10: an NGO reads its own retired needs and
+  still not a rival's, an administrator reads them platform-wide, a donor is refused the
+  flag and keeps the active board, a courier still reads nothing, the default listing is
+  unchanged, a reopened need returns to every board it was on, and the combined listing
+  keeps newest-first order. New `pages/ngo/__tests__/NGORequirements.test.tsx` (8) holds
+  the portal contract, and new `context/__tests__/requirements.test.tsx` (7) holds the
+  boundary the shared slice created — including the **real** `DonorNeedsBoard` rendered
+  through the **real** provider with a retired row in the payload, which shows none of it.
 
-⚠️ **What this does not close, recorded rather than hidden.** Ranking *membership* is
-still an oracle — a recipient appears iff the true distance is within 8 km — so a donor
-who binary-searches the pin can find the 8 km circle and trilaterate from three points on
-it. That needs abuse-limiting on donation creation, not a different distance
-representation, and closing it by changing eligibility was explicitly out of scope. Two
-smaller readings in the same family are also open: `Donation.match_score` (~320 m, one
-number per donation) and `DonationOut.distanceKm` (exact, to the kitchen that accepted —
-which the donor does not choose). All three are in *Backlog → A*; D-45 has the detail.
-
-Validation: `pytest code/tests` **242/242** (230 → 242, ~205 s), `npm test` **59/59**
-(8 files), `npm run typecheck` clean, `npm run build` clean, `alembic check` reports no new
-upgrade operations. The attack was also re-run end to end against a throwaway database: a
-donor posting five donations at pins of its choosing and solving for the kitchen from
-everything still exposed lands **465 m** from the true position and cannot refine further
-(the solution fits every observation exactly — it has converged on the surrogate). The same
-solver on the pre-fix payload shape, which is what an administrator still receives, lands
-**15 m** away, i.e. at the limit of the search grid rather than of the data.
+Validation: `pytest code/tests` **252/252** (242 → 252, ~177 s), `npm test` **74/74**
+(10 files, 59 → 74), `npm run typecheck` clean, `npm run build` clean, `alembic check`
+reports no new upgrade operations. Verified in the browser as the seeded NGO account
+(`raj@helpinghands.org`): retiring a need moved it into the retired section, reopening
+returned it to the active board, no console errors. `GET /api/requirements?includeInactive=true`
+as the seeded donor returned the active board only.
 
 ### Task 24 — the landing page (*Next* step 4, committed `9b11353`)
 
@@ -491,11 +472,12 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 Places where a shipped feature is incomplete — not new ideas.
 
-- [ ] Let an organisation see its own retired requirements. `PATCH /api/requirements/{id}`
-      can reopen one, but `GET /api/requirements` returns active rows only and gained no
-      parameter, so a retired requirement has no reader and the UI cannot list or reopen
-      it. The shape: an `includeInactive` flag widening the caller's view of **its own**
-      organisation's rows only, never anyone else's. `[D-29 · repo]` — **S**
+- [x] ~~Let an organisation see its own retired requirements.~~ **Done (Task 27, D-46),
+      uncommitted in the working tree.** Built as this entry described: an `includeInactive`
+      flag on `GET /api/requirements`, applied beside the D-44 scope rather than instead of
+      it, so it widens the lifecycle filter and never the organisation. The NGO portal lists
+      retired needs in their own section and reopens one through the existing PATCH.
+      `[D-29 · D-46 · repo]`
 - [ ] Courier rating flow, **or** drop `Volunteer.rating`. The column is written by nothing
       but `seed.py`; `VolunteerUpdate` excludes it deliberately, so every courier created
       through the app is permanently 5.0. `[B-3 · R-33]` — **M**
@@ -994,6 +976,74 @@ external.
 ---
 
 ## Completed (verified in the repository)
+
+### Match distance is scoped to the organisation it describes — **`883bcee`** `[HA-3 · D-26 · D-33 · D-45]`
+
+**A donor can no longer read a verified kitchen's coordinates out of
+`GET /api/donations/{id}/matches`.** The ranking is unchanged — same weights, same 8 km
+radius, same eligibility gates, same candidates for every reader — and so is every number
+an organisation reads about *itself*. **No schema change and no migration.**
+
+- **The mitigation this list previously proposed was wrong and has been replaced.**
+  Rounding `distance_km` to ~0.5 km does not close the disclosure: the boundaries of a
+  rounded value sit at known distances, so moving the pin until one flips recovers a
+  circle of known radius about the kitchen, and three of those still give the exact point.
+- **`distanceKm` was also not the only reading.** `distance_score` resolves to 80 m,
+  `deadline_score` (which subtracts a distance-derived travel estimate) to ~400 m, and
+  `overall_score` — a weighted sum of both — to ~320 m. A serialization-only fix cannot
+  reach the three scores, because they are *computed from* the distance rather than
+  carrying it.
+- **What was done instead.** `matching.score_pair(..., blur_location=True)` snaps the
+  recipient's coordinates to `LOCATION_BLUR_GRID_DEG` (0.01°, ≈ 1 km) and scores the
+  pairing against that surrogate, so every figure a non-owning reader can measure is an
+  exact function of one fixed point. `MatchOut.distanceKm` is `None` for such a row, and
+  the distance sentence in `reasons` drops its figure. Eligibility is still decided on the
+  true position, *before* the blur.
+- **The scope lives in the router,** `donations._precise_distance_scope`, in the shape
+  `_readable_by` already uses: `None` for an administrator, `{own recipient id}` for an
+  `ngo`, empty for a donor or a courier. An `ngo` is scoped for its *peers* — registration
+  hands that role to any address, which is the D-41 lesson.
+- **D-33 is untouched.** `DonationOut.viewerMatch` is always the caller's own organisation
+  and is never blurred, and the four internal rankings that freeze `Donation.match_score`
+  — two in `routers/donations`, two in `seed.py` — pass no scope and stay exact.
+- **The gate is above the blur, verified by mutation.** All three `return None` branches
+  (verification, coordinates, radius) run on the true `haversine_km`; the blur is applied
+  only afterwards. Moving it above the gate fails the two boundary tests and the
+  same-eligible-set test, and nothing else. The sort is on the blurred score, so ordering
+  is not a channel either.
+- **Contract widened:** `MatchOut.distanceKm` is `float | None`; `ApiMatch.distanceKm` and
+  `MatchAnalysis.distanceKm` are `number | null`. `displayDistanceKm` already coalesced,
+  so **no screen changed** — the analysis panel draws the scores and the reasons, never
+  this field.
+- **Tests.** New `code/tests/test_match_distance_privacy.py` (12): the three readings the
+  audit found; the disclosure floor stated directly (two kitchens ~600 m apart in one cell
+  give a donor whole rows that compare equal, which settles the ordering channel too); the
+  `deadline_score`/`overall_score` pair exercised at a one-hour deadline, where the
+  criterion is off its ceiling and actually carries the distance; the organisation's own
+  distance; the `viewerMatch` path; and **both directions of the 8 km gate** — a kitchen
+  8.02 km away whose surrogate is 7.52 km away stays out, and one 7.98 km away whose
+  surrogate is 8.46 km away stays in. One existing test —
+  `test_api.test_a_nearer_kitchen_outranks_a_further_one` — read the ranking through
+  `distanceKm` as a donor and now reads it through `distanceScore`. `geo.test.ts` gained
+  the null-distance case.
+
+⚠️ **What this does not close, recorded rather than hidden.** Ranking *membership* is
+still an oracle — a recipient appears iff the true distance is within 8 km — so a donor
+who binary-searches the pin can find the 8 km circle and trilaterate from three points on
+it. That needs abuse-limiting on donation creation, not a different distance
+representation, and closing it by changing eligibility was explicitly out of scope. Two
+smaller readings in the same family are also open: `Donation.match_score` (~320 m, one
+number per donation) and `DonationOut.distanceKm` (exact, to the kitchen that accepted —
+which the donor does not choose). All three are in *Backlog → A*; D-45 has the detail.
+
+Validation: `pytest code/tests` **242/242** (230 → 242, ~205 s), `npm test` **59/59**
+(8 files), `npm run typecheck` clean, `npm run build` clean, `alembic check` reports no new
+upgrade operations. The attack was also re-run end to end against a throwaway database: a
+donor posting five donations at pins of its choosing and solving for the kitchen from
+everything still exposed lands **465 m** from the true position and cannot refine further
+(the solution fits every observation exactly — it has converged on the surrogate). The same
+solver on the pre-fix payload shape, which is what an administrator still receives, lands
+**15 m** away, i.e. at the limit of the search grid rather than of the data.
 
 ### The donor needs board and requirement read scope — **`e72d4c2`** `[QA-3 · §8.2 · D-44]`
 
