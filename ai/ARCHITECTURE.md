@@ -32,7 +32,8 @@ any third-party API. The backend makes zero outbound HTTP requests.
 Pydantic 2.9 · PyJWT · bcrypt · uvicorn · python-multipart (login is OAuth2
 form-encoded). Tests: pytest ≥8.3 + httpx.
 **Frontend** — React 18.3 · TypeScript 5.5 · Vite 5.4 · React Router 6.26 ·
-Tailwind 3.4 · lucide-react. No Redux, no Axios, no form library, no test framework.
+Tailwind 3.4 · lucide-react. Tests: Vitest 3.2 + Testing Library (D-43).
+No Redux, no Axios, no form library.
 **Python** — needs 3.10+ in practice (`X | None` syntax) despite `pyproject.toml`.
 
 ## Backend layout — `code/foodlink/`
@@ -442,14 +443,16 @@ proxy target). `VITE_*` values are **inlined at build time** — never secrets.
 
 ## Testing architecture
 
+### Backend — `pytest code/tests`
+
 37 integration tests through FastAPI's `TestClient`, **no mocks**, full stack against
 in-memory SQLite. `conftest.py` uses `StaticPool` — required because in-memory SQLite
 exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **191 in total**
-(~163 s, almost entirely real bcrypt hashing). `test_donation_reads.py` (13),
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **216 in total**
+(~142 s, almost entirely real bcrypt hashing). `test_donation_reads.py` (13),
 `test_volunteer_reads.py` (8) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
@@ -485,7 +488,37 @@ with an injected `now`, that a stored score cannot track the deadline it scored.
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the
 process rather than the per-test database.
-Zero frontend tests; `tsc` in `npm run build` is the only frontend gate.
+
+### Frontend — `npm test` in `frontend/`
+
+**40 tests over 6 files**, Vitest 3.2 driven through the project's own
+`vite.config.ts`, so a module resolves in a test exactly as it does in the build (D-43).
+Runner config is the `test` block in that file; there is no separate config and no setup
+file. Default environment is **node**; `lib/__tests__/api.test.ts` and
+`components/__tests__/ProtectedRoute.test.tsx` opt into jsdom with a
+`// @vitest-environment jsdom` docblock, so the arithmetic suites do not pay for a DOM
+they never touch. The whole suite runs in ~1.5 s.
+
+The seams chosen are the ones carrying logic that `tsc` cannot check, because every
+field involved is a string or a number on both sides of the change:
+`lib/adapters.ts` (9 — entityId precedence, event→timestamp folding, the
+`deadlineScore`→`pickupAvailabilityScore` rename, feed ordering), `lib/time.ts` (8 —
+urgency bands at their boundaries, the deadline roll-forward), `lib/impact.ts` (6 — D-32,
+`COMPLETED`-only counting and the server counter winning over the loaded list),
+`lib/geo.ts` (4 — D-33, `viewerMatch.distanceKm` beating `distanceKm`), `lib/api.ts`
+(8 — token attach, the 401 eviction, Pydantic detail flattening, bodyless 5xx →
+`NetworkError`) and `components/ProtectedRoute.tsx` (5 — the three redirect decisions).
+
+`src/test/fixtures.ts` holds typed builders for the wire shapes (`apiDonation`,
+`apiUser`, `apiMatch`, …), so a test states only the field it is about and a wire type
+that drifts from the backend fails to compile rather than failing silently.
+
+**Only two things are stubbed, both process boundaries:** `fetch` in the api suite, and
+`useAuth` in the route-guard suite. `HOME_PATH` stays real. Nothing else is mocked —
+there is no component-level test double anywhere in the suite.
+
+⚠️ **`npm test` is not yet a CI step** — `ci.yml` still runs only `npm run build`. See
+`TASKS.md` → *Backlog → D*.
 
 ## Continuous integration — `.github/workflows/ci.yml`
 
@@ -493,7 +526,8 @@ Two independent jobs on push to `master`/`main` and on every pull request.
 **backend** (Python 3.13): `pip install -r code/requirements-dev.txt` → `pytest code/tests`
 → `alembic -c code/alembic.ini upgrade head` + `alembic ... check` against a throwaway
 SQLite file, which fails the build when the models have drifted from the revision history.
-**frontend** (Node 20): `npm ci` → `npm run build`, i.e. `tsc` is the type gate.
+**frontend** (Node 20): `npm ci` → `npm run build`, i.e. `tsc` is the type gate. ⚠️ The
+frontend test suite exists but **is not wired into CI yet**; adding the step is outstanding.
 
 The test step exports no signing key — `conftest.py` sets its own (D-22), and leaving CI
 silent about it keeps that self-containment tested. Only the Alembic step needs one, because

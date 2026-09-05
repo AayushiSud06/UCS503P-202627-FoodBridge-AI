@@ -4,7 +4,9 @@
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
 > Last verified against the repository: 2026-09-05, branch `master`, HEAD `e7032ea`
 > (Task 21: roster scope, pickup release, image bound). ⚠️ **The working tree carries the
-> uncommitted Task 22 matcher correction** — `HA-4` and `HA-5`; 216 backend tests pass.
+> uncommitted Task 22 matcher correction** (`HA-4`, `HA-5`; 216 backend tests pass) **and the
+> uncommitted Task 23 frontend test harness** (`HA-8`, `R-14`; 40 frontend tests pass, no
+> application source file touched). The two are independent.
 > See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
@@ -45,8 +47,8 @@ as ML.
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
 | Backend tests | ✅ 216 tests passing (~142 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
-| Frontend tests | ❌ None exist |
-| CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
+| Frontend tests | ✅ 40 tests passing (~1.5 s), **uncommitted**: 9 adapters + 8 time + 8 api-client + 6 impact + 5 route-guard + 4 geo. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 6 of 84 files under `frontend/src` — a foundation, not a sweep |
+| CI | ✅ GitHub Actions runs the backend tests, the frontend build and `alembic check`. ⚠️ **The frontend test suite is not a CI step yet** — the frontend job still runs `npm run build` only |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |
 
@@ -58,6 +60,20 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
+- **2026-09-05, uncommitted working tree** — **Task 23: the frontend has an automated test
+  command.** `npm test` in `frontend/` runs **40 tests over 6 files in ~1.5 s**, all
+  passing. Vitest 3.2 + Testing Library, configured as a `test` block in the existing
+  `vite.config.ts` so tests resolve modules exactly as the build does; Vitest 5 requires
+  Vite ≥ 6 and this project is on Vite 5.4, so the version is pinned deliberately. Seeded
+  on the seams that carry logic `tsc` cannot check: `lib/adapters.ts`, `lib/time.ts`,
+  `lib/api.ts`, `lib/impact.ts`, `lib/geo.ts` and `components/ProtectedRoute.tsx` — the
+  arithmetic behind D-32, D-33 and D-40, each of which closed with *"Nothing tests this"*.
+  **No application source file was modified**: four devDependencies, the config block, two
+  `package.json` scripts, seven new files under `frontend/src`. Only `fetch` and `useAuth`
+  are stubbed, both process boundaries. Verified by mutation — inverting the D-33 distance
+  precedence in `lib/geo.ts` passes `tsc` and fails the suite. `npm test` 40/40,
+  `tsc --noEmit` clean, `npm run build` clean. ⚠️ Not yet a CI step. See `DECISIONS.md`
+  D-43.
 - **2026-09-05, uncommitted working tree** — **Task 22: the matcher's two size criteria now
   measure two different things, and only comparable units are compared.** `HA-5`:
   `Recipient.capacity` counts meals — the product fixed that in three places and
@@ -460,12 +476,15 @@ interface claims the QA audit found the system could not honour) is complete exc
 landing page. What replaced them is the health audit's six confirmed findings, and unlike
 group I they are **defects in the running system, not in its description**.
 
-**The next task is `HA-1` + `HA-2` + the `image_url` cap, taken together as one small
-change** (`TASKS.md` → *Next*, step 1). They are grouped because each is a few lines, each
-has a matching regression test that does not exist yet, and two of them are the only
-findings in the audit that are both reproducible and currently exploitable. After that,
-step 2 repairs the matcher's scoring (`HA-4`, `HA-5`) — the project's headline feature,
-which today spends 45% of its published weight on two criteria that cancel.
+**Steps 1, 2 and 3 of that sequence are done** — step 1 (`HA-1`, `HA-2`, the `image_url`
+cap) as `e7032ea`, step 2 (the matcher's scoring, `HA-4`/`HA-5`) and step 3 (the frontend
+test harness, `HA-8`/`R-14`) uncommitted in the working tree.
+
+**The next task is step 4 — finishing the landing page** (`HA-6`), the one screen still
+printing invented figures. Two smaller pieces of step 3 were deliberately left out and are
+now in `TASKS.md` → *Backlog → D*: adding `npm test` to `ci.yml`, and the dead
+`npm run lint` script (*Backlog → H*), which has always referenced an `eslint` that is not
+a dependency.
 
 **Then stop hardening.** The audit's strategic conclusion is that the remaining backlog
 splits into things that are *broken* (steps 1–3 of *Next*, two to three days) and things
@@ -750,11 +769,12 @@ credibility rather than about its correctness, and that judgement belongs in thi
 1. ✅ **Done and committed — `HA-1` + `HA-2` + the `image_url` bound** (Task 21, `e7032ea`).
 2. ✅ **Done, uncommitted — the matcher's size criteria** (Task 22, `HA-4` + `HA-5`).
    Review and commit. 216 backend tests pass; `alembic check` clean; one source file changed.
-3. **Stand up a frontend test harness** (`HA-8`; `TASKS.md` → *Next* step 3). This is now the
-   next implementation task. Vitest over the pure modules — `lib/impact.ts`, `lib/geo.ts`,
-   `lib/time.ts`, `lib/adapters.ts` — plus `ProtectedRoute`, and the step added to `ci.yml`.
-   Every honesty invariant D-31 → D-40 established is still held by review habit alone, and
-   `tsc` remains the only frontend gate. **M.**
+3. ✅ **Done, uncommitted — the frontend test harness** (Task 23, `HA-8` + `R-14`).
+   Review and commit. Vitest 3.2 + Testing Library over `lib/adapters.ts`, `lib/time.ts`,
+   `lib/api.ts`, `lib/impact.ts`, `lib/geo.ts` and `ProtectedRoute`; **40 tests pass**,
+   `tsc --noEmit` and `npm run build` clean, no application source file changed. ⚠️ **The
+   `ci.yml` step was not added**, so the honesty invariants D-31 → D-40 are now covered by
+   tests but those tests do not yet gate a build — see `TASKS.md` → *Backlog → D*.
 4. **Finish the landing page** (`HA-6` / I-1a; *Next* step 4) — two fabricated blocks and a
    real-time claim, on the only page seen before login. **S.**
 5. Then **stop hardening and build the donor needs board** (*Blocked*) — the smallest real

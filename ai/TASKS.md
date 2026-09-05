@@ -34,8 +34,44 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 22 — *Next* step 2, complete.** The matcher's two
-size criteria are corrected; **216 backend tests pass** (191 → 216), `alembic check` reports
+**Uncommitted in the working tree: Tasks 22 and 23 — *Next* steps 2 and 3, both complete.**
+Two independent changes sit side by side: the matcher correction (backend, below) and the
+frontend test harness (frontend only, no source file touched). Neither depends on the other.
+
+### Task 23 — the frontend test harness (*Next* step 3)
+
+**`npm test` in `frontend/` runs 40 tests over 6 files in ~1.5 s, all passing.** Vitest 3.2
++ Testing Library, configured as a `test` block in the project's existing `vite.config.ts`
+so tests resolve modules exactly as the build does — D-43 records the choice and the Vite 5
+constraint that pinned the version. **No application source file was modified**: the change
+is four devDependencies, the config block, two `package.json` scripts, and seven new files
+under `frontend/src`.
+
+- **Seams covered** — `lib/adapters.ts` (9), `lib/time.ts` (8), `lib/api.ts` (8),
+  `lib/impact.ts` (6), `lib/geo.ts` (4), `components/ProtectedRoute.tsx` (5). These carry
+  the arithmetic behind D-32, D-33 and D-40, each of which closed with *"Nothing tests
+  this"*.
+- **Why these and not components** — the regressions that matter here are type-correct.
+  `viewerMatch.distanceKm` and `distanceKm` are both `number | null`; `deadlineScore` and
+  `pickupAvailabilityScore` are both `number`. Swapping either pair compiles and ships.
+  ⚠️ Confirmed by mutation: inverting the D-33 precedence in `lib/geo.ts` passes `tsc`
+  and fails the suite.
+- **Two stubs, both process boundaries** — `fetch` in the api suite, `useAuth` in the
+  route-guard suite. Nothing else is mocked; `src/test/fixtures.ts` builds wire objects
+  typed as the real `api.ts` interfaces, so backend drift becomes a compile error.
+- ⚠️ **Not wired into CI.** `ci.yml` still runs `npm run build` only, so the suite gates
+  nothing automatically. That step is the one piece of *Next* step 3 not done — see
+  *Backlog → D*.
+- ⚠️ **`npm run lint` is still dead** — it calls an `eslint` that has never been a
+  dependency. Pre-existing, deliberately untouched, still in *Backlog → H*.
+
+Validation: `npm test` 40/40, `npm run typecheck` (`tsc --noEmit`) clean, `npm run build`
+clean (1647 modules, no test code in the bundle). The backend suite was **not** re-run —
+no backend file was touched.
+
+### Task 22 — the matcher correction (*Next* step 2)
+
+The matcher's two size criteria are corrected; **216 backend tests pass** (191 → 216), `alembic check` reports
 no drift, and **one file changed** — `code/foodlink/matching.py`. No schema, migration, API,
 frontend, dependency or configuration change, and no weight was touched.
 
@@ -75,6 +111,8 @@ frontend, dependency or configuration change, and no weight was touched.
 breakdown against the published weights and still passes unchanged, which is the check that
 the contract held.
 
+---
+
 **Nothing else is in progress.** No feature branch, no TODO/FIXME markers in
 `code/foodlink/` or `frontend/src/`. See *Completed*.
 
@@ -82,12 +120,14 @@ the contract held.
 
 ## Next — hardening (recommended, ordered)
 
-**Steps 1 and 2 are done** — step 1 as `e7032ea`, step 2 uncommitted (see *Current*).
+**Steps 1, 2 and 3 are done** — step 1 as `e7032ea`, steps 2 and 3 uncommitted (see
+*Current*).
 These four steps are the health audit's confirmed defects in the order it recommended, and
 they are a bounded list rather than an open-ended hardening programme: its strategic
 conclusion is that everything *after* step 4 is unbuilt infrastructure rather than broken
 behaviour, and should be sequenced with the deployment it serves rather than ahead of it.
-**The next task is step 3.** Promotion into *Current* is still a Project Manager call.
+**Steps 1–3 are done; the next task is step 4.** Promotion into *Current* is still a
+Project Manager call.
 
 ### ✅ Step 1 — the three demonstrated defects — **DONE (Task 21, `e7032ea`)**
 
@@ -153,17 +193,18 @@ schema, API or frontend change and no weight touched.
       ⚠️ **Do not re-tune `WEIGHTS` before this lands** (`Backlog → G`, `R-31`): tuning two
       collinear criteria is tuning noise.
 
-### Step 3 — a frontend test harness ← **next**
+### ✅ Step 3 — a frontend test harness — **DONE (Task 23, uncommitted)**
 
 `[HA-8 · R-14]` — **M**.
 
-- [ ] Vitest + Testing Library, seeded with the modules that are pure and that carry the
-      arithmetic behind every honesty decision: `lib/impact.ts`, `lib/geo.ts`, `lib/time.ts`
-      and `lib/adapters.ts`, plus `components/ProtectedRoute.tsx`. Add the step to `ci.yml`.
-      The rationale is already recorded three times — D-32, D-33 and D-40 each close with
-      "Nothing tests this" — and `tsc` is the only frontend gate, so a type-correct
-      behavioural regression passes CI today. Fix the dead `npm run lint` script while in
-      `package.json` (group H).
+- [x] Vitest 3.2 + Testing Library, seeded with the modules carrying the arithmetic behind
+      every honesty decision: `lib/adapters.ts`, `lib/time.ts`, `lib/impact.ts`,
+      `lib/geo.ts` and `lib/api.ts`, plus `components/ProtectedRoute.tsx`. **40 tests,
+      ~1.5 s.** See *Completed* and D-43.
+- [ ] ⚠️ **Not done: the `ci.yml` step.** The suite exists but gates nothing automatically;
+      CI still runs `npm run build` only. Small and separate — see *Backlog → D*.
+- [ ] ⚠️ **Not done: the dead `npm run lint` script.** Left untouched as unrelated to the
+      harness; still in *Backlog → H*.
 
 ### Step 4 — `HA-6` · finish the landing page
 
@@ -280,11 +321,17 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       `test_donation_reads.py` and `test_recipient_reads.py`; the endpoint previously had
       **no test of any kind**. `test_pickup_release.py` (13) covers what the release edge
       does after authorization allows it. `[HA-1 · HA-2]`
-- [ ] ⬆️ **Promoted to *Next* step 3** — frontend tests (Vitest + Testing Library),
-      starting with the pure modules and `ProtectedRoute`. 84 files under `frontend/src`,
-      zero tests; `tsc` in `npm run build` is the only frontend gate in CI, so a
-      type-correct behavioural regression passes. `[R-14 · HA-8]` — **M** for the harness
-      plus the pure modules, **L** for meaningful component coverage
+- [x] ✅ **Done (Task 23, uncommitted)** — the frontend test harness. Vitest 3.2 +
+      Testing Library on the project's own `vite.config.ts` (D-43); 40 tests over
+      `lib/adapters.ts`, `lib/time.ts`, `lib/impact.ts`, `lib/geo.ts`, `lib/api.ts` and
+      `components/ProtectedRoute.tsx`. `[R-14 · HA-8]`
+- [ ] **Add `npm test` to `ci.yml`.** The frontend job still runs `npm run build` only, so
+      the suite gates nothing automatically — a failing test does not fail the build.
+      One step in the existing frontend job. `[HA-8]` — **S**
+- [ ] **Extend the frontend suite beyond the six seeded modules.** 84 files under
+      `frontend/src`; the harness covers 6. The obvious next targets are `lib/hooks.ts`
+      (`useAction`'s keyed in-flight state) and `context/AppContext.tsx`'s
+      write-then-refetch. `[R-14]` — **L**
 - [x] ~~Concurrency test for the courier claim.~~ Done with the fix — see *Completed*.
       `test_courier_claim.py` opens the window deterministically against a file-backed
       database. `[§14.4]`
@@ -822,6 +869,49 @@ external.
 ---
 
 ## Completed (verified in the repository)
+
+### Frontend test harness — **uncommitted** `[HA-8 · R-14]`
+
+Task 23 / *Next* step 3. In the working tree, not yet committed. **40 frontend tests over
+6 files, ~1.5 s, all passing.** No application source file was modified — the change is
+four devDependencies, a `test` block in `vite.config.ts`, two `package.json` scripts and
+seven new files under `frontend/src`. Decision recorded as **D-43**.
+
+- [x] **Vitest 3.2 + Testing Library, on the project's own `vite.config.ts`.** One plugin
+      pipeline and one resolver shared with the build, so a green test means the same
+      module graph the bundle uses. Vitest 5 needs Vite ≥ 6 and this project is on Vite
+      5.4, so the version is pinned deliberately — see D-43.
+- [x] **`npm test` (`vitest run`) and `npm run test:watch`** added; `npm run typecheck`
+      (`tsc --noEmit`) added as a name for the gate `build` already ran. `dev`, `build`,
+      `preview` and `lint` untouched.
+- [x] **jsdom per file, not globally.** Default environment is `node`; only
+      `api.test.ts` and `ProtectedRoute.test.tsx` carry a `// @vitest-environment jsdom`
+      docblock.
+- [x] **`src/test/fixtures.ts`** — builders typed as the real `api.ts` wire interfaces, so
+      a test states only the field it is about and backend drift is a compile error.
+- [x] **Seams covered.** `lib/adapters.ts` (9): entityId precedence per role, the
+      event-list → named-timestamp fold, the `deadlineScore` → `pickupAvailabilityScore`
+      rename, feed ordering and the limit applying after the sort. `lib/time.ts` (8):
+      urgency bands asserted **at** the 2 h and 6 h boundaries, the days label, the
+      overdue case, and the deadline roll-forward that makes a late-evening pickup
+      acceptable to the API. `lib/api.ts` (8): bearer attach, login staying anonymous so a
+      wrong password cannot evict a good token, the 401 evicting the token and firing the
+      handler exactly once, Pydantic's field-error list flattened to one sentence, and a
+      bodyless 5xx reported as unreachable rather than as a 500. `lib/impact.ts` (6):
+      `COMPLETED`-only counting, the server's lifetime counter beating the loaded list,
+      unmatched donations left out of the breakdown. `lib/geo.ts` (4): D-33 precedence and
+      the honest null. `components/ProtectedRoute.tsx` (5): splash while a token is being
+      exchanged, redirect to login, redirect to the account's own portal, pass-through.
+- [x] **Mutation-verified.** Inverting the D-33 precedence in `lib/geo.ts` typechecks
+      cleanly and fails the suite — which is the whole argument for the harness, since
+      `tsc` was the only frontend gate.
+- ⚠️ **Two stubs only, both process boundaries** — `fetch` and `useAuth`. `HOME_PATH`
+      and every other import stay real.
+- ⚠️ **Not done: the `ci.yml` step.** The suite gates nothing automatically yet.
+- ⚠️ **Not done: the dead `npm run lint` script.** Unrelated to the harness; untouched.
+- ⚠️ **Coverage is a foundation, not a sweep.** 6 of 84 files under `frontend/src`. No
+      E2E, no visual regression, no coverage threshold — none were in scope.
+
 
 ### Matcher correctness: unit comparability and absolute headroom — **uncommitted** `[HA-4 · HA-5]`
 

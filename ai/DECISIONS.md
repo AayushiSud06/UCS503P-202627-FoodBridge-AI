@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-42. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-43. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -13,7 +13,7 @@
 > source; the corrections it produced are marked in D-05, D-17, D-26 and D-35. **D-41**
 > (courier read scope and the release's second meaning) is committed as `e7032ea`.
 > **D-42** (matcher unit comparability and the absolute headroom criterion) is in the
-> working tree, uncommitted.
+> working tree, uncommitted, as is **D-43** (the frontend test harness).
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1647,3 +1647,56 @@ photo is a 422.
 `reliability_score`, `WEIGHTS`, the three hard gates, `rank_recipients` and every caller are
 unchanged. Requirement-aware matching (`R-35`) is untouched and remains a *Blocked*
 question.
+
+---
+
+## D-43 · The frontend test runner is the frontend build tool **[documented]**
+
+**Decision.** Frontend tests run on **Vitest 3.2 + Testing Library**, configured as a
+`test` block inside the existing `frontend/vite.config.ts` rather than in a config of
+their own. Four devDependencies: `vitest`, `jsdom`, `@testing-library/react`,
+`@testing-library/dom`. `npm test` → `vitest run`; `npm run test:watch` → `vitest`.
+
+**Reason.** The runner has to resolve modules the way the build does, or a green suite
+stops meaning anything. Sharing `vite.config.ts` gets that by construction — one plugin
+pipeline, one resolver, one set of aliases — instead of maintaining a second description
+of the same thing. Vitest also reads `import.meta.env` natively, which `lib/api.ts`
+touches at module load; under Jest that alone would need transform plumbing, and Jest
+would additionally need an ESM story for a `"type": "module"` package. The `tsc` gate
+does not have to be told about any of this, because the test files are inside `src` and
+are typechecked with everything else.
+
+**Constraint that fixed the version.** Vitest 5 requires **Vite ≥ 6**; this project is on
+Vite 5.4. Vitest 3.2 is the newest line that pairs with Vite 5, so the alternative to
+pinning it was upgrading the build tool — an unrelated risk taken for a test runner.
+⚠️ Whenever Vite is upgraded, Vitest moves with it; they are one decision, not two.
+
+**Scope of what is stubbed.** Two things, both process boundaries: `fetch` in the api
+suite, and `useAuth` in the route-guard suite (`HOME_PATH` stays real). Nothing else. The
+backend already has integration coverage on the far side of `fetch`, so re-simulating a
+server here would test the simulation. The suites deliberately assert against **real**
+application types and functions — the fixtures in `src/test/fixtures.ts` are typed as the
+actual `api.ts` wire interfaces, so a wire shape that drifts from the backend fails to
+compile rather than passing against a hand-written stand-in.
+
+**DOM only where a test needs one.** The default environment is `node`. The two suites
+that need `localStorage` or a rendered tree opt in per file with a
+`// @vitest-environment jsdom` docblock. A global jsdom environment would have been one
+line shorter and would have made every arithmetic test load a browser.
+
+**What this is for.** `tsc` was the only frontend gate, and the regressions that matter
+here are type-correct: `viewerMatch.distanceKm` and `distanceKm` are both `number | null`
+(D-33), `deadlineScore` and `pickupAvailabilityScore` are both `number`, `recipientId`
+and `volunteerId` are both nullable ids (D-32, D-40). Swapping any pair compiles. D-32,
+D-33 and D-40 each closed with *"Nothing tests this"*; that is what the harness answers.
+⚠️ Verified by mutation: inverting the D-33 precedence in `lib/geo.ts` typechecks cleanly
+and fails the suite.
+
+⚠️ **Consequences.**
+- **Not wired into CI.** `ci.yml` still runs `npm run build` only, so the suite gates
+  nothing automatically yet. Adding the step is outstanding work, not a decision.
+- **No coverage thresholds, and no E2E or visual-regression layer.** Six modules are
+  covered; 29 desktop pages and 26 mobile screens are not. The harness is a foundation,
+  and its value is that the next frontend task adds a file rather than a toolchain.
+- **`npm run lint` remains dead** — the script has always referenced an `eslint` that is
+  not a dependency. Untouched here; it predates this work.

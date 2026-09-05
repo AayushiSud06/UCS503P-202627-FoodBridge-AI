@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -15,5 +16,15 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  // Tests run through this same config, so a module resolves in a test exactly
+  // as it does in the build — one plugin pipeline, one set of aliases.
+  test: {
+    include: ['src/**/*.test.{ts,tsx}'],
+    // Plain Node by default: most of what is worth testing here is arithmetic
+    // and translation, which needs no DOM. The two suites that do need one
+    // opt in per file with a `@vitest-environment jsdom` docblock, so the
+    // majority of the suite does not pay for a browser it never touches.
+    environment: 'node',
   },
 })
