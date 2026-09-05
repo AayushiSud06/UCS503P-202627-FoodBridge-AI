@@ -152,6 +152,8 @@ export interface NGORequirement {
   id: string;
   ngoId: string;
   ngoName: string;
+  /** Whether an administrator has vouched for the posting organisation. */
+  isVerified: boolean;
   foodType: string;
   quantityNeeded: number;
   unit: string;
@@ -159,6 +161,10 @@ export interface NGORequirement {
   urgency: 'High' | 'Medium' | 'Low';
   dailyRecurring: boolean;
   notes: string;
+  /** Always true through the list endpoint, which is active-only. */
+  isActive: boolean;
+  /** ISO instant the need was posted, for the "posted 3h ago" line. */
+  createdAt: string;
 }
 
 // ─── App State ───────────────────────────────────────────────────────────────

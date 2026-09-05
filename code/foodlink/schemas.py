@@ -337,6 +337,11 @@ class RequirementOut(RequirementCreate):
     id: int
     recipient_id: int
     recipient_name: str
+    #: The posting organisation's `Recipient.is_verified`, denormalised onto
+    #: the need so the donor board can show whose need it is looking at. It is
+    #: not a column on `requirements` and not settable through this API — an
+    #: organisation is vouched for by an administrator (D-37) or not at all.
+    is_verified: bool
     is_active: bool
     created_at: datetime
 

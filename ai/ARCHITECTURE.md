@@ -1,10 +1,10 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05**, at HEAD `68d28c5`
-> **plus the uncommitted Task 21 fixes** in the working tree (roster scope, pickup release,
-> image bound — `TASKS.md` → *Current*). Earlier verification points: the project health
-> audit at `c274e99`, and `23c27f4` on 2026-09-02.
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05**, at HEAD `9b11353`
+> **plus the uncommitted Task 25 changes** in the working tree — requirement read scope and
+> the donor needs board (D-44), `TASKS.md` → *Current*. Earlier verification points: the
+> project health audit at `c274e99`, and `23c27f4` on 2026-09-02.
 
 ## Shape
 
@@ -70,7 +70,7 @@ layer** — deliberate, see D-07.
 | `context/AuthContext.tsx` | Identity: boot token→user exchange, sign in/up/out, 401 handling with a `useRef` re-entrancy guard. |
 | `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. |
 | `components/ProtectedRoute.tsx` | Route guard. **UX affordance, not a security control.** |
-| `pages/` (29 files) | Desktop portals: `donor/`, `ngo/`, `volunteer/`, `admin/`. |
+| `pages/` (30 files) | Desktop portals: `donor/`, `ngo/`, `volunteer/`, `admin/`. `donor/DonorNeedsBoard.tsx` (`/donor/needs`) is the read-only demand board — `useRequirements()`, no API call of its own. |
 | `mobile/` (26 files) | Phone layouts at `/m/*` with an inner `MobileRole` guard. |
 | `types/index.ts` | App-side domain types (`DonationStatus` union, etc.). |
 
@@ -235,19 +235,21 @@ its `require_roles(admin, ngo)` gate, so a donor or a courier still gets a 403 h
 than the empty list `GET /recipients` returns — the D-26 asymmetry is deliberate and
 unchanged. `GET /volunteers/me` is a separate route and is untouched.
 
-⚠️ **Two cross-organisation reads remain open, and they are not equally serious:**
+**Standing requirements are scoped the same way**, by
+`routers/organisations._visible_requirements()` (Task 25, `DECISIONS.md` D-44): admin →
+every active need; **donor → every active need posted by a *verified* recipient**, which is
+what the donor needs board reads; ngo → its own organisation's needs only; volunteer →
+none. Verification is the gate `matching.score_pair` already applies, so a donor is never
+shown demand from an organisation that could not receive the donation. Denial is an empty
+list rather than a 403, following `GET /recipients`. `RequirementOut` also now carries
+**`isVerified`**, read live from `Recipient.is_verified` — no column and no migration. The
+NGO portals keep their client-side `myRecipient` filter as defence in depth.
 
-1. **`GET /api/requirements` is unscoped by omission.** `Depends(get_current_user)`, no role
-   gate, no ownership clause, so every authenticated caller receives every organisation's
-   active requirements including `recipientName` — and `AppContext.load()` fetches it for
-   every role, so a donor's client already holds them. This is **consistent with D-26**,
-   which scoped `RecipientOut` because it carries `contact_person` and `phone` and expressly
-   recorded that organisation *names* are already public here; `RequirementOut` carries no
-   contact details. Defensible, but never decided — see `TASKS.md` → *Blocked*.
-2. **`GET /donations/{id}/matches` discloses recipient coordinates.** `MatchOut.distanceKm`
-   is a real measurement to a named organisation, so a donor who reads `200 []` from
-   `GET /api/recipients` by design can post three donations at pins of its choosing and
-   trilaterate any verified kitchen exactly. `TASKS.md` → *Backlog → A* / `HA-3`.
+⚠️ **One cross-organisation read remains open:** **`GET /donations/{id}/matches` discloses
+recipient coordinates.** `MatchOut.distanceKm` is a real measurement to a named
+organisation, so a donor who reads `200 []` from `GET /api/recipients` by design can post
+three donations at pins of its choosing and trilaterate any verified kitchen exactly.
+`TASKS.md` → *Backlog → A* / `HA-3`.
 
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
@@ -276,7 +278,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
 | donations | `POST /donations` (auto-ranks on create; `imageUrl` capped at `schemas.MAX_IMAGE_URL_LENGTH` = 256 KiB) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). ⚠️ `/matches` returns named organisations with real distances — see `HA-3` |
-| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET|POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and scoped within that** — an ngo sees only its own donations' couriers) · `GET|PATCH /volunteers/me` |
+| organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET /requirements` **(role-scoped; a donor reads verified organisations' needs, an ngo its own)** · `POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and scoped within that** — an ngo sees only its own donations' couriers) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
 | meta | `GET /health` (does **not** touch the DB) |
@@ -304,7 +306,10 @@ server distances a screen shows (D-33). *Blocked* covers whether to replace the 
 ⚠️ **Requirements are not an input.** `matching.py` neither imports nor references
 `Requirement`, and neither does `routers/donations.py`. The `requirements` table is a
 notice board read only by `routers/organisations.py` and `seed.py` — demand is *visible*
-before supply, but it does not influence any ranking. `Requirement.daily_recurring` is
+before supply, but it does not influence any ranking. Since Task 25 that board has a donor
+audience (`pages/donor/DonorNeedsBoard.tsx`), which changes who reads it and nothing about
+what it does: there is no requirement-to-donation relationship in the schema, no endpoint
+fulfils a need, and the page says so in as many words. `Requirement.daily_recurring` is
 likewise stored and displayed but never acted on: nothing re-posts a requirement and
 there is no scheduler that could (constraint 7).
 
@@ -478,6 +483,12 @@ first), and a cancel from a terminal state still gets 409 (so does the owner's).
 `test_requirement_lifecycle.py` (15) covers the requirement lifecycle as an ownership
 boundary: who may revise, retire and reopen a requirement, that another organisation's id
 is a 404, and that a retired one leaves `GET /api/requirements` without being deleted.
+`test_requirement_reads.py` (14) covers the read side (D-44): admin sees every active
+need, a donor sees verified organisations' needs and not an unverified one's, an ngo sees
+its own and not a rival's, a courier sees none, a retired need is invisible to all three,
+and `isVerified` tracks the organisation — verifying one flips the flag on its existing
+requirements with nothing backfilled. One of them backdates rows through the session
+because `created_at` is second-resolution, so it tests the `ORDER BY` and not a tie.
 `test_match_score_consistency.py` (11) pins the frozen/live distinction: two kitchens at
 different distances read one donation, and what the list gives each of them has to equal
 what `/matches` gives the same organisation. It also asserts the frozen number is *not*
@@ -491,13 +502,14 @@ process rather than the per-test database.
 
 ### Frontend — `npm test` in `frontend/`
 
-**40 tests over 6 files**, Vitest 3.2 driven through the project's own
+**58 tests over 8 files**, Vitest 3.2 driven through the project's own
 `vite.config.ts`, so a module resolves in a test exactly as it does in the build (D-43).
 Runner config is the `test` block in that file; there is no separate config and no setup
-file. Default environment is **node**; `lib/__tests__/api.test.ts` and
-`components/__tests__/ProtectedRoute.test.tsx` opt into jsdom with a
+file. Default environment is **node**; the four suites that render — `lib/api.test.ts`,
+`components/ProtectedRoute.test.tsx`, `pages/Landing.test.tsx` and
+`pages/donor/DonorNeedsBoard.test.tsx` — opt into jsdom with a
 `// @vitest-environment jsdom` docblock, so the arithmetic suites do not pay for a DOM
-they never touch. The whole suite runs in ~1.5 s.
+they never touch. The whole suite runs in ~2 s.
 
 The seams chosen are the ones carrying logic that `tsc` cannot check, because every
 field involved is a string or a number on both sides of the change:
@@ -508,13 +520,21 @@ urgency bands at their boundaries, the deadline roll-forward), `lib/impact.ts` (
 `lib/geo.ts` (4 — D-33, `viewerMatch.distanceKm` beating `distanceKm`), `lib/api.ts`
 (8 — token attach, the 401 eviction, Pydantic detail flattening, bodyless 5xx →
 `NetworkError`) and `components/ProtectedRoute.tsx` (5 — the three redirect decisions).
+Two page suites hold content claims rather than arithmetic, which is the other thing `tsc`
+cannot see: `pages/__tests__/Landing.test.tsx` (4 — the absence of the invented platform
+figures) and `pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14 — that a need renders in
+full, and that the board claims no fulfilment, commitment, automatic matching or statistic
+it was not given). Both are D-31 held at a boundary.
 
 `src/test/fixtures.ts` holds typed builders for the wire shapes (`apiDonation`,
-`apiUser`, `apiMatch`, …), so a test states only the field it is about and a wire type
-that drifts from the backend fails to compile rather than failing silently.
+`apiUser`, `apiMatch`, `apiRequirement`, …), so a test states only the field it is about
+and a wire type that drifts from the backend fails to compile rather than failing
+silently.
 
-**Only two things are stubbed, both process boundaries:** `fetch` in the api suite, and
-`useAuth` in the route-guard suite. `HOME_PATH` stays real. Nothing else is mocked —
+**Three things are stubbed, all of them boundaries into the page under test:** `fetch` in
+the api suite, `useAuth` in the route-guard suite, and `useRequirements`/`useLoadState` in
+the needs-board suite. `HOME_PATH` stays real, and so does `toRequirement` — the board's
+fixtures go through the real adapter from the real wire shape. Nothing else is mocked;
 there is no component-level test double anywhere in the suite.
 
 ⚠️ **`npm test` is not yet a CI step** — `ci.yml` still runs only `npm run build`. See

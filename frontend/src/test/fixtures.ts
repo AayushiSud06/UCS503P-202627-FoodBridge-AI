@@ -9,10 +9,10 @@
  */
 
 import type {
-  ApiDonation, ApiMatch, ApiMetrics, ApiStatusEvent, ApiUser, ApiVolunteer,
+  ApiDonation, ApiMatch, ApiMetrics, ApiRequirement, ApiStatusEvent, ApiUser, ApiVolunteer,
 } from '../lib/api';
-import type { Donation } from '../types';
-import { toDonation } from '../lib/adapters';
+import type { Donation, NGORequirement } from '../types';
+import { toDonation, toRequirement } from '../lib/adapters';
 
 export function apiUser(overrides: Partial<ApiUser> = {}): ApiUser {
   return {
@@ -98,6 +98,25 @@ export function apiVolunteer(overrides: Partial<ApiVolunteer> = {}): ApiVoluntee
   };
 }
 
+export function apiRequirement(overrides: Partial<ApiRequirement> = {}): ApiRequirement {
+  return {
+    id: 200,
+    recipientId: 7,
+    recipientName: 'Helping Hands',
+    isVerified: true,
+    foodType: 'Hot vegetarian meals',
+    quantityNeeded: 120,
+    unit: 'Meals',
+    beneficiaryCount: 140,
+    urgency: 'High',
+    dailyRecurring: false,
+    notes: '',
+    isActive: true,
+    createdAt: '2026-09-05T09:00:00.000Z',
+    ...overrides,
+  };
+}
+
 export function apiMetrics(overrides: Partial<ApiMetrics> = {}): ApiMetrics {
   return {
     totalDonations: 0,
@@ -118,4 +137,9 @@ export function apiMetrics(overrides: Partial<ApiMetrics> = {}): ApiMetrics {
 /** An app-side `Donation`, built through the real adapter rather than by hand. */
 export function donation(overrides: Partial<ApiDonation> = {}): Donation {
   return toDonation(apiDonation(overrides));
+}
+
+/** An app-side requirement, likewise built through the real adapter. */
+export function requirement(overrides: Partial<ApiRequirement> = {}): NGORequirement {
+  return toRequirement(apiRequirement(overrides));
 }

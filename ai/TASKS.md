@@ -1,9 +1,10 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05. HEAD is `f33aeae` (Task 23: the frontend
-> test harness); the working tree carries the **uncommitted Task 24 landing-page content
-> correction** described under *Current* — `HA-6`. Task 22's matcher correction is
-> committed as `a9f190b`.
+> Verified against the repository on 2026-09-05. HEAD is `9b11353` (Task 24: the
+> landing-page content correction, `HA-6`); the working tree carries the **uncommitted
+> Task 25 donor needs board** described under *Current* — requirement read scope (D-44)
+> and the board itself. Task 22's matcher correction is committed as `a9f190b` and Task
+> 23's frontend test harness as `f33aeae`.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
@@ -35,11 +36,54 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 24 — *Next* step 4, complete.** Frontend only, one
-page and one new test file. Tasks 22 and 23 are now committed (`a9f190b`, `f33aeae`) and
-have moved to *Completed*.
+**Uncommitted in the working tree: Task 25 — the donor needs board, complete.** Task 24 is
+now committed (`9b11353`) and its entry below is history.
 
-### Task 24 — the landing page (*Next* step 4)
+### Task 25 — the donor needs board `[QA-3 · §8.2 · D-44]`
+
+**Donors have a real read-only Needs Board, and `GET /api/requirements` is scoped by role
+for the first time.** The board reads through the existing `useRequirements()` flow — no
+new endpoint, no second fetch, no duplicate state — and the scope decision it forced is
+recorded as D-44. **No schema change, no migration, no new Requirement field, and
+`matching.py` is untouched.**
+
+- **Backend scope.** `routers/organisations._visible_requirements(user)` returns a WHERE
+  clause in the shape `_visible_recipients` / `_visible_volunteers` already use: admin →
+  every active need; **donor → needs from *verified* recipients**; ngo → its own only;
+  volunteer → none; unknown role → `false()`. Applied inside the existing query, so
+  authentication, active-only and newest-first are unchanged, and denial is an empty list
+  rather than a 403.
+- **`RequirementOut` gained `isVerified`,** read from `Recipient.is_verified` at
+  serialisation. It is not a column and nothing backfills: an administrator vouching for an
+  organisation makes its existing needs visible immediately.
+- **New `pages/donor/DonorNeedsBoard.tsx` at `/donor/needs`,** plus a *Needs Board* entry
+  in `DonorLayout`'s nav. Each card carries the organisation and its verified state, the
+  food, quantity and unit, urgency, beneficiaries **when stated** (the field defaults to 0,
+  which means "not said" rather than "nobody"), whether it recurs, the operator notes, and
+  `timeAgo(createdAt)`. Loading, empty and failure states use `useLoadState()` and the
+  existing `EmptyState` primitive.
+- **Nothing on it claims a commitment.** No fulfil action, no needs-met count, no
+  statistic the page was not given, and a line saying plainly that posting a donation does
+  not attach it to a need — because nothing in the system connects the two. D-31 at a new
+  boundary.
+- **The NGO client-side `myRecipient` filter was kept** on both the desktop and mobile
+  requirement screens, deliberately, even though the server now enforces the same scope.
+- **`notes` is now donor-facing.** It is operator-authored free text and is rendered
+  through ordinary React interpolation; there is no `dangerouslySetInnerHTML` anywhere in
+  the change, and a test asserts markup inside a note stays text.
+- **Tests.** New `code/tests/test_requirement_reads.py` (14) and
+  `frontend/src/pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14). One existing test —
+  `test_retiring_one_requirement_leaves_the_rest_of_the_board_alone` — asserted a rival
+  kitchen's need stayed on *this* caller's board, which was only true while the endpoint
+  was unscoped; it now checks that need on the rival's own board.
+
+Validation: `pytest code/tests` **230/230** (216 → 230, ~157 s), `npm test` **58/58**
+(8 files), `npm run typecheck` clean, `npm run build` clean, and the board read in a
+browser against a seeded throwaway database — a donor sees the two verified organisations'
+needs and not the unverified one's, an NGO sees only its own, and an NGO requirement edit
+still round-trips.
+
+### Task 24 — the landing page (*Next* step 4, committed `9b11353`)
 
 **`pages/Landing.tsx` no longer prints a platform figure.** All three sites the health
 audit recorded are gone, and **nothing was replaced with a substitute number**: `GET
@@ -154,13 +198,13 @@ the contract held.
 ## Next — hardening (recommended, ordered)
 
 **All four steps are done** — step 1 as `e7032ea`, step 2 as `a9f190b`, step 3 as
-`f33aeae`, step 4 uncommitted (see *Current*).
+`f33aeae`, step 4 as `9b11353`.
 These four steps are the health audit's confirmed defects in the order it recommended, and
 they are a bounded list rather than an open-ended hardening programme: its strategic
 conclusion is that everything *after* step 4 is unbuilt infrastructure rather than broken
 behaviour, and should be sequenced with the deployment it serves rather than ahead of it.
-**Steps 1–4 are done; the next task is the donor needs board** (*Blocked*). Promotion into
-*Current* is still a Project Manager call.
+**Steps 1–4 are done, and the donor needs board that followed them is done too** (Task 25,
+*Current*). What remains in *Blocked* is open questions rather than sequenced work.
 
 ### ✅ Step 1 — the three demonstrated defects — **DONE (Task 21, `e7032ea`)**
 
@@ -239,7 +283,7 @@ schema, API or frontend change and no weight touched.
 - [ ] ⚠️ **Not done: the dead `npm run lint` script.** Left untouched as unrelated to the
       harness; still in *Backlog → H*.
 
-### ✅ Step 4 — `HA-6` · finish the landing page — **DONE (Task 24, uncommitted)**
+### ✅ Step 4 — `HA-6` · finish the landing page — **DONE (Task 24, `9b11353`)**
 
 `[HA-6 · QA-4 · repo]` — **S**. Superseded I-1a, which was scoped too narrowly. Three sites
 removed, one labelled, no substitute number introduced; detail under *Current*. **Group I is
@@ -300,7 +344,7 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 - [x] ✅ **Done (Task 21, `e7032ea`)** — `HA-2`: the release clears `volunteer_id` and
       no longer re-runs the acceptance side effects for a donation already bound here. `[HA-2 · D-35 · D-38 · repo]` — **S**
-- [x] ✅ **Done (Task 22, uncommitted)** — `HA-4`/`HA-5`: `_capacity_score` now measures
+- [x] ✅ **Done (Task 22, `a9f190b`)** — `HA-4`/`HA-5`: `_capacity_score` now measures
       absolute spare meals rather than the fill ratio, and only meal-denominated donations
       are compared with capacity. `[HA-4 · HA-5 · D-05 · D-42 · R-13]`
 - [ ] Skip explicit nulls in `PATCH /recipients/me` and `PATCH /volunteers/me`. Both assign
@@ -339,7 +383,7 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 ### D. Testing
 
-- [x] ✅ **Done (Task 22, uncommitted)** — `test_matching_scores.py` (25) is the matcher's
+- [x] ✅ **Done (Task 22, `a9f190b`)** — `test_matching_scores.py` (25) is the matcher's
       first direct unit-test file: boundaries, overflow, zero capacity, unit comparability,
       and the collinearity property itself. Originally filed as unit tests for the
       boundaries —
@@ -355,7 +399,7 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       `test_donation_reads.py` and `test_recipient_reads.py`; the endpoint previously had
       **no test of any kind**. `test_pickup_release.py` (13) covers what the release edge
       does after authorization allows it. `[HA-1 · HA-2]`
-- [x] ✅ **Done (Task 23, uncommitted)** — the frontend test harness. Vitest 3.2 +
+- [x] ✅ **Done (Task 23, `f33aeae`)** — the frontend test harness. Vitest 3.2 +
       Testing Library on the project's own `vite.config.ts` (D-43); 40 tests over
       `lib/adapters.ts`, `lib/time.ts`, `lib/impact.ts`, `lib/geo.ts`, `lib/api.ts` and
       `components/ProtectedRoute.tsx`. `[R-14 · HA-8]`
@@ -469,10 +513,20 @@ Places where a shipped feature is incomplete — not new ideas.
       every distance is now labelled straight-line and no travel time is displayed — so
       this decision is no longer urgent, only open. `[R-30 · QA-1]`
 - [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
+- [ ] **Narrow the donor needs board by distance.** It is platform-wide today (D-44) and
+      cannot be otherwise: a donor account stores **no coordinates** — `users` has none,
+      and `Donation.latitude/longitude` belong to a donation, not to the person who posted
+      it. So this needs a product decision first: a donor location on the account (a new
+      column and a profile field), or a "needs near this donation" board reached from a
+      donation rather than from the nav. Only then is it a filter. `[D-44 · QA-3]` — **M**
 - [ ] Tune the matching weights against real outcome data; revisit the 85 reliability
       prior. ✅ **Unblocked by Task 22** — the two size criteria are independent now, so
       re-weighting measures something. Still wants outcome data the project does not have.
       `[R-31 · D-42]`
+- [ ] **The donor needs board on `/m/*`.** Task 25 built the desktop page only; the mobile
+      donor portal has no Needs tab, so a phone user reads no standing demand. The data
+      flow is shared (`useRequirements()` and the same adapter), so this is a screen and a
+      tab entry rather than new plumbing. `[D-44]` — **S**
 - [ ] Recurring donation schedules. `Requirement.daily_recurring` exists on the recipient
       side; donations have no equivalent. ⚠️ **The recipient-side flag is storage only:**
       `models.py:293` declares it, `RequirementOut` echoes it, and the NGO UI renders a
@@ -538,7 +592,7 @@ Places where a shipped feature is incomplete — not new ideas.
       an NGO and a courier on desktop and `/m/*`.
 
 - [x] **I-1a / `HA-6` · The public landing page no longer prints invented platform
-      figures.** `[repo · QA-4 · HA-6]` — **done, Task 24, uncommitted in the working
+      figures.** `[repo · QA-4 · HA-6]` — **done, Task 24, `9b11353`, in the working
       tree.** All three sites in `pages/Landing.tsx` are closed, and the chosen remedy was
       **delete, not relabel**, for the two that asserted totals:
 
@@ -840,27 +894,24 @@ settled. They sit here rather than in *Backlog* so that nobody implements one by
   it changes every score on every screen — which is a demo-visible event worth scheduling
   deliberately.
 
-- **Should donors see a needs board?** `[QA-3 · §8.2]`
-  There is a real product gap here and **no authorization obstacle to close it.**
-  `GET /api/requirements` is already `Depends(get_current_user)` with no role gate and no
-  ownership scope, so every authenticated caller reads every organisation's active
-  requirements; `AppContext.load()` already fetches them for **every** role, so a donor's
-  browser holds this data today and simply never renders it — donor navigation
-  (`DonorLayout.tsx:11`) has no Needs entry, only the NGO's does. ⚠️ This is **not** a hole
-  in D-26: that decision scoped `RecipientOut` because it carries `contact_person` and
-  `phone`, and it explicitly recorded that "peer organisation *names* are already public
-  through `GET /api/requirements`". `RequirementOut` carries a name and a need, no contact
-  details. **So the question is product, not security:** does a donor deciding what to
-  cook or list benefit from seeing standing demand, and does showing it change how donors
-  behave in a way the project wants? If yes, it is a read-only page over data the client
-  already has — **S**, and no endpoint changes. Two things to settle alongside: whether the
-  board should be scoped by radius rather than shown platform-wide, and whether
-  `GET /api/requirements` should gain an explicit scope decision of its own, since it is
-  unscoped by omission rather than by a recorded decision (it is defensible: `RequirementOut`
-  carries a name and a need, no contact details). ⚠️ It is **not** the only unscoped
-  cross-organisation read, as this entry used to say — `GET /api/volunteers` (`HA-1`) and
-  `/matches` (`HA-3`) are the other two, and the first of them is a real defect rather than
-  an open question.
+- ~~**Should donors see a needs board?**~~ ✅ **Answered and built — Task 25, D-44.**
+  `[QA-3 · §8.2]`
+  Yes. `pages/donor/DonorNeedsBoard.tsx` at `/donor/needs` is a read-only board over the
+  existing `useRequirements()` flow. **Both sub-questions this entry left open were settled
+  rather than dodged:**
+  - *Explicit scope for `GET /api/requirements`* — **decided, not inherited.** It is now
+    role-scoped (D-44): a donor reads active needs from **verified** recipients, an ngo its
+    own, a courier none, an admin all. The old openness was defensible — `RequirementOut`
+    carries a name and a need, no contact details — but it was openness by omission, and a
+    donor-facing page is a commitment to a scope.
+  - *Radius vs platform-wide* — **platform-wide, and the reason is a data gap.** A donor
+    account stores no coordinates; only a *donation* has them. Radius filtering therefore
+    needs either a donor location on the account or a "near this donation" board, both of
+    which are product decisions. Moved to *Backlog* as its own item rather than left here.
+
+  ⚠️ What was **not** built and is still open: requirements do not drive matching (the
+  entry above), nothing fulfils a need from the board, and a retired requirement still has
+  no reader (D-29).
 
 - **Should there be a real, exportable impact report?** `[QA-4 · repo]`
   ✅ **The misleading half is closed:** I-1 deleted both stub buttons (2026-09-03), so
@@ -905,7 +956,7 @@ external.
 
 ## Completed (verified in the repository)
 
-### Landing page: no platform figure without a source — **uncommitted** `[HA-6 · I-1a · QA-4]`
+### Landing page: no platform figure without a source — **`9b11353`** `[HA-6 · I-1a · QA-4]`
 
 Task 24 / *Next* step 4. In the working tree, not yet committed. **One page changed**
 (`frontend/src/pages/Landing.tsx`) and **one test file added**; no other application source,
@@ -1198,7 +1249,7 @@ existing items in F and G.
 |---|---|---|---|
 | 1 | Distance is straight-line, not road | **Intentional, but misleadingly presented** | ✅ wording done → I-2 · building it → *Blocked* · `R-30` |
 | 2 | Requirements do not drive matching | **Misleading UI claim** — verified: `matching.py` never references `Requirement` | ✅ wording done → I-3 · building it → *Blocked* |
-| 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint is already open and the client already fetches it | *Blocked* |
+| 3 | No donor needs board | **Product gap; no security obstacle** — the endpoint was already open and the client already fetched it | ✅ built — Task 25 / D-44 (and the endpoint is now role-scoped) |
 | 4 | Impact figures partly invented; PDF export is an `alert()` | **Confirmed — the audit's most serious finding** | I-1 · real export → *Blocked* |
 | 5 | Notification settings send nothing | **Misleading UI claim** — 10 dead toggles, 4 screens | ✅ toggles and claims removed by I-4 · delivery itself → `R-28` |
 | 6 | "FSSAI Compliant" / "Verified Institutional Donor" | **Misleading UI claim** — no donor verification exists in the model at all | ✅ both removed by I-5 · D-37 |

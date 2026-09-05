@@ -106,6 +106,12 @@ def _requirement_out(req: Requirement) -> RequirementOut:
         id=req.id,
         recipient_id=req.recipient_id,
         recipient_name=req.recipient.name if req.recipient else "",
+        # The posting organisation's verification state, not a state of the
+        # requirement itself. The donor board reads standing needs from
+        # organisations somebody has vouched for, so it has to be able to say
+        # so on the card; an unverified organisation cannot be matched or
+        # accept a donation either (`matching.score_pair`).
+        is_verified=bool(req.recipient.is_verified) if req.recipient else False,
         food_type=req.food_type,
         quantity_needed=req.quantity_needed,
         unit=req.unit,
@@ -118,17 +124,71 @@ def _requirement_out(req: Requirement) -> RequirementOut:
     )
 
 
+def _visible_requirements(user: User):
+    """The standing needs `user` may read, as a WHERE clause — or None for all.
+
+    The endpoint used to be scoped by omission: `get_current_user` and nothing
+    else, so every authenticated caller read every organisation's board. That
+    was defensible — `RequirementOut` carries an organisation name and a need,
+    never a contact or a phone, unlike the two directories `_visible_recipients`
+    and `_visible_volunteers` guard — but it had never been decided. It is
+    decided now, and the scope follows the same shape as its neighbours: a
+    clause applied in the query rather than a check after it.
+
+    * admin — unrestricted, as everywhere else.
+    * donor — every active need posted by a **verified** organisation. This is
+      the donor needs board, and it is the whole reason the table has an
+      audience: demand is visible before supply. Verification is the same gate
+      the matcher applies (`matching.score_pair`), so a donor is never shown a
+      need from an organisation that could not receive the donation anyway.
+    * ngo — its own organisation's needs only. Two kitchens have no workflow
+      with each other, which is exactly the reasoning D-26 applied to
+      `GET /recipients`, and the portal already filtered this list client-side.
+    * volunteer — nothing. A courier carries an assigned donation; standing
+      demand is not an input to that and never reaches a courier screen.
+
+    Fail closed: a role added later reads nothing until it is given a scope
+    here, rather than silently inheriting the whole board.
+    """
+    if user.role is UserRole.admin:
+        return None
+
+    if user.role is UserRole.donor:
+        # A subquery rather than a join so the outer statement keeps returning
+        # one row per requirement no matter how the relationship is loaded.
+        verified = select(Recipient.id).where(Recipient.is_verified.is_(True))
+        return Requirement.recipient_id.in_(verified)
+
+    if user.role is UserRole.ngo:
+        # Resolved through `Recipient` in the query, so an `ngo` account with
+        # no organisation row yet simply matches nothing.
+        own = select(Recipient.id).where(Recipient.user_id == user.id)
+        return Requirement.recipient_id.in_(own)
+
+    return false()
+
+
 @router.get("/requirements", response_model=list[RequirementOut])
 def list_requirements(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[RequirementOut]:
+    """Active standing needs, scoped to the caller.
+
+    Newest first, active only, and now narrowed by role — see
+    `_visible_requirements` and `DECISIONS.md` D-44. Denial here is an empty
+    list rather than a 403, following `GET /recipients`: there is no id to
+    confirm or deny, only a board that is empty for this caller.
+    """
     stmt = (
         select(Requirement)
         .options(selectinload(Requirement.recipient))
         .where(Requirement.is_active.is_(True))
         .order_by(Requirement.created_at.desc())
     )
+    scope = _visible_requirements(user)
+    if scope is not None:
+        stmt = stmt.where(scope)
     return [_requirement_out(r) for r in db.scalars(stmt)]
 
 

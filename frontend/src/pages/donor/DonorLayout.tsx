@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, PlusCircle, Package, BarChart2, User, Menu, X, Leaf
+  LayoutDashboard, PlusCircle, Package, ClipboardList, BarChart2, User, Menu, X, Leaf
 } from 'lucide-react';
 import { useState } from 'react';
 import Sidebar from '../../components/Sidebar';
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: 'Dashboard',      path: '/donor',          icon: LayoutDashboard },
   { label: 'My Donations',   path: '/donor/donations', icon: Package },
   { label: 'Create Donation', path: '/donor/create',   icon: PlusCircle },
+  { label: 'Needs Board',    path: '/donor/needs',     icon: ClipboardList },
   { label: 'Impact',         path: '/donor/impact',    icon: BarChart2 },
   { label: 'Profile',        path: '/donor/profile',   icon: User },
 ];

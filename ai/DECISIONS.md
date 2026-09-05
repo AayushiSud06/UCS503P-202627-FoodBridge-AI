@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-43. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-44. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -14,6 +14,8 @@
 > (courier read scope and the release's second meaning) is committed as `e7032ea`.
 > **D-42** (matcher unit comparability and the absolute headroom criterion) is committed as
 > `a9f190b` and **D-43** (the frontend test harness) as `f33aeae`, which is HEAD.
+> **D-44** (requirement read scope and the donor needs board) is **uncommitted in the
+> working tree**, together with the Task 24 landing-page correction it sits on top of.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1708,3 +1710,68 @@ and fails the suite.
   and its value is that the next frontend task adds a file rather than a toolchain.
 - **`npm run lint` remains dead** — the script has always referenced an `eslint` that is
   not a dependency. Untouched here; it predates this work.
+
+---
+
+## D-44 · The needs board is scoped by role, and a donor's half of it is verification **[documented]**
+
+**Decision.** `GET /api/requirements` narrows to the caller.
+`routers/organisations._visible_requirements()` returns a WHERE clause — `None` for
+admin — applied in the query alongside the existing `is_active` filter and newest-first
+order: **admin** every active need; **donor** every active need posted by a *verified*
+recipient; **ngo** its own organisation's needs only; **volunteer** nothing; anything
+else `false()`. `RequirementOut` gains **`isVerified`**, read from
+`Recipient.is_verified` at serialisation time. No column, no migration, no new model
+field, and `POST`/`PATCH` authorization is untouched.
+
+**Reason.** The endpoint was the last cross-organisation read that was open *by omission
+rather than by decision* — `Depends(get_current_user)` and nothing more. That was
+defensible and `TASKS.md` said so: unlike `RecipientOut` (D-26) and `VolunteerOut`
+(D-41), which are directories of people, `RequirementOut` carries an organisation name
+and a need and no contact details. But "defensible" is not "decided", and building the
+donor needs board is what forced the question — a page is a commitment to a scope, so the
+scope had to become one.
+
+- **A donor's board is verified-only because that is the gate the rest of the system
+  already applies.** `matching.score_pair` refuses an unverified organisation outright,
+  so an unverified kitchen cannot be ranked for, cannot accept, and cannot receive. Its
+  need on a donor's board would be an invitation to cook for a match the platform will
+  not make. Verification is read live rather than copied onto the requirement, so an
+  administrator vouching for an organisation makes its existing needs visible with
+  nothing to backfill.
+- **An NGO reads its own needs for D-26's reason, not for a new one.** Two kitchens have
+  no workflow with each other. The desktop and mobile portals already filtered this list
+  by `myRecipient` client-side; **that filter stays** as defence in depth — the server
+  being right is not a reason to make the client depend on it.
+- **A courier gets an empty list, not a 403,** following `GET /recipients` rather than
+  `GET /volunteers`. There is no id to confirm or deny here, only a board that is empty
+  for this caller, and `AppContext.load()` treats a 403 as a slice it may ignore — so a
+  role gate would have been indistinguishable from success anyway.
+- **Fail closed.** An unrecognised role matches nothing, so a role added later reads the
+  board only once somebody gives it a scope.
+
+**What the board is not.** Requirements still do not touch matching (`matching.py` has
+never referenced `Requirement`), there is still no requirement-to-donation relationship,
+and `daily_recurring` is still stored and displayed and acted on by nothing. The donor
+page is therefore read-only and says so: no fulfil action, no count of needs met, and an
+explicit line that posting a donation does not attach it to a need. This is D-31 applied
+to a new surface — a screen may only claim what the system can honour.
+
+⚠️ **Consequences.**
+- **Platform-wide, not radius-scoped.** The obvious next filter is distance, and it
+  cannot be built: a donor account stores no coordinates (`users` has none, and
+  `Donation.latitude/longitude` belong to a *donation*, not to the person). Filtering
+  would need either a donor location on the account or a "near this donation" board, and
+  both are product decisions. `TASKS.md` → *Backlog*.
+- **A retired requirement still has no reader** (D-29). Scoping narrows the board; it
+  does not add a way to see what has left it.
+- **One existing test changed.**
+  `test_requirement_lifecycle.test_retiring_one_requirement_leaves_the_rest_of_the_board_alone`
+  asserted that a rival kitchen's requirement stayed on *this* caller's board, which was
+  only true because the endpoint was unscoped. It now checks the rival's requirement on
+  the rival's own board — same property, correct board.
+- ⚠️ **Newest-first is only as fine as the timestamp.** `created_at` is
+  `CURRENT_TIMESTAMP`, which SQLite resolves to whole seconds, so requirements posted
+  within the same second tie and fall back to insertion order. Pre-existing and not
+  changed here; `test_requirement_reads.py` backdates its rows so it tests the `ORDER BY`
+  rather than the tie.

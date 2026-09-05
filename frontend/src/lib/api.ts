@@ -294,6 +294,12 @@ export interface ApiRequirement {
   id: number;
   recipientId: number;
   recipientName: string;
+  /**
+   * The posting organisation's verification state, not the requirement's.
+   * Denormalised onto the need by the server so the donor needs board can say
+   * whose need it is showing; there is no column behind it.
+   */
+  isVerified: boolean;
   foodType: string;
   quantityNeeded: number;
   unit: string;

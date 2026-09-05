@@ -204,15 +204,23 @@ def test_an_ngo_cannot_retire_another_organisations_requirement(client, two_kitc
 
 
 def test_retiring_one_requirement_leaves_the_rest_of_the_board_alone(client, two_kitchens):
-    mine, req, _, their_req = two_kitchens
+    """Retirement is per-requirement, not per-board.
+
+    This used to also assert that the rival kitchen's requirement stayed on
+    *this* caller's board, which was true only because `GET /api/requirements`
+    was unscoped. Since D-44 an organisation reads its own needs and nothing
+    else, so the surviving requirement to check is this kitchen's second one —
+    and the rival's is checked on the rival's own board, where it belongs.
+    """
+    mine, req, theirs, their_req = two_kitchens
     second = post_requirement(client, mine, foodType="Dry rations")
 
     client.patch(f"/api/requirements/{req['id']}", json={"isActive": False}, headers=auth(mine))
 
     remaining = board_ids(client, mine)
     assert second["id"] in remaining
-    assert their_req["id"] in remaining
     assert req["id"] not in remaining
+    assert their_req["id"] in board_ids(client, theirs)
 
 
 # ─── Validation ──────────────────────────────────────────────────────────────

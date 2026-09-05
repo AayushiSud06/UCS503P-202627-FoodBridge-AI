@@ -2,11 +2,12 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, HEAD `f33aeae`
-> (Task 23: the frontend test harness). The Task 22 matcher correction is committed as
-> `a9f190b` and the Task 23 harness as `f33aeae`. ⚠️ **The working tree carries the
-> uncommitted Task 24 landing-page content correction** (`HA-6`; one page and one new test
-> file, 44 frontend tests pass, no other application source touched).
+> Last verified against the repository: 2026-09-05, branch `master`, HEAD `9b11353`
+> (Task 24: the landing-page content correction, `HA-6`). The Task 22 matcher correction is
+> committed as `a9f190b` and the Task 23 test harness as `f33aeae`. ⚠️ **The working tree
+> carries the uncommitted Task 25 donor needs board** — role scoping on
+> `GET /api/requirements` (D-44), `isVerified` on `RequirementOut`, a new donor page and
+> two new test files; 230 backend and 58 frontend tests pass.
 > See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
@@ -41,14 +42,14 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example. **Donors now have a read-only Needs Board** at `/donor/needs` over the existing requirement flow (Task 25, D-44) — it claims no fulfilment, no commitment and no statistic it was not given |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients **and couriers** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed). ⚠️ Still open: `/matches` discloses recipient geometry (issue 25) and `GET /api/requirements` is unscoped by omission |
+| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients, couriers **and standing requirements** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed), and `GET /api/requirements` is scoped by role (D-44: donor → verified recipients' needs, ngo → its own, volunteer → none, admin → all), closing the last read that was open by omission. ⚠️ Still open: `/matches` discloses recipient geometry (issue 25) |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 216 tests passing (~142 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
-| Frontend tests | ✅ 40 tests passing (~1.5 s), **uncommitted**: 9 adapters + 8 time + 8 api-client + 6 impact + 5 route-guard + 4 geo. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 6 of 84 files under `frontend/src` — a foundation, not a sweep |
+| Backend tests | ✅ 230 tests passing (~157 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + **14 requirement-read-scope** + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
+| Frontend tests | ✅ 58 tests passing (~2 s): **14 donor-needs-board** + 9 adapters + 8 time + 8 api-client + 6 impact + 5 route-guard + 4 landing + 4 geo. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 8 of 85 files under `frontend/src` — a foundation, not a sweep |
 | CI | ✅ GitHub Actions runs the backend tests, the frontend build and `alembic check`. ⚠️ **The frontend test suite is not a CI step yet** — the frontend job still runs `npm run build` only |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |
@@ -61,7 +62,28 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-05, uncommitted working tree** — **Task 23: the frontend has an automated test
+- **2026-09-05, uncommitted working tree** — **Task 25: donors have a needs board, and
+  `GET /api/requirements` is scoped by role.** `[QA-3 · D-44]` The last cross-organisation
+  read that was open *by omission* is now open *by decision*:
+  `routers/organisations._visible_requirements()` gives admin every active need, a **donor**
+  every active need from a **verified** recipient, an ngo its own only, and a courier none,
+  with an unrecognised role failing closed. `RequirementOut` gained `isVerified`, read live
+  from `Recipient.is_verified` — **no column, no migration, no new model field.** The
+  donor-side result is `pages/donor/DonorNeedsBoard.tsx` at `/donor/needs`, read-only, over
+  the existing `useRequirements()` flow rather than a second fetch: organisation and
+  verified state, food, quantity, urgency, beneficiaries when stated, whether the need
+  recurs, the operator notes as plain text, and `timeAgo(createdAt)`.
+  **The board claims nothing the system cannot honour** (D-31): no fulfil action, no
+  needs-met figure, and an explicit line that posting a donation does not attach it to a
+  need — because requirements still do not touch matching and no relationship joins the
+  two tables. The NGO screens kept their client-side ownership filter as defence in depth.
+  New tests: `code/tests/test_requirement_reads.py` (14) and
+  `frontend/src/pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14); one lifecycle test
+  that depended on the old unscoped board was corrected rather than relaxed. 230 backend
+  and 58 frontend tests pass; typecheck and build clean; verified in a browser against a
+  seeded throwaway database.
+
+- **2026-09-05, commit `f33aeae`** — **Task 23: the frontend has an automated test
   command.** `npm test` in `frontend/` runs **40 tests over 6 files in ~1.5 s**, all
   passing. Vitest 3.2 + Testing Library, configured as a `test` block in the existing
   `vite.config.ts` so tests resolve modules exactly as the build does; Vitest 5 requires
@@ -75,7 +97,7 @@ own key in `conftest.py` and need no setup.
   precedence in `lib/geo.ts` passes `tsc` and fails the suite. `npm test` 40/40,
   `tsc --noEmit` clean, `npm run build` clean. ⚠️ Not yet a CI step. See `DECISIONS.md`
   D-43.
-- **2026-09-05, uncommitted working tree** — **Task 22: the matcher's two size criteria now
+- **2026-09-05, commit `a9f190b`** — **Task 22: the matcher's two size criteria now
   measure two different things, and only comparable units are compared.** `HA-5`:
   `Recipient.capacity` counts meals — the product fixed that in three places and
   `matching.CAPACITY_UNIT` now names it, rather than a new column naming it again. Only a
@@ -479,8 +501,8 @@ group I they are **defects in the running system, not in its description**.
 
 **Steps 1–4 of that sequence are done** — step 1 (`HA-1`, `HA-2`, the `image_url` cap) as
 `e7032ea`, step 2 (the matcher's scoring, `HA-4`/`HA-5`) as `a9f190b`, step 3 (the frontend
-test harness, `HA-8`/`R-14`) as `f33aeae`, and step 4 (the landing page, `HA-6`)
-uncommitted in the working tree. **Group I is now complete**, which closes the QA audit's
+test harness, `HA-8`/`R-14`) as `f33aeae`, and step 4 (the landing page, `HA-6`) as
+`9b11353`. **Group I is now complete**, which closes the QA audit's
 interface-honesty programme: no screen in the project states a capability the system
 cannot honour.
 
@@ -492,14 +514,14 @@ Two smaller pieces of step 3 were deliberately left out and are now in `TASKS.md
 splits into things that are *broken* (steps 1–3 of *Next*, two to three days) and things
 that are merely *unbuilt* — Postgres, deployment, logging, pagination. The second group is
 infrastructure for a deployment that does not exist yet and should be sequenced *with* that
-deployment rather than ahead of it. The recommended first product feature is the **donor
-needs board** (*Blocked*): **S**, no endpoint or schema change, over data
-`AppContext.load()` already fetches for every role.
+deployment rather than ahead of it. Its recommended first product feature — the **donor
+needs board** — **is now built** (Task 25). It cost one endpoint scope, one serialised
+field, one page and two test files; no schema change and no migration.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional expansion
-and cleanup) or *Blocked*, which holds **eight** open decisions: the original four, plus
-the four the QA audit opened — road distance, requirement-aware matching, a donor needs
-board, and a real impact report. None of it has been committed to.
+and cleanup) or *Blocked*, which now holds **seven** open decisions: the original four,
+plus road distance, requirement-aware matching and a real impact report. The needs-board
+question is answered and closed. None of the rest has been committed to.
 
 ## Known issues and blockers
 
@@ -545,7 +567,7 @@ stable as items are resolved, so gaps are expected.
     Reproduced: recovered `(30.3600, 76.3700)` exactly, first try. Whether it matters is a
     product judgement — a community kitchen's address is often public, a shelter's may not
     be — but it is a demonstrated bypass of a scoping decision made on purpose. `HA-3`.
-26. ✅ **Resolved (Task 22, uncommitted).** `_capacity_score` now measures absolute spare
+26. ✅ **Resolved (Task 22, `a9f190b`).** `_capacity_score` now measures absolute spare
     meals, saturating at `FULL_HEADROOM_MEALS`. Over feasible capacities the old pair spanned
     exactly 5.00 points whatever the donation size; the new pair spans roughly 10.6–17.5
     points for donations of 20–500 meals, and its maximum is now interior
@@ -561,7 +583,7 @@ stable as items are resolved, so gaps are expected.
     explainability panel renders them as two independent bars, which since I-8 are captioned
     accurately and now describe two genuinely different measurements. See `DECISIONS.md`
     D-42; covered by `test_matching_scores.py`.
-27. ✅ **Resolved (Task 22, uncommitted).** Only meal-denominated donations are compared
+27. ✅ **Resolved (Task 22, `a9f190b`).** Only meal-denominated donations are compared
     with capacity; any other unit leaves both size criteria unassessed and says so in
     `reasons`, and nothing is converted. What was open — **the matcher compared
     `Donation.quantity` against `Recipient.capacity` without reading `Donation.unit`.** `quantity` is a count in Meals · Kg · Boxes · Pieces; `capacity` is
@@ -572,7 +594,7 @@ stable as items are resolved, so gaps are expected.
     three criteria rather than five. That is honest, not a regression, but the platform's
     headline score is less discriminating for those donations until a real unit model
     exists.
-28. ✅ **Resolved (working tree, Task 24) — the landing page no longer prints a platform
+28. ✅ **Resolved (`9b11353`, Task 24) — the landing page no longer prints a platform
     figure.** All three sites are gone: the four-stat strip (`1,240+` meals, `32` partner
     organizations, `56` volunteers, `84` pickups), the hero card captioned **"Live this
     term"** under a pulsing dot, and `HOW_IT_WORKS`'s "**in real time** on every dashboard".
@@ -785,13 +807,16 @@ credibility rather than about its correctness, and that judgement belongs in thi
    `tsc --noEmit` and `npm run build` clean, no application source file changed. ⚠️ **The
    `ci.yml` step was not added**, so the honesty invariants D-31 → D-40 are now covered by
    tests but those tests do not yet gate a build — see `TASKS.md` → *Backlog → D*.
-4. ✅ **Done, uncommitted — the landing page** (Task 24, `HA-6` / I-1a). Review and commit.
-   Two fabricated blocks and the real-time claim are gone, replaced by copy about how the
-   system counts rather than by substitute numbers; **44 frontend tests pass**,
-   `tsc --noEmit` and `npm run build` clean; one page and one new test file changed.
-5. **Stop hardening and build the donor needs board** (*Blocked*) — the smallest real
-   feature in the project and the one that gives `requirements` an audience. This is now
-   the next task: every step of the *Next* sequence is done.
+4. ✅ **Done, committed `9b11353` — the landing page** (Task 24, `HA-6` / I-1a). Two
+   fabricated blocks and the real-time claim are gone, replaced by copy about how the
+   system counts rather than by substitute numbers.
+5. ✅ **Done, uncommitted — the donor needs board** (Task 25, D-44). Review and commit.
+   `GET /api/requirements` is scoped by role for the first time, `RequirementOut` carries
+   `isVerified`, and `/donor/needs` renders the board read-only over the existing
+   `useRequirements()` flow. **230 backend and 58 frontend tests pass**, `tsc --noEmit` and
+   `npm run build` clean, and the board was read in a browser against a seeded throwaway
+   database. `requirements` finally has an audience — without gaining any influence over
+   matching, which is still a separate *Blocked* question.
 
 Sequenced behind those, unchanged: `HA-3` (the `/matches` distance disclosure), then
 *Backlog → E* (concurrency guard → Postgres → deployment configuration), which is where the

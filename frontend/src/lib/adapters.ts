@@ -126,6 +126,7 @@ export function toRequirement(api: ApiRequirement): NGORequirement {
     id: String(api.id),
     ngoId: String(api.recipientId),
     ngoName: api.recipientName,
+    isVerified: api.isVerified,
     foodType: api.foodType,
     quantityNeeded: api.quantityNeeded,
     unit: api.unit,
@@ -133,6 +134,8 @@ export function toRequirement(api: ApiRequirement): NGORequirement {
     urgency: (api.urgency as NGORequirement['urgency']) ?? 'Medium',
     dailyRecurring: api.dailyRecurring,
     notes: api.notes,
+    isActive: api.isActive,
+    createdAt: api.createdAt,
   };
 }
 

@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import DonorLayout from './pages/donor/DonorLayout';
 import DonorDashboard from './pages/donor/DonorDashboard';
 import DonorDonations from './pages/donor/DonorDonations';
+import DonorNeedsBoard from './pages/donor/DonorNeedsBoard';
 import CreateDonation from './pages/donor/CreateDonation';
 import DonationDetails from './pages/donor/DonationDetails';
 import DonorImpact from './pages/donor/DonorImpact';
@@ -68,6 +69,7 @@ export default function App() {
                 <Route path="donations" element={<DonorDonations />} />
                 <Route path="donations/:id" element={<DonationDetails />} />
                 <Route path="create" element={<CreateDonation />} />
+                <Route path="needs" element={<DonorNeedsBoard />} />
                 <Route path="impact" element={<DonorImpact />} />
                 <Route path="profile" element={<DonorProfile />} />
               </Route>
