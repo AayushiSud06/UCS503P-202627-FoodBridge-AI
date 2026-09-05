@@ -245,11 +245,18 @@ list rather than a 403, following `GET /recipients`. `RequirementOut` also now c
 **`isVerified`**, read live from `Recipient.is_verified` — no column and no migration. The
 NGO portals keep their client-side `myRecipient` filter as defence in depth.
 
-⚠️ **One cross-organisation read remains open:** **`GET /donations/{id}/matches` discloses
-recipient coordinates.** `MatchOut.distanceKm` is a real measurement to a named
-organisation, so a donor who reads `200 []` from `GET /api/recipients` by design can post
-three donations at pins of its choosing and trilaterate any verified kitchen exactly.
-`TASKS.md` → *Backlog → A* / `HA-3`.
+**Match distances are scoped a third time, per row.** `GET /donations/{id}/matches` used
+to disclose recipient coordinates: `MatchOut.distanceKm` was a real measurement to a named
+organisation, so a donor who reads `200 []` from `GET /api/recipients` by design could post
+three donations at pins of its choosing and trilaterate any verified kitchen exactly
+(`HA-3`). `routers/donations._precise_distance_scope()` now decides, in `_readable_by`'s
+shape, which recipients a caller may be told a true position for — `None` for an
+administrator, the caller's own organisation for an `ngo`, nothing for a donor or courier —
+and `matching.score_pair(..., blur_location=True)` scores every other row against
+coordinates snapped to a ~1 km grid, with `distanceKm` withheld. **Eligibility is still
+decided on the true position**, so the ranking itself does not depend on who is reading.
+See D-45. ⚠️ That gate is the residual: a recipient appears iff the true distance is within
+8 km, which a patient prober can still use (`TASKS.md` → *Backlog → A* / `HA-3a`).
 
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
@@ -277,7 +284,7 @@ Prefix `/api`. All bodies camelCase. Interactive docs at `/docs` and `/redoc`.
 | Group | Endpoints |
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` **(form-encoded)** · `GET|PATCH /auth/me` · `POST /auth/password` |
-| donations | `POST /donations` (auto-ranks on create; `imageUrl` capped at `schemas.MAX_IMAGE_URL_LENGTH` = 256 KiB) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). ⚠️ `/matches` returns named organisations with real distances — see `HA-3` |
+| donations | `POST /donations` (auto-ranks on create; `imageUrl` capped at `schemas.MAX_IMAGE_URL_LENGTH` = 256 KiB) · `GET /donations?mine=&status=&limit=` **(role-scoped; `mine` narrows further)** · `GET /donations/{id}` · `GET /donations/{id}/matches` · **`POST /donations/{id}/status`**. All four `DonationOut` responses carry `viewerMatch`, the caller's own ranking (D-30). `/matches` returns named organisations, with a real distance only on the caller's own row (D-45) |
 | organisations | `GET /recipients` **(role/ownership-scoped)** · `GET|PATCH /recipients/me` · `GET /requirements` **(role-scoped; a donor reads verified organisations' needs, an ngo its own)** · `POST /requirements` · **`PATCH /requirements/{id}`** (owner only) · `GET /volunteers` (**admin+ngo only, and scoped within that** — an ngo sees only its own donations' couriers) · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
@@ -298,7 +305,8 @@ Travel time, which `_deadline_score` needs, is derived from it by a flat constan
 `travel_minutes = (distance / 20) * 60`, i.e. 20 km/h assumed city traffic
 (`matching.py:132`). Both are deliberate and both are approximations. **Neither is
 serialised to a client**: `DonationOut.distanceKm` and `MatchOut.distanceKm` carry the
-great-circle kilometres, and travel time never leaves the module. Since I-2 the interface
+great-circle kilometres — `MatchOut.distanceKm` only for the organisation the row is about
+(D-45), otherwise `null` — and travel time never leaves the module. Since I-2 the interface
 says so — every distance is labelled straight-line, no travel estimate is displayed
 anywhere, and `frontend/src/lib/geo.ts` is the single selector deciding which of the two
 server distances a screen shows (D-33). *Blocked* covers whether to replace the model.
@@ -456,8 +464,10 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **216 in total**
-(~142 s, almost entirely real bcrypt hashing). `test_donation_reads.py` (13),
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **242 in total**
+(~205 s, almost entirely real bcrypt hashing). ⚠️ The per-bucket figures in this paragraph
+predate the last few task files and no longer add up to that total; `PROJECT_STATE.md`'s
+status table carries the current per-file breakdown. `test_donation_reads.py` (13),
 `test_volunteer_reads.py` (8) and
 `test_recipient_reads.py` (11) hold the read-scope tests: for every role, what the list
 withholds the id lookup withholds too, and no caller reads another organisation's
@@ -495,6 +505,17 @@ what `/matches` gives the same organisation. It also asserts the frozen number i
 the reader's own — the property that made the UI bug possible — that the breakdown
 reconciles to its headline by the published weights, and, as a unit test on `score_pair`
 with an injected `now`, that a stored score cannot track the deadline it scored.
+`test_match_distance_privacy.py` (12) covers the read scope on match distances (D-45): a
+donor gets no `distanceKm`, no distance figure in any `reasons` sentence, and scores
+computed from the blurred position rather than the true one; two kitchens ~600 m apart in
+one grid cell hand that donor whole rows that compare equal, which states the disclosure
+floor directly and settles the ordering channel with it; the `deadline_score` reading is
+exercised at a one-hour deadline, where the criterion is off the ceiling that hides it at
+six; and the organisation's own row, `viewerMatch`, the eligible set and the frozen
+`matchScore` are all unchanged. Two of them pin the **8 km gate in both directions** — a
+kitchen whose surrogate crosses the radius stays on the side its true position puts it —
+because that is the property a privacy control applied one line too early would silently
+break.
 `test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the
@@ -502,7 +523,7 @@ process rather than the per-test database.
 
 ### Frontend — `npm test` in `frontend/`
 
-**58 tests over 8 files**, Vitest 3.2 driven through the project's own
+**59 tests over 8 files**, Vitest 3.2 driven through the project's own
 `vite.config.ts`, so a module resolves in a test exactly as it does in the build (D-43).
 Runner config is the `test` block in that file; there is no separate config and no setup
 file. Default environment is **node**; the four suites that render — `lib/api.test.ts`,
@@ -517,7 +538,8 @@ field involved is a string or a number on both sides of the change:
 `deadlineScore`→`pickupAvailabilityScore` rename, feed ordering), `lib/time.ts` (8 —
 urgency bands at their boundaries, the deadline roll-forward), `lib/impact.ts` (6 — D-32,
 `COMPLETED`-only counting and the server counter winning over the loaded list),
-`lib/geo.ts` (4 — D-33, `viewerMatch.distanceKm` beating `distanceKm`), `lib/api.ts`
+`lib/geo.ts` (5 — D-33, `viewerMatch.distanceKm` beating `distanceKm`, and D-45's
+null-distance match falling through to it), `lib/api.ts`
 (8 — token attach, the 401 eviction, Pydantic detail flattening, bodyless 5xx →
 `NetworkError`) and `components/ProtectedRoute.tsx` (5 — the three redirect decisions).
 Two page suites hold content claims rather than arithmetic, which is the other thing `tsc`

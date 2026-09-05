@@ -60,6 +60,30 @@ UNASSESSED_SIZE_SCORE = 50
 #: criterion collapsing back into the fit ratio — see `_capacity_score`.
 FULL_HEADROOM_MEALS = 100
 
+#: Side of the grid, in degrees, that a recipient's coordinates are snapped to
+#: before a pairing is scored for anybody but that organisation itself.
+#:
+#: 0.01° is about 1.11 km of latitude and, at the pilot's latitude, about
+#: 0.96 km of longitude — a cell roughly a kilometre across.
+#:
+#: **This is a privacy control, not a performance one.** Every number a match
+#: carries is a function of the distance: `distance_score` decays linearly over
+#: the radius, `_deadline_score` subtracts a travel estimate derived from it,
+#: and `overall_score` is a weighted sum of both. A donor chooses the donation's
+#: pin, so any of them, read back at full precision from three pins of the
+#: donor's choosing, is enough to trilaterate a kitchen the recipient directory
+#: deliberately withholds (D-26). Rounding the published figures does not answer
+#: that: the boundaries of a rounded value are at known distances, so moving the
+#: pin until one flips recovers a circle of *known* radius about the kitchen,
+#: and three of those still give the exact point.
+#:
+#: Snapping the kitchen's own coordinates does answer it. Everything the caller
+#: can measure is then an exact function of one fixed surrogate point, so
+#: repeated probing recovers that surrogate and stops there — the true location
+#: is somewhere in its cell and no number in the response distinguishes where.
+#: See `DECISIONS.md` D-45.
+LOCATION_BLUR_GRID_DEG = 0.01
+
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in kilometres."""
@@ -73,12 +97,29 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * radius * math.asin(math.sqrt(a))
 
 
+def blurred_coords(latitude: float, longitude: float) -> tuple[float, float]:
+    """A point snapped to the `LOCATION_BLUR_GRID_DEG` grid.
+
+    Deterministic and stateless: the same kitchen always resolves to the same
+    surrogate, so a caller reading the same pairing twice is told the same
+    thing, and nothing has to be stored to make that true.
+    """
+    grid = LOCATION_BLUR_GRID_DEG
+    return (round(latitude / grid) * grid, round(longitude / grid) * grid)
+
+
 @dataclass
 class MatchResult:
     recipient_id: int
     recipient_name: str
     overall_score: int
-    distance_km: float
+    #: The straight-line kilometres this pairing spans, or **None when the
+    #: pairing was scored against a blurred position** — see `score_pair`.
+    #: `None` rather than the blurred figure on purpose: a number computed from
+    #: a surrogate point is not the distance to the kitchen, and D-33 forbids
+    #: printing a plausible distance that is not one. An absent number is
+    #: information; a wrong one is not.
+    distance_km: float | None
     distance_score: int
     quantity_score: int
     capacity_score: int
@@ -184,8 +225,19 @@ def score_pair(
     *,
     radius_km: float,
     now: datetime | None = None,
+    blur_location: bool = False,
 ) -> MatchResult | None:
-    """Score one donation/recipient pair, or None if the pair is ineligible."""
+    """Score one donation/recipient pair, or None if the pair is ineligible.
+
+    `blur_location` decides *which* of the recipient's positions the scoring
+    runs against, and nothing else. Eligibility — verification, coordinates and
+    the service radius — is always decided on the true position, so the set of
+    recipients a donation is ranked against never depends on who is reading;
+    only the figures reported about them do. Set it for any caller who is not
+    the organisation being scored (`LOCATION_BLUR_GRID_DEG`, `DECISIONS.md`
+    D-45); leave it off for that organisation's own view of itself, which is
+    what D-33's distance display depends on.
+    """
     now = now or datetime.now(timezone.utc)
 
     # Unverified organisations are not ranked. A suggestion the recipient is
@@ -203,6 +255,20 @@ def score_pair(
     )
     if distance > radius_km:
         return None
+
+    # Past the gate, every remaining figure is derived from `distance` — which
+    # is why the blur is applied here rather than on the way out. The clamp
+    # keeps a surrogate that lands just outside the radius from reporting a
+    # pairing as further away than the radius the list is drawn from; the score
+    # is 0 either side of it.
+    reported_distance: float | None = round(distance, 2)
+    if blur_location:
+        blurred_lat, blurred_lon = blurred_coords(recipient.latitude, recipient.longitude)
+        distance = min(
+            haversine_km(donation.latitude, donation.longitude, blurred_lat, blurred_lon),
+            radius_km,
+        )
+        reported_distance = None
 
     # A flat 20 km/h over the great-circle distance. This is a rough estimate
     # feeding `_deadline_score`, not a routed journey: nothing here knows about
@@ -241,8 +307,14 @@ def score_pair(
 
     reasons: list[str] = []
     if distance_score >= 70:
+        # The figure is printed only where it is the real one. A blurred
+        # pairing says the same thing without a number, which is both the
+        # honest wording and the one that closes the third reading of the
+        # distance an audit found in this sentence.
         reasons.append(
-            f"{distance:.1f} km away in a straight line — well inside the collection radius"
+            "Well inside the collection radius"
+            if reported_distance is None
+            else f"{distance:.1f} km away in a straight line — well inside the collection radius"
         )
     if not size_comparable:
         # Said plainly rather than left as a silent 50. The old prose below was
@@ -279,7 +351,7 @@ def score_pair(
         recipient_id=recipient.id,
         recipient_name=recipient.name,
         overall_score=round(overall),
-        distance_km=round(distance, 2),
+        distance_km=reported_distance,
         distance_score=distance_score,
         quantity_score=quantity_score,
         capacity_score=capacity_score,
@@ -296,17 +368,36 @@ def rank_recipients(
     radius_km: float,
     limit: int | None = None,
     now: datetime | None = None,
+    precise_for: set[int] | None = None,
 ) -> list[MatchResult]:
     """Every eligible recipient, best first.
 
     This is the part the prototype faked: it scored a single hard-coded
     organisation. Ranking the full eligible set is what makes the number on
     screen mean anything.
+
+    `precise_for` names the recipients this ranking may report a true position
+    for, in the shape `routers/donations._readable_by` already uses for read
+    scope: **`None` is unrestricted**, a set is the ids allowed, and an empty
+    set allows none. It defaults to unrestricted because the internal callers —
+    the two places that freeze `Donation.match_score` — are ranking on the
+    platform's behalf rather than answering a reader, and their figures must
+    stay exact. A route answering a reader passes the reader's scope
+    (`score_pair`, `DECISIONS.md` D-45).
     """
     scored = [
         result
         for recipient in recipients
-        if (result := score_pair(donation, recipient, radius_km=radius_km, now=now)) is not None
+        if (
+            result := score_pair(
+                donation,
+                recipient,
+                radius_km=radius_km,
+                now=now,
+                blur_location=precise_for is not None and recipient.id not in precise_for,
+            )
+        )
+        is not None
     ]
     scored.sort(key=lambda r: r.overall_score, reverse=True)
     return scored[:limit] if limit else scored

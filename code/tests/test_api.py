@@ -180,8 +180,12 @@ def test_a_nearer_kitchen_outranks_a_further_one(client, recipients):
     ).json()["id"]
     matches = client.get(f"/api/donations/{donation_id}/matches", headers=auth(token)).json()
     by_name = {m["recipientName"]: m for m in matches}
-    assert by_name["Helping Hands"]["distanceKm"] < by_name["Umeed Shelter"]["distanceKm"]
     assert by_name["Helping Hands"]["distanceScore"] > by_name["Umeed Shelter"]["distanceScore"]
+    # The ranking is read through the score rather than through `distanceKm`,
+    # which a donor is not given: the kitchens here are not this donor's
+    # organisation, so the distances are withheld and the scores come from a
+    # blurred position (D-45). `test_match_distance_privacy.py` covers that.
+    assert all(m["distanceKm"] is None for m in matches)
 
 
 # ─── Lifecycle ───────────────────────────────────────────────────────────────

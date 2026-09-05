@@ -65,6 +65,8 @@ export function isValidCoords(latitude: number, longitude: number): boolean {
  *   donation never carries one.
  * - `viewerMatch.distanceKm` — donor pin to the **calling** organisation's own
  *   kitchen, present while that kitchen can still act on the donation (D-30).
+ *   A match about somebody *else's* kitchen carries no distance at all (D-45),
+ *   so this is null-checked like the other one rather than assumed present.
  *
  * An NGO looking at an open listing is asking "how far is this from us", which
  * only the second answers — so it wins where both exist. Neither is computed in

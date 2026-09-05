@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-44. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-45. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -14,8 +14,9 @@
 > (courier read scope and the release's second meaning) is committed as `e7032ea`.
 > **D-42** (matcher unit comparability and the absolute headroom criterion) is committed as
 > `a9f190b` and **D-43** (the frontend test harness) as `f33aeae`, which is HEAD.
-> **D-44** (requirement read scope and the donor needs board) is **uncommitted in the
-> working tree**, together with the Task 24 landing-page correction it sits on top of.
+> **D-44** (requirement read scope and the donor needs board) is committed as `e72d4c2`,
+> which is HEAD. **D-45** (match distance is scoped to the organisation it describes,
+> `HA-3`) is **uncommitted in the working tree**.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1775,3 +1776,96 @@ to a new surface — a screen may only claim what the system can honour.
   within the same second tie and fall back to insertion order. Pre-existing and not
   changed here; `test_requirement_reads.py` backdates its rows so it tests the `ORDER BY`
   rather than the tie.
+
+---
+
+## D-45 · A match distance belongs to the organisation it describes **[documented]**
+
+**Decision.** `GET /api/donations/{id}/matches` still ranks every eligible kitchen for
+every reader, but only describes the reader's *own* organisation from its real position.
+For any other row, `matching.score_pair(..., blur_location=True)` snaps the recipient's
+coordinates to a `LOCATION_BLUR_GRID_DEG` (0.01°, ≈ 1 km) grid and scores the pairing
+against that surrogate point; `MatchOut.distanceKm` is then `None` and the distance
+sentence in `reasons` drops its figure. The router supplies the scope through
+`donations._precise_distance_scope`, which mirrors `_readable_by`: `None` (unrestricted)
+for an administrator, `{own recipient id}` for an `ngo`, the empty set for a donor or a
+courier. `DonationOut.viewerMatch` is always the caller's own organisation and is never
+blurred.
+
+**Reasoning.**
+
+- **Rounding the published number does not close it.** `TASKS.md` proposed rounding
+  `distance_km` to ~0.5 km. That fails to a boundary search: the rounding boundaries sit
+  at *known* distances, so a donor who walks the pin until the value flips has found a
+  circle of known radius about the kitchen, and three such circles still give the exact
+  point. Any deterministic function of the true distance has this property. Snapping the
+  kitchen's coordinates does not: everything the caller can measure is an exact function
+  of one fixed surrogate, so probing recovers the surrogate and stops.
+- **`distanceKm` was not the only reading, or even the finest.** `distance_score` decays
+  linearly over the 8 km radius, so one point is 80 m. `_deadline_score` subtracts a
+  travel estimate derived from the same distance, so one point there is ~400 m. And
+  `overall_score` is a weighted sum of both — 4 points of `distance_score` move it by
+  one, which is 320 m. A serialization-only transform can reach `distanceKm` and the
+  reason text; it cannot reach the three scores, because they are computed from the
+  distance rather than carrying it. That is why the blur is applied inside `score_pair`
+  and not in `serialize.py`, against the first instinct: the seam has to sit *upstream*
+  of the arithmetic, or the fix is cosmetic. ⚠️ `deadline_score` is invisible at a
+  six-hour deadline, where the slack saturates at 100 for every candidate; a test posts a
+  one-hour deadline so the criterion is off both rails and the channel is actually
+  exercised.
+- **Blurring the input keeps the panel self-consistent.** Every figure in a blurred match
+  is derived from the same surrogate, so the weighted sum still reconciles by hand — the
+  property D-05 and D-06 exist for, and the one that coarsening the published components
+  individually would have broken.
+- **`None`, not a blurred number, on `distanceKm`.** A distance computed from a surrogate
+  is not the distance to the kitchen, and D-33 is explicit that a screen may not print a
+  plausible number in place of one it does not have. Nothing renders this field from
+  `/matches` today (the analysis panel draws the scores and the reasons), so withholding
+  it costs no screen anything.
+- **Eligibility is decided on the true position.** The blur is applied *after* the
+  verification, coordinate and radius gates — all three `return None` branches run on the
+  true `haversine_km` — so the same kitchens are ranked for every reader and D-06's gate is
+  untouched. This is load-bearing in both directions and is pinned by test: a kitchen
+  8.02 km away whose surrogate is 7.52 km away must stay out, and one 7.98 km away whose
+  surrogate is 8.46 km away must stay in. Moving the blur above the gate fails exactly
+  those tests. The rankings that freeze `Donation.match_score` — two in `routers/donations`
+  and two in `seed.py` — pass no scope and stay exact.
+- **The sort is on the blurred score, not the true one.** `rank_recipients` orders by
+  `overall_score` as each reader receives it. Sorting on the true score while publishing
+  blurred numbers would have left the *comparison* between two kitchens as a distance
+  oracle of its own, which the pin can be walked against just as a value can.
+- **An administrator is not scoped** because `GET /api/recipients` already gives them the
+  coordinates in full; blurring would withhold nothing and would make the admin view
+  disagree with the directory beside it.
+- **An `ngo` is scoped like a donor for its peers.** Registration hands out the `ngo`
+  role to any address, so treating "is an organisation" as "may locate other
+  organisations" would leave the bypass open one role over — the mistake D-26 made about
+  the courier roster and D-41 had to correct.
+
+⚠️ **Constraints and what this does *not* close.**
+
+- **The residual disclosure is one grid cell, ≈ 1 km across, and that is deliberate.** Two
+  kitchens in the same cell are numerically identical to a donor; where in the cell either
+  one stands is not recoverable from any number in the response.
+  `tests/test_match_distance_privacy.py` (12) states exactly this — the two rows are
+  compared whole, not field by field. Measured end to end: a donor
+  posting five donations at pins of its choosing and solving for the kitchen from
+  everything still exposed lands **465 m** away and fits every observation exactly, so it
+  cannot refine further; the same solver on the pre-fix payload lands **15 m** away, at the
+  limit of the search grid rather than of the data.
+- **Membership in the ranking is itself an oracle, and this decision does not touch it.**
+  A recipient appears iff the *true* distance is within the 8 km radius, so a donor who
+  binary-searches the pin can still find points on that 8 km circle and trilaterate from
+  three of them. Closing that would mean changing eligibility, which the matcher's
+  correctness depends on. The control for it is abuse-limiting on donation creation, not
+  a different distance representation. Filed in `TASKS.md` → *Backlog → A*.
+- **Two smaller readings in the same family remain open**, both found while implementing
+  this and both outside its endpoint: `Donation.match_score` is frozen from a precise
+  ranking and shown to the donor who posted the pin (~320 m granularity, one number per
+  donation, about whichever kitchen ranked first), and `DonationOut.distanceKm` is the
+  exact distance to the kitchen that accepted — a kitchen the donor does not choose.
+  Also `TASKS.md` → *Backlog → A*.
+- **The wire contract widened.** `MatchOut.distanceKm` is `float | None`, and
+  `ApiMatch.distanceKm` / `MatchAnalysis.distanceKm` are `number | null` to match.
+  `displayDistanceKm` already coalesced, so no screen changed; `geo.test.ts` gained the
+  case where a match carries no distance of its own.

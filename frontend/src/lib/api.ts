@@ -281,7 +281,11 @@ export interface ApiMatch {
   recipientId: number;
   recipientName: string;
   overallScore: number;
-  distanceKm: number;
+  /** Null for a reader who is not the organisation this match is about: the
+   *  scores beside it are then computed from a blurred position, so there is no
+   *  true distance to publish (D-45). An organisation's own `viewerMatch`
+   *  always carries one, which is what D-33's display reads. */
+  distanceKm: number | null;
   distanceScore: number;
   quantityScore: number;
   capacityScore: number;

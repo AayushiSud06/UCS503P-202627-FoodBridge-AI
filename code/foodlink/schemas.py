@@ -193,7 +193,13 @@ class MatchOut(Schema):
     recipient_id: int
     recipient_name: str
     overall_score: int
-    distance_km: float
+    #: Null for a reader who is not the organisation this match is about. The
+    #: figures beside it are then computed from a blurred position rather than
+    #: the kitchen's own, so there is no true distance to publish — see
+    #: `matching.score_pair` and `DECISIONS.md` D-45. An organisation's own
+    #: match (`DonationOut.viewerMatch`) always carries one, which is what
+    #: D-33's distance display reads.
+    distance_km: float | None
     distance_score: int
     quantity_score: int
     capacity_score: int

@@ -26,6 +26,19 @@ describe('displayDistanceKm', () => {
     expect(displayDistanceKm(donation({ distanceKm: 12.4, viewerMatch: null }))).toBe(12.4);
   });
 
+  it('falls through a match that carries no distance of its own', () => {
+    // `/matches` withholds the distance on a row about somebody else's kitchen
+    // (D-45). A viewerMatch is always about the reader's own, so this should
+    // not arise there — but the field is nullable now, and `??` has to skip a
+    // null rather than print it.
+    const listing = donation({
+      distanceKm: 12.4,
+      viewerMatch: apiMatch({ distanceKm: null }),
+    });
+
+    expect(displayDistanceKm(listing)).toBe(12.4);
+  });
+
   it('reports an unknown distance as unknown rather than as zero', () => {
     const open = donation({ distanceKm: null, viewerMatch: null });
 

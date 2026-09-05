@@ -2,13 +2,15 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, HEAD `9b11353`
-> (Task 24: the landing-page content correction, `HA-6`). The Task 22 matcher correction is
-> committed as `a9f190b` and the Task 23 test harness as `f33aeae`. ⚠️ **The working tree
-> carries the uncommitted Task 25 donor needs board** — role scoping on
-> `GET /api/requirements` (D-44), `isVerified` on `RequirementOut`, a new donor page and
-> two new test files; 230 backend and 58 frontend tests pass.
-> See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
+> Last verified against the repository: 2026-09-05, branch `master`, HEAD `e72d4c2`
+> (Task 25: the donor needs board and the requirement read scope, D-44). The Task 22
+> matcher correction is committed as `a9f190b`, the Task 23 test harness as `f33aeae` and
+> the Task 24 landing-page correction as `9b11353`. ⚠️ **The working tree carries the
+> uncommitted Task 26 match-distance privacy fix** — `HA-3`/D-45: a match now describes
+> the reader's own organisation from its real position and every other from a ~1 km
+> surrogate, so `/matches` is no longer a coordinate oracle for a donor. Three source
+> files, three schema/type widenings, one new backend test file; 242 backend and 59
+> frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
 > I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
@@ -19,8 +21,11 @@
 > audit against `23c27f4` on 2026-09-02, and a **full project health audit against
 > `c274e99` on 2026-09-05**. The health audit's confirmed findings are issues 23–28 below
 > and tag `HA-n` in `TASKS.md`. **23, 24 and the `image_url` half of 13 are fixed in
-> `e7032ea`; 26 and 27 in `a9f190b`; 28 is fixed in the working tree.** Open: 25 (`HA-3`)
-> alone.
+> `e7032ea`; 26 and 27 in `a9f190b`; 28 in `9b11353`; 25 (`HA-3`) is fixed in the working
+> tree.** All six confirmed findings are now answered. ⚠️ The `HA-3` fix left two named
+> residuals — `HA-3a` (ranking membership is still an oracle at the 8 km gate) and
+> `HA-3b` (`match_score` and `DonationOut.distanceKm`) — recorded in `TASKS.md` →
+> *Backlog → A* rather than treated as closed.
 
 ## What this project is
 
@@ -48,8 +53,8 @@ as ML.
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 230 tests passing (~157 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + **14 requirement-read-scope** + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
-| Frontend tests | ✅ 58 tests passing (~2 s): **14 donor-needs-board** + 9 adapters + 8 time + 8 api-client + 6 impact + 5 route-guard + 4 landing + 4 geo. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 8 of 85 files under `frontend/src` — a foundation, not a sweep |
+| Backend tests | ✅ 242 tests passing (~205 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 14 requirement-read-scope + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + **12 match-distance-privacy** + 22 rate-limit + 22 config + 8 migration |
+| Frontend tests | ✅ 59 tests passing (~2 s): 14 donor-needs-board + 9 adapters + 8 time + 8 api-client + 6 impact + **5 geo** + 5 route-guard + 4 landing. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 8 of 85 files under `frontend/src` — a foundation, not a sweep |
 | CI | ✅ GitHub Actions runs the backend tests, the frontend build and `alembic check`. ⚠️ **The frontend test suite is not a CI step yet** — the frontend job still runs `npm run build` only |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |
@@ -62,7 +67,33 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-05, uncommitted working tree** — **Task 25: donors have a needs board, and
+- **2026-09-05, uncommitted working tree** — **Task 26: a match distance belongs to the
+  organisation it describes.** `[HA-3 · D-45]` `GET /donations/{id}/matches` was a
+  coordinate oracle: a donor reads `[]` from `GET /api/recipients` by design (D-26), then
+  posted three donations at pins of their choosing and trilaterated any verified kitchen.
+  **Four readings carried the distance, not one** — `distanceKm` (10 m), `distance_score`
+  (80 m), `deadline_score` (~400 m, through the travel estimate) and `overall_score`
+  (~320 m, as a weighted sum of the two) — which is why the previously proposed fix,
+  rounding `distanceKm`, would have been cosmetic, and why the seam had to sit *upstream*
+  of the scoring arithmetic rather than in `serialize.py`. `matching.score_pair` now takes
+  `blur_location`: the recipient's coordinates are snapped to a ~1 km grid and the pairing
+  scored against that surrogate, so everything a non-owning reader can measure is an exact
+  function of one fixed point. `MatchOut.distanceKm` is `None` there and the `reasons`
+  sentence drops its figure. The scope lives in `donations._precise_distance_scope`, in
+  `_readable_by`'s shape: unrestricted for an admin, own-organisation for an `ngo`, empty
+  for a donor or courier. **Eligibility is still decided on the true position**, so the
+  same kitchens are ranked for everyone, weights and radius are untouched, and the two
+  internal rankings that freeze `Donation.match_score` stay exact — as does
+  `viewerMatch`, which is what D-33's display reads. New
+  `code/tests/test_match_distance_privacy.py` (7), including the disclosure floor stated
+  directly: two kitchens ~600 m apart in one grid cell are numerically identical to a
+  donor and still distinct to an administrator, and **both directions of the 8 km gate**
+  — the blur sits below all three eligibility branches, and moving it above them fails
+  exactly those tests. 242 backend and 59 frontend tests pass;
+  typecheck and build clean. ⚠️ Two residuals are named, not claimed closed: `HA-3a` (the
+  8 km eligibility gate is itself an oracle) and `HA-3b` (`match_score`,
+  `DonationOut.distanceKm`).
+- **2026-09-05, committed `e72d4c2`** — **Task 25: donors have a needs board, and
   `GET /api/requirements` is scoped by role.** `[QA-3 · D-44]` The last cross-organisation
   read that was open *by omission* is now open *by decision*:
   `routers/organisations._visible_requirements()` gives admin every active need, a **donor**
@@ -80,8 +111,8 @@ own key in `conftest.py` and need no setup.
   New tests: `code/tests/test_requirement_reads.py` (14) and
   `frontend/src/pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14); one lifecycle test
   that depended on the old unscoped board was corrected rather than relaxed. 230 backend
-  and 58 frontend tests pass; typecheck and build clean; verified in a browser against a
-  seeded throwaway database.
+  and 58 frontend tests passed at the time; typecheck and build clean; verified in a
+  browser against a seeded throwaway database.
 
 - **2026-09-05, commit `f33aeae`** — **Task 23: the frontend has an automated test
   command.** `npm test` in `frontend/` runs **40 tests over 6 files in ~1.5 s**, all
@@ -518,6 +549,15 @@ deployment rather than ahead of it. Its recommended first product feature — th
 needs board** — **is now built** (Task 25). It cost one endpoint scope, one serialised
 field, one page and two test files; no schema change and no migration.
 
+**`HA-3` followed it as Task 26** and is the last of the health audit's six confirmed
+findings. The disclosure was larger than this file recorded — `distanceKm` was the
+coarsest of four readings, not the only one — and the mitigation `TASKS.md` proposed
+(rounding to ~0.5 km) would not have closed it, because rounding boundaries sit at known
+distances. What was done instead is recorded as D-45. It is also the first fix here that
+names what it does *not* close: the 8 km eligibility gate is itself an oracle, and the
+answer to that is abuse-limiting on donation creation (`HA-3a`), not another distance
+format.
+
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional expansion
 and cleanup) or *Blocked*, which now holds **seven** open decisions: the original four,
 plus road distance, requirement-aware matching and a real impact report. The needs-board
@@ -561,12 +601,21 @@ stable as items are resolved, so gaps are expected.
 
 ### Medium — found by the health audit, 2026-09-05
 
-25. **`GET /donations/{id}/matches` gives back the recipient coordinates D-26 withholds.**
-    A donor reads `[]` from `GET /api/recipients` by design, then posts three donations at
-    pins of their choosing and trilaterates any verified kitchen from `MatchOut.distanceKm`.
-    Reproduced: recovered `(30.3600, 76.3700)` exactly, first try. Whether it matters is a
-    product judgement — a community kitchen's address is often public, a shelter's may not
-    be — but it is a demonstrated bypass of a scoping decision made on purpose. `HA-3`.
+25. ✅ **Resolved (Task 26, uncommitted).** `GET /donations/{id}/matches` used to give
+    back the recipient coordinates D-26 withholds: a donor reads `[]` from `GET
+    /api/recipients` by design, then posted three donations at pins of their choosing and
+    trilaterated any verified kitchen from `MatchOut.distanceKm` — reproduced, recovering
+    `(30.3600, 76.3700)` exactly on the first try. A match now describes the reader's own
+    organisation from its real position and every other from a surrogate snapped to a
+    ~1 km grid, so `distanceKm` is withheld, the `reasons` sentence drops its figure, and
+    the three distance-derived scores resolve to the cell rather than to the kitchen.
+    Ranking, weights, radius and eligibility are unchanged — the gate runs on the true
+    distance, above the blur, which is pinned in both directions by test. `HA-3`;
+    `DECISIONS.md` D-45; `test_match_distance_privacy.py` (12 tests). ⚠️ Two residuals were named rather than
+    claimed closed — `HA-3a` (a recipient appears iff the *true* distance is within 8 km,
+    so the gate itself is still an oracle to a patient prober) and `HA-3b`
+    (`Donation.match_score` at ~320 m, and `DonationOut.distanceKm` to the kitchen that
+    accepted).
 26. ✅ **Resolved (Task 22, `a9f190b`).** `_capacity_score` now measures absolute spare
     meals, saturating at `FULL_HEADROOM_MEALS`. Over feasible capacities the old pair spanned
     exactly 5.00 points whatever the donation size; the new pair spans roughly 10.6–17.5
@@ -810,17 +859,22 @@ credibility rather than about its correctness, and that judgement belongs in thi
 4. ✅ **Done, committed `9b11353` — the landing page** (Task 24, `HA-6` / I-1a). Two
    fabricated blocks and the real-time claim are gone, replaced by copy about how the
    system counts rather than by substitute numbers.
-5. ✅ **Done, uncommitted — the donor needs board** (Task 25, D-44). Review and commit.
+5. ✅ **Done, committed `e72d4c2` — the donor needs board** (Task 25, D-44).
    `GET /api/requirements` is scoped by role for the first time, `RequirementOut` carries
    `isVerified`, and `/donor/needs` renders the board read-only over the existing
-   `useRequirements()` flow. **230 backend and 58 frontend tests pass**, `tsc --noEmit` and
-   `npm run build` clean, and the board was read in a browser against a seeded throwaway
-   database. `requirements` finally has an audience — without gaining any influence over
-   matching, which is still a separate *Blocked* question.
+   `useRequirements()` flow. `requirements` finally has an audience — without gaining any
+   influence over matching, which is still a separate *Blocked* question.
+6. ✅ **Done, uncommitted — the `/matches` distance disclosure** (Task 26, `HA-3`, D-45).
+   Review and commit. A match describes the reader's own organisation from its real
+   position and every other from a ~1 km surrogate; `MatchOut.distanceKm` is nullable and
+   null for those rows. **242 backend and 59 frontend tests pass**, `tsc --noEmit` and
+   `npm run build` clean. No schema change, no migration, no change to weights, radius or
+   eligibility.
 
-Sequenced behind those, unchanged: `HA-3` (the `/matches` distance disclosure), then
-*Backlog → E* (concurrency guard → Postgres → deployment configuration), which is where the
-rate-limit-sharing decision gets answered. `R-31` (weight tuning) is unblocked by Task 22
+Sequenced behind those: *Backlog → E* (concurrency guard → Postgres → deployment
+configuration), which is where the rate-limit-sharing decision gets answered — and which
+`HA-3a` now has a second reason to want, since rate-limiting `POST /api/donations` is the
+control for the residual probing oracle. `R-31` (weight tuning) is unblocked by Task 22
 but still wants outcome data the project does not have.
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**

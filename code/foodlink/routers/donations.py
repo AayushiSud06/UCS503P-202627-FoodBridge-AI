@@ -186,6 +186,26 @@ def _viewer_recipient(db: Session, user: User) -> Recipient | None:
     return db.scalar(select(Recipient).where(Recipient.user_id == user.id))
 
 
+def _precise_distance_scope(db: Session, user: User) -> set[int] | None:
+    """The recipients this caller may be told a true distance to.
+
+    `None` is unrestricted, matching `_readable_by`'s convention: an
+    administrator already reads the recipient directory in full, so blurring a
+    distance would withhold nothing from them.
+
+    Everybody else is scoped to their own organisation, which for a donor and a
+    courier is no organisation at all. That is the whole of `HA-3`: a donor
+    reads `200 []` from `GET /api/recipients` by design (D-26) and then reads
+    the distances back out of `/matches`, one donation pin at a time. The
+    ranking still runs over every eligible kitchen — this decides only which of
+    them the reader is told a real position for (`DECISIONS.md` D-45).
+    """
+    if user.role is UserRole.admin:
+        return None
+    recipient = _viewer_recipient(db, user)
+    return {recipient.id} if recipient is not None else set()
+
+
 def _viewer_match(donation: Donation, recipient: Recipient | None) -> MatchOut | None:
     """How this donation ranks for the reader's own organisation, right now.
 
@@ -210,6 +230,10 @@ def _viewer_match(donation: Donation, recipient: Recipient | None) -> MatchOut |
     left to weigh, a live score would carry on decaying past the decision, and
     the frozen `match_score` is by then the honest number — the one the
     accepting organisation actually acted on.
+
+    Scored from the organisation's true position, unblurred: this match is
+    about the reader's own kitchen, so there is nothing here it does not
+    already know, and D-33's distance display reads exactly this field.
     """
     if recipient is None or donation.status not in OPEN_TO_RECIPIENTS:
         return None
@@ -374,13 +398,22 @@ def get_matches(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[MatchOut]:
-    """Ranked recipients for this donation, with the reasoning for each."""
+    """Ranked recipients for this donation, with the reasoning for each.
+
+    Distances are scoped separately from the ranking: every eligible kitchen is
+    still listed and still ranked, but only the reader's own is described from
+    its real position. See `_precise_distance_scope`.
+    """
     # Same read scope as the donation itself: the reasoning describes a
     # donation, so seeing it is seeing the donation.
     donation = _get_readable_or_404(db, donation_id, user)
     recipients = list(db.scalars(select(Recipient)))
     ranked = rank_recipients(
-        donation, recipients, radius_km=settings.max_match_radius_km, limit=limit
+        donation,
+        recipients,
+        radius_km=settings.max_match_radius_km,
+        limit=limit,
+        precise_for=_precise_distance_scope(db, user),
     )
     return [MatchOut(**r.__dict__) for r in ranked]
 

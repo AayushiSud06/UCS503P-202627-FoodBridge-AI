@@ -1,10 +1,10 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05. HEAD is `9b11353` (Task 24: the
-> landing-page content correction, `HA-6`); the working tree carries the **uncommitted
-> Task 25 donor needs board** described under *Current* — requirement read scope (D-44)
-> and the board itself. Task 22's matcher correction is committed as `a9f190b` and Task
-> 23's frontend test harness as `f33aeae`.
+> Verified against the repository on 2026-09-05. HEAD is `e72d4c2` (Task 25: the donor
+> needs board and the requirement read scope, D-44); the working tree carries the
+> **uncommitted Task 26 match-distance privacy fix** (`HA-3`, D-45) described under
+> *Current*. Task 22's matcher correction is committed as `a9f190b`, Task 23's frontend
+> test harness as `f33aeae` and Task 24's landing-page correction as `9b11353`.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
@@ -36,52 +36,76 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 25 — the donor needs board, complete.** Task 24 is
-now committed (`9b11353`) and its entry below is history.
+**Uncommitted in the working tree: Task 26 — the match-distance privacy fix, complete.**
+Task 25 is now committed (`e72d4c2`) and its entry has moved to *Completed*.
 
-### Task 25 — the donor needs board `[QA-3 · §8.2 · D-44]`
+### Task 26 — `HA-3` · match distance is scoped to the organisation it describes `[HA-3 · D-26 · D-33 · D-45]`
 
-**Donors have a real read-only Needs Board, and `GET /api/requirements` is scoped by role
-for the first time.** The board reads through the existing `useRequirements()` flow — no
-new endpoint, no second fetch, no duplicate state — and the scope decision it forced is
-recorded as D-44. **No schema change, no migration, no new Requirement field, and
-`matching.py` is untouched.**
+**A donor can no longer read a verified kitchen's coordinates out of
+`GET /api/donations/{id}/matches`.** The ranking is unchanged — same weights, same 8 km
+radius, same eligibility gates, same candidates for every reader — and so is every number
+an organisation reads about *itself*. **No schema change and no migration.**
 
-- **Backend scope.** `routers/organisations._visible_requirements(user)` returns a WHERE
-  clause in the shape `_visible_recipients` / `_visible_volunteers` already use: admin →
-  every active need; **donor → needs from *verified* recipients**; ngo → its own only;
-  volunteer → none; unknown role → `false()`. Applied inside the existing query, so
-  authentication, active-only and newest-first are unchanged, and denial is an empty list
-  rather than a 403.
-- **`RequirementOut` gained `isVerified`,** read from `Recipient.is_verified` at
-  serialisation. It is not a column and nothing backfills: an administrator vouching for an
-  organisation makes its existing needs visible immediately.
-- **New `pages/donor/DonorNeedsBoard.tsx` at `/donor/needs`,** plus a *Needs Board* entry
-  in `DonorLayout`'s nav. Each card carries the organisation and its verified state, the
-  food, quantity and unit, urgency, beneficiaries **when stated** (the field defaults to 0,
-  which means "not said" rather than "nobody"), whether it recurs, the operator notes, and
-  `timeAgo(createdAt)`. Loading, empty and failure states use `useLoadState()` and the
-  existing `EmptyState` primitive.
-- **Nothing on it claims a commitment.** No fulfil action, no needs-met count, no
-  statistic the page was not given, and a line saying plainly that posting a donation does
-  not attach it to a need — because nothing in the system connects the two. D-31 at a new
-  boundary.
-- **The NGO client-side `myRecipient` filter was kept** on both the desktop and mobile
-  requirement screens, deliberately, even though the server now enforces the same scope.
-- **`notes` is now donor-facing.** It is operator-authored free text and is rendered
-  through ordinary React interpolation; there is no `dangerouslySetInnerHTML` anywhere in
-  the change, and a test asserts markup inside a note stays text.
-- **Tests.** New `code/tests/test_requirement_reads.py` (14) and
-  `frontend/src/pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14). One existing test —
-  `test_retiring_one_requirement_leaves_the_rest_of_the_board_alone` — asserted a rival
-  kitchen's need stayed on *this* caller's board, which was only true while the endpoint
-  was unscoped; it now checks that need on the rival's own board.
+- **The mitigation this list previously proposed was wrong and has been replaced.**
+  Rounding `distance_km` to ~0.5 km does not close the disclosure: the boundaries of a
+  rounded value sit at known distances, so moving the pin until one flips recovers a
+  circle of known radius about the kitchen, and three of those still give the exact point.
+- **`distanceKm` was also not the only reading.** `distance_score` resolves to 80 m,
+  `deadline_score` (which subtracts a distance-derived travel estimate) to ~400 m, and
+  `overall_score` — a weighted sum of both — to ~320 m. A serialization-only fix cannot
+  reach the three scores, because they are *computed from* the distance rather than
+  carrying it.
+- **What was done instead.** `matching.score_pair(..., blur_location=True)` snaps the
+  recipient's coordinates to `LOCATION_BLUR_GRID_DEG` (0.01°, ≈ 1 km) and scores the
+  pairing against that surrogate, so every figure a non-owning reader can measure is an
+  exact function of one fixed point. `MatchOut.distanceKm` is `None` for such a row, and
+  the distance sentence in `reasons` drops its figure. Eligibility is still decided on the
+  true position, *before* the blur.
+- **The scope lives in the router,** `donations._precise_distance_scope`, in the shape
+  `_readable_by` already uses: `None` for an administrator, `{own recipient id}` for an
+  `ngo`, empty for a donor or a courier. An `ngo` is scoped for its *peers* — registration
+  hands that role to any address, which is the D-41 lesson.
+- **D-33 is untouched.** `DonationOut.viewerMatch` is always the caller's own organisation
+  and is never blurred, and the four internal rankings that freeze `Donation.match_score`
+  — two in `routers/donations`, two in `seed.py` — pass no scope and stay exact.
+- **The gate is above the blur, verified by mutation.** All three `return None` branches
+  (verification, coordinates, radius) run on the true `haversine_km`; the blur is applied
+  only afterwards. Moving it above the gate fails the two boundary tests and the
+  same-eligible-set test, and nothing else. The sort is on the blurred score, so ordering
+  is not a channel either.
+- **Contract widened:** `MatchOut.distanceKm` is `float | None`; `ApiMatch.distanceKm` and
+  `MatchAnalysis.distanceKm` are `number | null`. `displayDistanceKm` already coalesced,
+  so **no screen changed** — the analysis panel draws the scores and the reasons, never
+  this field.
+- **Tests.** New `code/tests/test_match_distance_privacy.py` (12): the three readings the
+  audit found; the disclosure floor stated directly (two kitchens ~600 m apart in one cell
+  give a donor whole rows that compare equal, which settles the ordering channel too); the
+  `deadline_score`/`overall_score` pair exercised at a one-hour deadline, where the
+  criterion is off its ceiling and actually carries the distance; the organisation's own
+  distance; the `viewerMatch` path; and **both directions of the 8 km gate** — a kitchen
+  8.02 km away whose surrogate is 7.52 km away stays out, and one 7.98 km away whose
+  surrogate is 8.46 km away stays in. One existing test —
+  `test_api.test_a_nearer_kitchen_outranks_a_further_one` — read the ranking through
+  `distanceKm` as a donor and now reads it through `distanceScore`. `geo.test.ts` gained
+  the null-distance case.
 
-Validation: `pytest code/tests` **230/230** (216 → 230, ~157 s), `npm test` **58/58**
-(8 files), `npm run typecheck` clean, `npm run build` clean, and the board read in a
-browser against a seeded throwaway database — a donor sees the two verified organisations'
-needs and not the unverified one's, an NGO sees only its own, and an NGO requirement edit
-still round-trips.
+⚠️ **What this does not close, recorded rather than hidden.** Ranking *membership* is
+still an oracle — a recipient appears iff the true distance is within 8 km — so a donor
+who binary-searches the pin can find the 8 km circle and trilaterate from three points on
+it. That needs abuse-limiting on donation creation, not a different distance
+representation, and closing it by changing eligibility was explicitly out of scope. Two
+smaller readings in the same family are also open: `Donation.match_score` (~320 m, one
+number per donation) and `DonationOut.distanceKm` (exact, to the kitchen that accepted —
+which the donor does not choose). All three are in *Backlog → A*; D-45 has the detail.
+
+Validation: `pytest code/tests` **242/242** (230 → 242, ~205 s), `npm test` **59/59**
+(8 files), `npm run typecheck` clean, `npm run build` clean, `alembic check` reports no new
+upgrade operations. The attack was also re-run end to end against a throwaway database: a
+donor posting five donations at pins of its choosing and solving for the kitchen from
+everything still exposed lands **465 m** from the true position and cannot refine further
+(the solution fits every observation exactly — it has converged on the surrogate). The same
+solver on the pre-fix payload shape, which is what an administrator still receives, lands
+**15 m** away, i.e. at the limit of the search grid rather than of the data.
 
 ### Task 24 — the landing page (*Next* step 4, committed `9b11353`)
 
@@ -286,13 +310,14 @@ schema, API or frontend change and no weight touched.
 ### ✅ Step 4 — `HA-6` · finish the landing page — **DONE (Task 24, `9b11353`)**
 
 `[HA-6 · QA-4 · repo]` — **S**. Superseded I-1a, which was scoped too narrowly. Three sites
-removed, one labelled, no substitute number introduced; detail under *Current*. **Group I is
-now complete.**
+removed, one labelled, no substitute number introduced; detail under *Completed*.
+**Group I is now complete.**
 
-**Then stop hardening.** The audit's recommended first product feature is the **donor needs
-board** (*Blocked*): **S**, no endpoint or schema change, over data `AppContext.load()`
-already fetches for every role. `HA-3` (the `/matches` distance disclosure, group A) and
-*Backlog → E* (concurrency guard → Postgres → deployment configuration) sequence behind it.
+**Then stop hardening.** The audit's recommended first product feature was the **donor
+needs board**, done as Task 25 (`e72d4c2`), and `HA-3` — the `/matches` distance
+disclosure — followed it as Task 26 (see *Current* and D-45). What sequences behind them
+is *Backlog → E* (concurrency guard → Postgres → deployment configuration), with `HA-3a`
+(the residual membership oracle, group A) the nearest remaining security item.
 
 ---
 
@@ -319,17 +344,31 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 - [x] ✅ **Done (Task 21, `e7032ea`)** — `HA-1`: `GET /api/volunteers` is scoped by
       `_visible_volunteers`, so an `ngo` reads only the couriers on its own donations.
       `[HA-1 · D-26 · repo]` — **S**
-- [ ] **`HA-3` · `GET /donations/{id}/matches` gives back the recipient coordinates D-26
-      withholds.** A donor reads `200 []` from `GET /api/recipients` by design, then posts
-      three donations at pins of its own choosing and trilaterates any verified kitchen from
-      `MatchOut.distanceKm`. Reproduced: recovered `(30.3600, 76.3700)` exactly, first try.
-      Whether it matters is a product judgement — a community kitchen's address is often
-      public, a shelter's may not be — but it is a demonstrated bypass of a scoping decision
-      made on purpose, so it should be answered rather than left unrecorded. Cheapest
-      mitigation: round `MatchOut.distance_km` to ~0.5 km, which no screen and no score
-      notices (the UI shows one decimal; `_distance_score` decays linearly over 8 km).
-      ⚠️ **Do not remove the field** — I-2/D-33 depends on it for every NGO distance shown.
-      `[HA-3 · D-26 · D-33]` — **S**
+- [x] ✅ **Done (Task 26, uncommitted)** — `HA-3`: a match describes the reader's own
+      organisation from its real position and every other from a ~1 km surrogate, so
+      `distanceKm`, `distanceScore`, `deadlineScore`, `overallScore` and the `reasons`
+      sentence are all functions of one blurred point rather than of the kitchen.
+      ⚠️ **This item's own proposed mitigation was wrong**: rounding `distance_km` to
+      ~0.5 km leaves the rounding boundaries at known distances, so walking the pin until
+      one flips still recovers a circle of known radius and three of those still give the
+      exact point. D-45 records what was done instead and why the seam had to sit upstream
+      of the scoring arithmetic rather than in `serialize.py`. `[HA-3 · D-26 · D-33 · D-45]` — **S**
+- [ ] **`HA-3a` · ranking membership is still a coordinate oracle.** A recipient appears in
+      `/matches` iff the *true* distance is within the 8 km radius, so a donor who
+      binary-searches the pin can find points on that circle and trilaterate from three of
+      them — tens of donations rather than three, but the same recovery. D-45 deliberately
+      did not touch this: the gate is D-06's and the matcher's correctness rests on it. The
+      control is abuse-limiting on `POST /api/donations` (nothing rate-limits it today;
+      `ratelimit.py` covers login and registration only), not another distance
+      representation. `[HA-3a · D-06 · D-27 · D-45 · repo]` — **M**
+- [ ] **`HA-3b` · two smaller distance readings outside `/matches`.** Found while
+      implementing D-45, both left alone as out of that task's scope. `Donation.match_score`
+      is frozen from a precise ranking and shown to the donor who chose the pin — one number
+      per donation, about whichever kitchen ranked first, resolving to ~320 m. And
+      `DonationOut.distanceKm` is the exact donor-pin-to-kitchen distance once a recipient
+      binds, readable by the donor; weaker, because the donor does not choose which kitchen
+      accepts. Neither is the reproduced bypass `HA-3` was, and fixing them touches D-30's
+      frozen score and `serialize.donation_out`. `[HA-3b · D-30 · D-45 · repo]` — **S**
 - [ ] Security headers + CSP (and HSTS wherever TLS terminates). Nothing is sent today. A
       CSP is the single largest mitigation available for the localStorage-token choice the
       project has deliberately accepted (D-13). `[R-21 · S-7]` — **S**
@@ -956,9 +995,53 @@ external.
 
 ## Completed (verified in the repository)
 
+### The donor needs board and requirement read scope — **`e72d4c2`** `[QA-3 · §8.2 · D-44]`
+
+Task 25. **Donors have a real read-only Needs Board, and `GET /api/requirements` is scoped by role
+for the first time.** The board reads through the existing `useRequirements()` flow — no
+new endpoint, no second fetch, no duplicate state — and the scope decision it forced is
+recorded as D-44. **No schema change, no migration, no new Requirement field, and
+`matching.py` is untouched.**
+
+- **Backend scope.** `routers/organisations._visible_requirements(user)` returns a WHERE
+  clause in the shape `_visible_recipients` / `_visible_volunteers` already use: admin →
+  every active need; **donor → needs from *verified* recipients**; ngo → its own only;
+  volunteer → none; unknown role → `false()`. Applied inside the existing query, so
+  authentication, active-only and newest-first are unchanged, and denial is an empty list
+  rather than a 403.
+- **`RequirementOut` gained `isVerified`,** read from `Recipient.is_verified` at
+  serialisation. It is not a column and nothing backfills: an administrator vouching for an
+  organisation makes its existing needs visible immediately.
+- **New `pages/donor/DonorNeedsBoard.tsx` at `/donor/needs`,** plus a *Needs Board* entry
+  in `DonorLayout`'s nav. Each card carries the organisation and its verified state, the
+  food, quantity and unit, urgency, beneficiaries **when stated** (the field defaults to 0,
+  which means "not said" rather than "nobody"), whether it recurs, the operator notes, and
+  `timeAgo(createdAt)`. Loading, empty and failure states use `useLoadState()` and the
+  existing `EmptyState` primitive.
+- **Nothing on it claims a commitment.** No fulfil action, no needs-met count, no
+  statistic the page was not given, and a line saying plainly that posting a donation does
+  not attach it to a need — because nothing in the system connects the two. D-31 at a new
+  boundary.
+- **The NGO client-side `myRecipient` filter was kept** on both the desktop and mobile
+  requirement screens, deliberately, even though the server now enforces the same scope.
+- **`notes` is now donor-facing.** It is operator-authored free text and is rendered
+  through ordinary React interpolation; there is no `dangerouslySetInnerHTML` anywhere in
+  the change, and a test asserts markup inside a note stays text.
+- **Tests.** New `code/tests/test_requirement_reads.py` (14) and
+  `frontend/src/pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14). One existing test —
+  `test_retiring_one_requirement_leaves_the_rest_of_the_board_alone` — asserted a rival
+  kitchen's need stayed on *this* caller's board, which was only true while the endpoint
+  was unscoped; it now checks that need on the rival's own board.
+
+Validation: `pytest code/tests` **230/230** (216 → 230, ~157 s), `npm test` **58/58**
+(8 files), `npm run typecheck` clean, `npm run build` clean, and the board read in a
+browser against a seeded throwaway database — a donor sees the two verified organisations'
+needs and not the unverified one's, an NGO sees only its own, and an NGO requirement edit
+still round-trips.
+
 ### Landing page: no platform figure without a source — **`9b11353`** `[HA-6 · I-1a · QA-4]`
 
-Task 24 / *Next* step 4. In the working tree, not yet committed. **One page changed**
+Task 24 / *Next* step 4. **One page changed**
 (`frontend/src/pages/Landing.tsx`) and **one test file added**; no other application source,
 no backend, schema, API, routing or dependency change. Detail under *Current*. **This closes
 group I**: every interface claim the QA audit found the system could not honour is now

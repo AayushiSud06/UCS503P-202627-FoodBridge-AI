@@ -130,7 +130,9 @@ export interface Delivery {
 
 export interface MatchAnalysis {
   recipientName: string;
-  distanceKm: number;
+  /** Null unless this match is about the reader's own organisation — see
+   *  `ApiMatch.distanceKm`. */
+  distanceKm: number | null;
   overallScore: number;
   distanceScore: number;
   quantityScore: number;
