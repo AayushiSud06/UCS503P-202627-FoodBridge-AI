@@ -2,11 +2,11 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, HEAD `e7032ea`
-> (Task 21: roster scope, pickup release, image bound). ⚠️ **The working tree carries the
-> uncommitted Task 22 matcher correction** (`HA-4`, `HA-5`; 216 backend tests pass) **and the
-> uncommitted Task 23 frontend test harness** (`HA-8`, `R-14`; 40 frontend tests pass, no
-> application source file touched). The two are independent.
+> Last verified against the repository: 2026-09-05, branch `master`, HEAD `f33aeae`
+> (Task 23: the frontend test harness). The Task 22 matcher correction is committed as
+> `a9f190b` and the Task 23 harness as `f33aeae`. ⚠️ **The working tree carries the
+> uncommitted Task 24 landing-page content correction** (`HA-6`; one page and one new test
+> file, 44 frontend tests pass, no other application source touched).
 > See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
@@ -18,7 +18,8 @@
 > audit against `23c27f4` on 2026-09-02, and a **full project health audit against
 > `c274e99` on 2026-09-05**. The health audit's confirmed findings are issues 23–28 below
 > and tag `HA-n` in `TASKS.md`. **23, 24 and the `image_url` half of 13 are fixed in
-> `e7032ea`; 26 and 27 are fixed in the working tree.** Open: 25 (`HA-3`) and 28 (`HA-6`).
+> `e7032ea`; 26 and 27 in `a9f190b`; 28 is fixed in the working tree.** Open: 25 (`HA-3`)
+> alone.
 
 ## What this project is
 
@@ -40,7 +41,7 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) are all done. ⚠️ **The one screen still printing invented figures is the pre-login landing page** (I-1a, and it is wider than first recorded — see issue 28) |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
 | Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients **and couriers** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed). ⚠️ Still open: `/matches` discloses recipient geometry (issue 25) and `GET /api/requirements` is unscoped by omission |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
@@ -476,15 +477,16 @@ interface claims the QA audit found the system could not honour) is complete exc
 landing page. What replaced them is the health audit's six confirmed findings, and unlike
 group I they are **defects in the running system, not in its description**.
 
-**Steps 1, 2 and 3 of that sequence are done** — step 1 (`HA-1`, `HA-2`, the `image_url`
-cap) as `e7032ea`, step 2 (the matcher's scoring, `HA-4`/`HA-5`) and step 3 (the frontend
-test harness, `HA-8`/`R-14`) uncommitted in the working tree.
+**Steps 1–4 of that sequence are done** — step 1 (`HA-1`, `HA-2`, the `image_url` cap) as
+`e7032ea`, step 2 (the matcher's scoring, `HA-4`/`HA-5`) as `a9f190b`, step 3 (the frontend
+test harness, `HA-8`/`R-14`) as `f33aeae`, and step 4 (the landing page, `HA-6`)
+uncommitted in the working tree. **Group I is now complete**, which closes the QA audit's
+interface-honesty programme: no screen in the project states a capability the system
+cannot honour.
 
-**The next task is step 4 — finishing the landing page** (`HA-6`), the one screen still
-printing invented figures. Two smaller pieces of step 3 were deliberately left out and are
-now in `TASKS.md` → *Backlog → D*: adding `npm test` to `ci.yml`, and the dead
-`npm run lint` script (*Backlog → H*), which has always referenced an `eslint` that is not
-a dependency.
+Two smaller pieces of step 3 were deliberately left out and are now in `TASKS.md` →
+*Backlog → D*: adding `npm test` to `ci.yml`, and the dead `npm run lint` script
+(*Backlog → H*), which has always referenced an `eslint` that is not a dependency.
 
 **Then stop hardening.** The audit's strategic conclusion is that the remaining backlog
 splits into things that are *broken* (steps 1–3 of *Next*, two to three days) and things
@@ -570,12 +572,18 @@ stable as items are resolved, so gaps are expected.
     three criteria rather than five. That is honest, not a regression, but the platform's
     headline score is less discriminating for those donations until a real unit model
     exists.
-28. **The landing page fabricates more than I-1a recorded.** Beyond the four-stat strip at
-    `pages/Landing.tsx:8-13`, there is a second block at `:163-181` — a card with a pulsing
-    green dot captioned **"Live this term"**, printing `1,240+`, "meals redistributed across
-    32 partner NGOs" and **"18% more than last month"** — plus `HOW_IT_WORKS`'s claim that
-    impact updates "**in real time** on every dashboard". This is D-31's worst category (a
-    literal wearing a measurement's clothes) on the only page seen before login. `HA-6`.
+28. ✅ **Resolved (working tree, Task 24) — the landing page no longer prints a platform
+    figure.** All three sites are gone: the four-stat strip (`1,240+` meals, `32` partner
+    organizations, `56` volunteers, `84` pickups), the hero card captioned **"Live this
+    term"** under a pulsing dot, and `HOW_IT_WORKS`'s "**in real time** on every dashboard".
+    Nothing was replaced with a substitute number — `GET /api/metrics` is behind
+    `get_current_user`, so a pre-login page has no source and the honest section is one that
+    explains **how** impact is counted rather than asserting a total. The sample match card
+    in the same page kept its figures but is now titled *Example match analysis* with an
+    *Illustrative sample* footnote, which is D-31's labelling remedy rather than a deletion:
+    the five criteria it shows are the matcher's real ones. Covered by
+    `pages/__tests__/Landing.test.tsx`, which asserts the absence of the eight literals and
+    of any "real time" wording.
 
 ### Resolved, and earlier open items (1–22)
 
@@ -692,9 +700,11 @@ credibility rather than about its correctness, and that judgement belongs in thi
     equivalences were removed rather than re-based (D-32). **`GET /api/metrics` is still
     read by the admin screens only, and deliberately so**: it is platform-wide, and a
     per-role page asking "how am I doing" must not be answered with FoodLink's total.
-    **Remaining, and now tracked as `TASKS.md` → I-1a:** `pages/Landing.tsx` still prints
-    four invented platform statistics pre-login, which cannot be fixed by reading real
-    data without a scope decision on the authenticated metrics endpoint.
+    **The remainder — `pages/Landing.tsx`'s invented pre-login statistics, tracked as I-1a
+    and widened by the audit into `HA-6` — was closed by Task 24** (issue 28). It needed no
+    scope decision on the authenticated metrics endpoint in the end: the figures were
+    removed rather than sourced, so whether a public metrics endpoint should exist stays an
+    open, optional question.
 19. ✅ **Resolved (`b5e09ee`, 2026-09-04) — the requirement screens no longer claim to
     drive matching.** Re-verified that `matching.py` never references `Requirement`, then
     corrected seven strings across the desktop and mobile requirement surfaces plus four
@@ -767,18 +777,21 @@ credibility rather than about its correctness, and that judgement belongs in thi
 ## Immediate priorities
 
 1. ✅ **Done and committed — `HA-1` + `HA-2` + the `image_url` bound** (Task 21, `e7032ea`).
-2. ✅ **Done, uncommitted — the matcher's size criteria** (Task 22, `HA-4` + `HA-5`).
-   Review and commit. 216 backend tests pass; `alembic check` clean; one source file changed.
-3. ✅ **Done, uncommitted — the frontend test harness** (Task 23, `HA-8` + `R-14`).
-   Review and commit. Vitest 3.2 + Testing Library over `lib/adapters.ts`, `lib/time.ts`,
+2. ✅ **Done and committed — the matcher's size criteria** (Task 22, `HA-4` + `HA-5`,
+   `a9f190b`). 216 backend tests pass; `alembic check` clean; one source file changed.
+3. ✅ **Done and committed — the frontend test harness** (Task 23, `HA-8` + `R-14`,
+   `f33aeae`). Vitest 3.2 + Testing Library over `lib/adapters.ts`, `lib/time.ts`,
    `lib/api.ts`, `lib/impact.ts`, `lib/geo.ts` and `ProtectedRoute`; **40 tests pass**,
    `tsc --noEmit` and `npm run build` clean, no application source file changed. ⚠️ **The
    `ci.yml` step was not added**, so the honesty invariants D-31 → D-40 are now covered by
    tests but those tests do not yet gate a build — see `TASKS.md` → *Backlog → D*.
-4. **Finish the landing page** (`HA-6` / I-1a; *Next* step 4) — two fabricated blocks and a
-   real-time claim, on the only page seen before login. **S.**
-5. Then **stop hardening and build the donor needs board** (*Blocked*) — the smallest real
-   feature in the project and the one that gives `requirements` an audience.
+4. ✅ **Done, uncommitted — the landing page** (Task 24, `HA-6` / I-1a). Review and commit.
+   Two fabricated blocks and the real-time claim are gone, replaced by copy about how the
+   system counts rather than by substitute numbers; **44 frontend tests pass**,
+   `tsc --noEmit` and `npm run build` clean; one page and one new test file changed.
+5. **Stop hardening and build the donor needs board** (*Blocked*) — the smallest real
+   feature in the project and the one that gives `requirements` an audience. This is now
+   the next task: every step of the *Next* sequence is done.
 
 Sequenced behind those, unchanged: `HA-3` (the `/matches` distance disclosure), then
 *Backlog → E* (concurrency guard → Postgres → deployment configuration), which is where the

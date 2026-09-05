@@ -1,15 +1,31 @@
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, ArrowUpRight, Leaf, Heart, Users, ShieldCheck, Sparkles,
+  ArrowRight, Leaf, Heart, Users, ShieldCheck, Sparkles,
   BarChart2, Check, MapPin, Truck, CheckCircle2, FlaskConical, Rocket,
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 
-const STATS = [
-  { value: '1,240+', label: 'Meals redistributed' },
-  { value: '32', label: 'Partner organizations' },
-  { value: '56', label: 'Active volunteers' },
-  { value: '84', label: 'Successful pickups' },
+// This page is seen before logging in and `GET /api/metrics` sits behind
+// `get_current_user`, so there is no platform figure it can honestly print. The
+// section keeps its place — the navbar anchors to `#impact` — and says how
+// impact is counted instead of asserting a total (D-31, D-32).
+const HOW_IMPACT_IS_COUNTED = [
+  {
+    title: 'Server-stamped',
+    desc: 'Every status change is written by the server into an append-only record, never entered by hand.',
+  },
+  {
+    title: 'Explainable scores',
+    desc: 'A match score is a weighted sum of five published criteria, each one shown beside it.',
+  },
+  {
+    title: 'Verified recipients',
+    desc: 'Only organizations an administrator has verified are ranked as candidates for a donation.',
+  },
+  {
+    title: 'Your own figures',
+    desc: 'Dashboards total the records your account holds — sign in to see them.',
+  },
 ];
 
 const HOW_IT_WORKS = [
@@ -34,7 +50,7 @@ const HOW_IT_WORKS = [
   {
     title: 'Track',
     icon: BarChart2,
-    desc: 'Meals saved and community impact update in real time on every dashboard.',
+    desc: "Each dashboard totals the handovers your account holds, computed from the server's record when the page loads.",
     ring: 'bg-sky-100 text-sky-700',
   },
 ];
@@ -160,22 +176,25 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* Floating live-stat card */}
+            {/* Floating card: what the system records, not what it has achieved. */}
             <div className="hidden lg:block relative">
               <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 rotate-[3deg] hover:rotate-0 transition-transform duration-300">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <ShieldCheck size={13} className="text-emerald-600" />
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                    Live this term
+                    How a handover is recorded
                   </span>
                 </div>
-                <p className="font-display text-4xl font-semibold text-gray-900">1,240+</p>
-                <p className="text-sm text-gray-500 mt-1 leading-snug">
-                  meals redistributed across 32 partner NGOs
+                <p className="font-display text-2xl font-semibold text-gray-900 leading-snug">
+                  Listed &rarr; matched &rarr; collected &rarr; confirmed
+                </p>
+                <p className="text-sm text-gray-500 mt-2 leading-snug">
+                  The server stamps each step as it happens, so impact is counted from the
+                  record rather than self-reported.
                 </p>
                 <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs font-medium text-emerald-700">
-                  <ArrowUpRight size={14} />
-                  18% more than last month
+                  <ArrowRight size={14} />
+                  Sign in to see your own figures
                 </div>
               </div>
             </div>
@@ -183,17 +202,22 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Impact Stats ───────────────────────────────────────────────────── */}
+      {/* ── How impact is counted ──────────────────────────────────────────── */}
       <section id="impact" className="bg-white border-y border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <div className="grid grid-cols-2 lg:grid-cols-4 divide-y divide-x-0 lg:divide-y-0 lg:divide-x divide-gray-200">
-            {STATS.map((s) => (
-              <div key={s.label} className="text-center px-4 py-6 lg:py-0">
-                <p className="font-display text-4xl lg:text-5xl font-semibold text-gray-900 mb-1.5">{s.value}</p>
-                <p className="text-sm text-gray-500">{s.label}</p>
+            {HOW_IMPACT_IS_COUNTED.map((item) => (
+              <div key={item.title} className="text-center px-4 py-6 lg:py-0">
+                <p className="font-display text-xl lg:text-2xl font-semibold text-gray-900 mb-1.5">{item.title}</p>
+                <p className="text-sm text-gray-500 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
+
+          <p className="mt-10 text-center text-xs text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            FoodLink AI is a university prototype. Platform-wide totals are derived from that
+            record and are only shown to signed-in accounts, so none are published here.
+          </p>
         </div>
       </section>
 
@@ -304,8 +328,8 @@ export default function Landing() {
             {/* Mock AI card */}
             <div className="bg-white rounded-2xl p-6 sm:p-7 text-gray-900 shadow-2xl">
               <div className="flex items-center gap-2 mb-5">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-xs font-bold tracking-wider text-emerald-700 uppercase">Match analysis</span>
+                <span className="w-2 h-2 bg-emerald-500 rounded-full" />
+                <span className="text-xs font-bold tracking-wider text-emerald-700 uppercase">Example match analysis</span>
               </div>
 
               <div className="flex items-start justify-between mb-5">
@@ -348,6 +372,11 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
+
+              <p className="mt-4 text-[11px] italic text-gray-400 leading-relaxed">
+                Illustrative sample. A real score is computed per donation from the criteria
+                above and is only shown to the account it belongs to.
+              </p>
             </div>
           </div>
         </div>

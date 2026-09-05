@@ -12,8 +12,8 @@
 > which is HEAD. Re-verified in the project health audit of 2026-09-05, which changed no
 > source; the corrections it produced are marked in D-05, D-17, D-26 and D-35. **D-41**
 > (courier read scope and the release's second meaning) is committed as `e7032ea`.
-> **D-42** (matcher unit comparability and the absolute headroom criterion) is in the
-> working tree, uncommitted, as is **D-43** (the frontend test harness).
+> **D-42** (matcher unit comparability and the absolute headroom criterion) is committed as
+> `a9f190b` and **D-43** (the frontend test harness) as `f33aeae`, which is HEAD.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -942,10 +942,14 @@ twelve findings against this line; the resulting work is `TASKS.md` → *Backlog
 - ⚠️ **This is not a licence to delete features.** Where a real value exists and only the
   label is wrong — the frozen match score before D-30, `distanceKm` in the open pool today
   — the answer is to show the real value correctly, not to remove the surface.
-- **Nothing enforces it automatically.** There is no lint rule and no frontend test suite
-  to hold it (`TASKS.md` → *Backlog → D*), so it is a review habit: when a screen states a
-  fact, the reviewer asks which row or function produced it. The audit is what a manual
-  pass of that check looks like, and it took one sitting.
+- **Enforcement is mostly still a review habit.** There is no lint rule, and the frontend
+  suite D-43 established covers the arithmetic behind these claims rather than the claims
+  themselves — with one exception: `pages/__tests__/Landing.test.tsx` asserts the *absence*
+  of the landing page's eight retired literals and of any "real time" wording, which is the
+  first place D-31 is held mechanically. Everywhere else the check is manual: when a screen
+  states a fact, the reviewer asks which row or function produced it. The audit is what a
+  manual pass of that looks like, and it took one sitting. ⚠️ Neither gate runs in CI yet
+  (`TASKS.md` → *Backlog → D*).
 - **The seed data is inside the boundary.** `seed.py` writing a literal `94 - i * 3` into
   `match_score` is what put an invented number on screen next to a real one (D-30), and it
   now ranks through `rank_recipients` like the API does. Demo data that does not come from
@@ -1015,13 +1019,17 @@ Three consequences follow, and they were the substance of I-1:
   null until a donation has a recipient. Every screen showing it now says "straight-line".
   Whether road distance should exist is `TASKS.md` → *Blocked*; the routing claims
   elsewhere in the interface were closed by I-2 and are recorded in **D-33**.
-- **The public landing page is out of scope and still fabricates.** `pages/Landing.tsx`
-  prints four literal platform statistics. `/api/metrics` requires authentication, so a
-  pre-login page cannot read the real ones without a scope decision — see `TASKS.md` →
-  *Backlog → I*.
-- **Nothing tests this.** There is still no frontend test suite, so `tsc` is the only
-  automated gate on `lib/impact.ts`. It is pure and takes plain arrays, which makes it the
-  most testable module in the frontend the moment one exists.
+- ✅ **The public landing page no longer fabricates** (Task 24, `HA-6`; working tree).
+  `/api/metrics` requires authentication, so a pre-login page still cannot read a real
+  total — and the resolution was to **stop asserting one** rather than to open the endpoint.
+  The sections stayed and now describe *how* impact is counted; a substitute literal would
+  have been the same defect at a lower volume. Where the underlying structure was honest and
+  only the framing implied liveness — the page's sample match card, over the matcher's real
+  five criteria — D-31's labelling remedy was used instead. Whether a **public** metrics
+  endpoint should exist is unchanged by this and remains open and optional.
+- **This is now tested.** D-43's suite covers `lib/impact.ts` directly (6 tests), so `tsc`
+  is no longer the only automated gate. It is pure and takes plain arrays, which is why it
+  was among the first modules the harness seeded.
 
 ---
 
@@ -1082,9 +1090,9 @@ name) because it read `distanceKm` on donations that structurally never carry on
 - **This does not decide whether road distance should exist.** That is still `TASKS.md` →
   *Blocked* / `R-30`. I-2 only ensures the interface is honest under either answer; if
   routing is ever added, `displayDistanceKm` is the single place the meaning changes.
-- **Nothing tests it.** There is still no frontend test suite, so `tsc` remains the only
-  automated gate. `displayDistanceKm` is pure and takes a plain object, so it is trivially
-  testable once one exists.
+- **This is now tested.** D-43's suite covers `lib/geo.ts` (4 tests), including a mutation
+  check that inverting the precedence below passes `tsc` and fails the suite. `tsc` is no
+  longer the only automated gate.
 
 ---
 

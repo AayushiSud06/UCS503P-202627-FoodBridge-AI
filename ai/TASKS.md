@@ -1,8 +1,9 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05. HEAD is `e7032ea` (Task 21: roster scope,
-> pickup release, image bound); the working tree carries the **uncommitted Task 22 matcher
-> correction** described under *Current* — `HA-4` and `HA-5`.
+> Verified against the repository on 2026-09-05. HEAD is `f33aeae` (Task 23: the frontend
+> test harness); the working tree carries the **uncommitted Task 24 landing-page content
+> correction** described under *Current* — `HA-6`. Task 22's matcher correction is
+> committed as `a9f190b`.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
@@ -34,11 +35,43 @@
 
 ## Current
 
-**Uncommitted in the working tree: Tasks 22 and 23 — *Next* steps 2 and 3, both complete.**
-Two independent changes sit side by side: the matcher correction (backend, below) and the
-frontend test harness (frontend only, no source file touched). Neither depends on the other.
+**Uncommitted in the working tree: Task 24 — *Next* step 4, complete.** Frontend only, one
+page and one new test file. Tasks 22 and 23 are now committed (`a9f190b`, `f33aeae`) and
+have moved to *Completed*.
 
-### Task 23 — the frontend test harness (*Next* step 3)
+### Task 24 — the landing page (*Next* step 4)
+
+**`pages/Landing.tsx` no longer prints a platform figure.** All three sites the health
+audit recorded are gone, and **nothing was replaced with a substitute number**: `GET
+/api/metrics` is behind `get_current_user`, so a pre-login page has no source, and inventing
+a smaller literal would have been the same defect at a lower volume.
+
+- **The four-stat strip → how impact is counted.** `1,240+` meals, `32` partner
+  organizations, `56` volunteers and `84` pickups are replaced by four non-numeric claims
+  the repository backs: server-stamped status events, a weighted sum of five published
+  criteria, the verified-recipient gate (`matching.py:195`), and per-account figures from
+  `lib/impact.ts`. The section keeps its `#impact` id — `Navbar` anchors to it — its grid
+  and its dividers; only the cell contents changed. A caption says plainly why no total is
+  published.
+- **The hero "Live this term" card → how a handover is recorded.** The pulsing dot,
+  `1,240+`, "32 partner NGOs" and "18% more than last month" are gone; the card keeps its
+  rotation, shadow and three-part layout and now names the lifecycle it actually stamps.
+- **`HOW_IT_WORKS`'s "in real time" → what the dashboards actually do.** They total the
+  account's own records when the page loads. There is still no polling, SSE or WebSocket
+  (`ARCHITECTURE.md` constraint 7).
+- **The sample match card was labelled, not deleted** — *Example match analysis*, a static
+  dot in place of the pulsing one, and an *Illustrative sample* footnote. Its five criteria
+  are the matcher's real ones (`WEIGHTS`), so D-31's labelling remedy applies rather than
+  removal. It was not in the audit's list; it is the same defect and it was one label away.
+- **New: `pages/__tests__/Landing.test.tsx`** (4 tests). It asserts the **absence** of the
+  eight literals and of any "real time"/"live" wording, plus the `#impact` anchor — so a
+  redesign stays free while a reintroduced figure fails.
+
+Validation: `npm test` **44/44** (7 files), `npm run typecheck` clean, `npm run build`
+clean, and the page read in the running dev server at desktop and tablet widths with no
+console errors. The backend suite was **not** re-run — no backend file was touched.
+
+### Task 23 — the frontend test harness (*Next* step 3, committed `f33aeae`)
 
 **`npm test` in `frontend/` runs 40 tests over 6 files in ~1.5 s, all passing.** Vitest 3.2
 + Testing Library, configured as a `test` block in the project's existing `vite.config.ts`
@@ -120,14 +153,14 @@ the contract held.
 
 ## Next — hardening (recommended, ordered)
 
-**Steps 1, 2 and 3 are done** — step 1 as `e7032ea`, steps 2 and 3 uncommitted (see
-*Current*).
+**All four steps are done** — step 1 as `e7032ea`, step 2 as `a9f190b`, step 3 as
+`f33aeae`, step 4 uncommitted (see *Current*).
 These four steps are the health audit's confirmed defects in the order it recommended, and
 they are a bounded list rather than an open-ended hardening programme: its strategic
 conclusion is that everything *after* step 4 is unbuilt infrastructure rather than broken
 behaviour, and should be sequenced with the deployment it serves rather than ahead of it.
-**Steps 1–3 are done; the next task is step 4.** Promotion into *Current* is still a
-Project Manager call.
+**Steps 1–4 are done; the next task is the donor needs board** (*Blocked*). Promotion into
+*Current* is still a Project Manager call.
 
 ### ✅ Step 1 — the three demonstrated defects — **DONE (Task 21, `e7032ea`)**
 
@@ -168,7 +201,7 @@ because each is a few lines and each needs a regression test that does not exist
       mutation, so one photo is 3 MB on every write by every user. This is the cheap guard;
       object storage (group F) remains the real fix. `[B-6 · R-19 · S-6 · HA-7]`
 
-### ✅ Step 2 — repair the matcher's scoring — **DONE (Task 22, uncommitted)**
+### ✅ Step 2 — repair the matcher's scoring — **DONE (Task 22, `a9f190b`)**
 
 `[HA-4 · HA-5 · R-13 · D-05 · D-42]` — **M**. Delivered as one file, `matching.py`, with no
 schema, API or frontend change and no weight touched.
@@ -193,7 +226,7 @@ schema, API or frontend change and no weight touched.
       ⚠️ **Do not re-tune `WEIGHTS` before this lands** (`Backlog → G`, `R-31`): tuning two
       collinear criteria is tuning noise.
 
-### ✅ Step 3 — a frontend test harness — **DONE (Task 23, uncommitted)**
+### ✅ Step 3 — a frontend test harness — **DONE (Task 23, `f33aeae`)**
 
 `[HA-8 · R-14]` — **M**.
 
@@ -206,10 +239,11 @@ schema, API or frontend change and no weight touched.
 - [ ] ⚠️ **Not done: the dead `npm run lint` script.** Left untouched as unrelated to the
       harness; still in *Backlog → H*.
 
-### Step 4 — `HA-6` · finish the landing page
+### ✅ Step 4 — `HA-6` · finish the landing page — **DONE (Task 24, uncommitted)**
 
-`[HA-6 · QA-4 · repo]` — **S**. Supersedes I-1a, which was scoped too narrowly. Detail in
-*Backlog → I*.
+`[HA-6 · QA-4 · repo]` — **S**. Superseded I-1a, which was scoped too narrowly. Three sites
+removed, one labelled, no substitute number introduced; detail under *Current*. **Group I is
+now complete.**
 
 **Then stop hardening.** The audit's recommended first product feature is the **donor needs
 board** (*Blocked*): **S**, no endpoint or schema change, over data `AppContext.load()`
@@ -503,29 +537,30 @@ Places where a shipped feature is incomplete — not new ideas.
       `DECISIONS.md` D-32; verified in the running app against the dev database for a donor,
       an NGO and a courier on desktop and `/m/*`.
 
-- [ ] **I-1a / `HA-6` · The public landing page still prints invented platform figures —
-      in two places, not one.** `[repo · QA-4 · HA-6]` — **S**, *Next* step 4.
-      ⚠️ **This entry was scoped too narrowly and the health audit widened it.** Three sites,
-      all in `pages/Landing.tsx`:
+- [x] **I-1a / `HA-6` · The public landing page no longer prints invented platform
+      figures.** `[repo · QA-4 · HA-6]` — **done, Task 24, uncommitted in the working
+      tree.** All three sites in `pages/Landing.tsx` are closed, and the chosen remedy was
+      **delete, not relabel**, for the two that asserted totals:
 
-      1. `:8-13` — the four-stat strip: `1,240+` meals redistributed, `32` partner
-         organisations, `56` active volunteers, `84` successful pickups, rendered as facts.
-         (The first is the same literal I-1 removed from `NGOImpact`.)
-      2. `:163-181` — **the block I-1a did not record**: a card with a pulsing green dot
-         captioned **"Live this term"**, printing `1,240+`, "meals redistributed across 32
-         partner NGOs" and **"18% more than last month"**. This is D-31's worst category — a
-         literal wearing a measurement's clothes, under an indicator asserting liveness — on
-         the only page anyone sees before logging in.
-      3. `HOW_IT_WORKS` — "Meals saved and community impact update **in real time** on every
-         dashboard." Nothing updates in real time; there is no polling, no SSE and no
-         WebSocket anywhere (`ARCHITECTURE.md` constraint 7).
+      1. The four-stat strip (`1,240+` meals, `32` partner organisations, `56` volunteers,
+         `84` pickups) is now four non-numeric claims the repository backs, under the same
+         `#impact` id, grid and dividers.
+      2. The "Live this term" hero card no longer carries a pulsing dot, `1,240+`,
+         "32 partner NGOs" or "18% more than last month"; it names the lifecycle the server
+         actually stamps.
+      3. `HOW_IT_WORKS`'s "**in real time** on every dashboard" now says the dashboards total
+         the account's own records when the page loads.
 
-      **It no longer needs a decision first.** The original entry was blocked on whether any
-      metric may be read without authentication, because `GET /api/metrics` is
-      `Depends(get_current_user)`. Both honest options need no backend change and no
-      decision: delete the figures, or relabel the section as illustrative. A public metrics
-      endpoint remains a separate, optional question (D-26's neighbour) and should not hold
-      this up.
+      A fourth site the audit did not record — the sample match card, whose figures sat under
+      a pulsing dot captioned "Match analysis" — was **labelled rather than deleted**: its
+      five criteria are the matcher's real ones, so D-31's labelling remedy applies. It reads
+      *Example match analysis* with an *Illustrative sample* footnote.
+
+      **No decision was needed in the end.** The original entry was blocked on whether any
+      metric may be read without authentication (`GET /api/metrics` is
+      `Depends(get_current_user)`). Removing the figures made the question moot: whether a
+      **public metrics endpoint** should exist is still open, still optional, and still
+      D-26's neighbour. Covered by `pages/__tests__/Landing.test.tsx` (4 tests).
 
 - [x] **I-2 · Remove the live-tracking and road-routing claims.** `[QA-1 · QA-10 · repo]` — **done,
       commit `fcbd03b`, 2026-09-03.** The audit's findings were all confirmed against
@@ -870,9 +905,37 @@ external.
 
 ## Completed (verified in the repository)
 
-### Frontend test harness — **uncommitted** `[HA-8 · R-14]`
+### Landing page: no platform figure without a source — **uncommitted** `[HA-6 · I-1a · QA-4]`
 
-Task 23 / *Next* step 3. In the working tree, not yet committed. **40 frontend tests over
+Task 24 / *Next* step 4. In the working tree, not yet committed. **One page changed**
+(`frontend/src/pages/Landing.tsx`) and **one test file added**; no other application source,
+no backend, schema, API, routing or dependency change. Detail under *Current*. **This closes
+group I**: every interface claim the QA audit found the system could not honour is now
+either true or labelled as future work.
+
+- [x] **The two blocks that asserted totals lost their numbers rather than gaining smaller
+      ones.** A pre-login page has no authenticated source, so any figure would be a literal;
+      the sections were kept and re-pointed at *how* the system counts — server-stamped
+      status events, five published criteria, the verified-recipient gate, per-account
+      arithmetic in `lib/impact.ts`. Every replacement claim was checked against source.
+- [x] **The "in real time" claim is gone.** `ARCHITECTURE.md` constraint 7 still holds:
+      no polling, no SSE, no WebSocket.
+- [x] **The sample match card was labelled, not removed** — D-31 treats labelling as a real
+      remedy where the underlying structure is honest, and its five criteria are `WEIGHTS`.
+- [x] **`pages/__tests__/Landing.test.tsx`** — 4 tests asserting the absence of the eight
+      literals and of "real time"/"live" wording, plus the `#impact` anchor `Navbar` links
+      to. The frontend suite is **44 tests over 7 files**. Written as absence assertions so
+      it constrains honesty, not layout.
+- [x] Validation: `npm test` 44/44, `npm run typecheck` clean, `npm run build` clean, and
+      the rendered page inspected in the dev server (desktop and tablet widths, no console
+      errors).
+- ⚠️ **Structure and styling were preserved deliberately.** This was a content-correctness
+      task, not a redesign; the grid, dividers, card rotation and section ids are unchanged.
+
+
+### Frontend test harness — `f33aeae` `[HA-8 · R-14]`
+
+Task 23 / *Next* step 3, committed as `f33aeae`. **40 frontend tests over
 6 files, ~1.5 s, all passing.** No application source file was modified — the change is
 four devDependencies, a `test` block in `vite.config.ts`, two `package.json` scripts and
 seven new files under `frontend/src`. Decision recorded as **D-43**.
@@ -913,9 +976,9 @@ seven new files under `frontend/src`. Decision recorded as **D-43**.
       E2E, no visual regression, no coverage threshold — none were in scope.
 
 
-### Matcher correctness: unit comparability and absolute headroom — **uncommitted** `[HA-4 · HA-5]`
+### Matcher correctness: unit comparability and absolute headroom — `a9f190b` `[HA-4 · HA-5]`
 
-Task 22 / *Next* step 2. In the working tree, not yet committed. 191 → **216 tests**;
+Task 22 / *Next* step 2, committed as `a9f190b`. 191 → **216 tests**;
 `alembic check` clean; **one source file changed** (`code/foodlink/matching.py`); no schema,
 migration, API, frontend, dependency or configuration change; no weight altered.
 
@@ -971,7 +1034,7 @@ migration, API, frontend, dependency or configuration change; no weight altered.
 - [x] See `DECISIONS.md` D-42.
 
 
-### Foundation hardening: roster scope, pickup release, image bound — **uncommitted** `[HA-1 · HA-2 · HA-7]`
+### Foundation hardening: roster scope, pickup release, image bound — `e7032ea` `[HA-1 · HA-2 · HA-7]`
 
 Task 21 / *Next* step 1, committed as `e7032ea`. 168 → **191 tests**;
 `alembic check` clean; no schema, migration, frontend, dependency or configuration change.
