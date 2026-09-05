@@ -33,6 +33,33 @@ WEIGHTS: dict[str, float] = {
 #: than scores.
 COLD_STORAGE = {"Refrigerated", "Frozen"}
 
+#: The unit `Recipient.capacity` is counted in.
+#:
+#: There is no `capacity_unit` column and none was added: the product already
+#: fixes this in three places — the NGO profile field is labelled "Max Batch
+#: Capacity (Meals)", the mobile profile prints "<n> meals", and
+#: `frontend/src/types/index.ts` documents it as "max meals they can handle".
+#: This constant names what those already agree on so the matcher stops
+#: assuming it silently.
+CAPACITY_UNIT = "Meals"
+
+#: What the two size criteria score when the donation's unit cannot be compared
+#: with `CAPACITY_UNIT`.
+#:
+#: Neither credited nor penalised. The unit is a property of the *donation*, so
+#: an unassessable one is unassessable for every candidate alike — the value is
+#: identical across the whole ranking and therefore cannot reorder it. What is
+#: left deciding the ranking is distance, deadline and reliability, which is
+#: exactly the information that remains meaningful. See `DECISIONS.md` D-42.
+UNASSESSED_SIZE_SCORE = 50
+
+#: Spare capacity, in meals, at which a kitchen counts as keeping a full day's
+#: room after taking a donation. Anchored on the default `Recipient.capacity`
+#: of 100: retaining that much means a default-sized kitchen's entire service
+#: is still free. Saturating rather than linear-to-capacity is what stops this
+#: criterion collapsing back into the fit ratio — see `_capacity_score`.
+FULL_HEADROOM_MEALS = 100
+
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in kilometres."""
@@ -67,11 +94,38 @@ def _distance_score(distance_km: float, radius_km: float) -> int:
     return round(100 * (1 - distance_km / radius_km))
 
 
-def _quantity_score(quantity: int, capacity: int) -> int:
-    """Best when the donation nearly fills, but does not exceed, capacity.
+def is_comparable_unit(unit: str) -> bool:
+    """Can a donation counted in `unit` be measured against `Recipient.capacity`?
 
-    Under-filling wastes a trip; over-filling means food the kitchen cannot
-    use in time. The peak sits at 100% of capacity and falls off either side.
+    Only if it is already in the same unit. `Donation.unit` is free text on the
+    wire (`String(24)`, no enum) and the product's picker offers Meals, Kg,
+    Boxes and Pieces — of which only Meals is what capacity counts.
+
+    **Nothing here converts, because the repository holds nothing to convert
+    with.** There is no mass or portion field on a donation, no per-category
+    yield table, and no conversion rule anywhere in the codebase; the frontend
+    reached the same conclusion for impact totals and says so in
+    `lib/impact.ts`. Inventing "1 box = n meals" would put a fabricated number
+    inside the one score the platform asks to be checked by hand (D-05).
+
+    Matching is deliberately strict: an unrecognised unit is not comparable, so
+    a new unit added later is unassessed rather than silently mismeasured.
+    """
+    return unit.strip().casefold() == CAPACITY_UNIT.casefold()
+
+
+def _quantity_score(quantity: int, capacity: int) -> int:
+    """How well the donation's *size* suits this kitchen — a relative measure.
+
+    Best when the donation nearly fills, but does not exceed, capacity.
+    Under-filling wastes a trip; over-filling means food the kitchen cannot use
+    in time. The peak sits at 100% of capacity and falls off either side.
+
+    Unchanged, and deliberately a pure function of `quantity / capacity`: "does
+    this fit" is a question about proportion. What changed is its partner —
+    `_capacity_score` used to answer the same question upside down.
+
+    Both arguments are in `CAPACITY_UNIT`; the caller checks that first.
     """
     if capacity <= 0:
         return 0
@@ -84,12 +138,34 @@ def _quantity_score(quantity: int, capacity: int) -> int:
 
 
 def _capacity_score(quantity: int, capacity: int) -> int:
-    """Headroom the recipient retains after taking this donation."""
+    """How much room the kitchen keeps afterwards — an *absolute* measure.
+
+    Spare meals left over, saturating at `FULL_HEADROOM_MEALS`. Zero once the
+    donation would not fit at all.
+
+    ⚠️ **This is the fix for a real defect, not a re-tuning.** It used to return
+    `100 * (1 - 0.5 * quantity / capacity)`, which is a function of the same
+    ratio `_quantity_score` uses — and, over the whole feasible range, an exact
+    affine function of `_quantity_score` itself. The two criteria were one
+    criterion counted twice in opposite directions: their weighted contribution
+    came to `0.25(40 + 60r) + 0.20(100 - 50r) = 30 + 5r`, so 45% of the
+    published weight moved five points from an empty kitchen to a full one
+    while presenting itself as two independent bars.
+
+    Absolute headroom is the information the ratio throws away. A 1000-meal
+    kitchen taking 500 and a 100-meal kitchen taking 50 fit equally well and are
+    not equally free afterwards: one can still take another 500 meals today, the
+    other 50. That difference is what decides whether sending this donation here
+    also costs the network its next placement.
+
+    Both arguments are in `CAPACITY_UNIT`; the caller checks that first.
+    """
     if capacity <= 0:
         return 0
-    if quantity > capacity:
+    spare = capacity - quantity
+    if spare <= 0:
         return 0
-    return round(100 * (1 - (quantity / capacity) * 0.5))
+    return round(100 * min(1.0, spare / FULL_HEADROOM_MEALS))
 
 
 def _deadline_score(deadline: datetime, now: datetime, travel_minutes: float) -> int:
@@ -135,8 +211,18 @@ def score_pair(
     travel_minutes = (distance / 20) * 60
 
     distance_score = _distance_score(distance, radius_km)
-    quantity_score = _quantity_score(donation.quantity, recipient.capacity)
-    capacity_score = _capacity_score(donation.quantity, recipient.capacity)
+
+    # Both size criteria measure the donation against `Recipient.capacity`, so
+    # both need the donation to be counted in the same unit. Where it is not,
+    # neither is assessed rather than computed from numbers that do not line up
+    # — 100 Kg is not 100 meals, and scoring it as though it were is the kind of
+    # invented figure the explainability panel exists to rule out.
+    size_comparable = is_comparable_unit(donation.unit)
+    if size_comparable:
+        quantity_score = _quantity_score(donation.quantity, recipient.capacity)
+        capacity_score = _capacity_score(donation.quantity, recipient.capacity)
+    else:
+        quantity_score = capacity_score = UNASSESSED_SIZE_SCORE
 
     deadline = donation.pickup_deadline
     if deadline.tzinfo is None:
@@ -158,7 +244,16 @@ def score_pair(
         reasons.append(
             f"{distance:.1f} km away in a straight line — well inside the collection radius"
         )
-    if quantity_score >= 80:
+    if not size_comparable:
+        # Said plainly rather than left as a silent 50. The old prose below was
+        # the same defect in words — "exceeds stated capacity by 50 kg" against
+        # a capacity counted in meals.
+        reasons.append(
+            f"Donation size not assessed: {donation.quantity} "
+            f"{donation.unit.lower()} cannot be compared with a capacity stated "
+            f"in {CAPACITY_UNIT.lower()}"
+        )
+    elif quantity_score >= 80:
         reasons.append(
             f"{donation.quantity} {donation.unit.lower()} fits the {recipient.capacity}-meal "
             f"daily capacity closely"
@@ -167,6 +262,11 @@ def score_pair(
         reasons.append(
             f"Donation exceeds stated capacity by "
             f"{donation.quantity - recipient.capacity} {donation.unit.lower()}"
+        )
+    if size_comparable and capacity_score >= 70:
+        reasons.append(
+            f"{recipient.capacity - donation.quantity} meals of capacity still "
+            f"free afterwards"
         )
     if deadline_score >= 70:
         reasons.append("Comfortable margin before the pickup deadline")

@@ -2,20 +2,21 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, HEAD `68d28c5`.
-> ⚠️ **The working tree carries the uncommitted Task 21 foundation fixes** — `HA-1`,
-> `HA-2` and the `image_url` bound; 191 backend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
+> Last verified against the repository: 2026-09-05, branch `master`, HEAD `e7032ea`
+> (Task 21: roster scope, pickup release, image bound). ⚠️ **The working tree carries the
+> uncommitted Task 22 matcher correction** — `HA-4` and `HA-5`; 216 backend tests pass.
+> See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
 > I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
-> I-8 match-criteria wording fix (`ed56bd5`) and the I-9 donor-profile binding fix
-> (`c274e99`, now HEAD).
+> I-8 match-criteria wording fix (`ed56bd5`), the I-9 donor-profile binding fix
+> (`c274e99`) and the Task 21 foundation fixes (`e7032ea`, now HEAD).
 >
 > Two audits have been run against this codebase and neither changed source: a manual QA
 > audit against `23c27f4` on 2026-09-02, and a **full project health audit against
 > `c274e99` on 2026-09-05**. The health audit's confirmed findings are issues 23–28 below
-> and tag `HA-n` in `TASKS.md`; **23, 24 and the `image_url` half of 13 are now fixed** in
-> the working tree.
+> and tag `HA-n` in `TASKS.md`. **23, 24 and the `image_url` half of 13 are fixed in
+> `e7032ea`; 26 and 27 are fixed in the working tree.** Open: 25 (`HA-3`) and 28 (`HA-6`).
 
 ## What this project is
 
@@ -43,7 +44,7 @@ as ML.
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 191 tests passing (~163 s): 39 integration + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
+| Backend tests | ✅ 216 tests passing (~142 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + 22 rate-limit + 22 config + 8 migration |
 | Frontend tests | ❌ None exist |
 | CI | ✅ GitHub Actions runs the tests, the frontend build and `alembic check` |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -57,7 +58,35 @@ own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
 
-- **2026-09-05, uncommitted working tree** — **Task 21: the three defects the health audit
+- **2026-09-05, uncommitted working tree** — **Task 22: the matcher's two size criteria now
+  measure two different things, and only comparable units are compared.** `HA-5`:
+  `Recipient.capacity` counts meals — the product fixed that in three places and
+  `matching.CAPACITY_UNIT` now names it, rather than a new column naming it again. Only a
+  meal-denominated donation is scored against it; Kg, Boxes, Pieces and anything
+  unrecognised leave both size criteria at `UNASSESSED_SIZE_SCORE` with a `reasons` line
+  saying the size was not assessed. **Nothing is converted** — the repository holds no mass
+  field, no per-category yield table and no conversion rule, and a fabricated factor inside
+  the score the platform asks people to check by hand is exactly what D-05 forbids.
+  Abstaining is safe rather than a fudge because the unit belongs to the *donation*: every
+  candidate gets the same value, so it cannot reorder a ranking, and such donations rank on
+  distance, deadline and reliability. `HA-4`: `_capacity_score` now measures **absolute**
+  spare meals, saturating at `FULL_HEADROOM_MEALS`, where it used to be an exact affine
+  function of `_quantity_score`. An absolute term was required — any scale-free function of
+  `(quantity, capacity)` collapses back into the ratio. The pair's maximum has moved off the
+  boundary: it now sits at `capacity = quantity + 100` and is **global and interior**, where
+  the old pair's best candidate was always the smallest kitchen the donation fitted, so the
+  winner is the kitchen that takes the donation comfortably *and* keeps a full day's room.
+  Over feasible capacities the old pair spanned **exactly 5.00 points** whatever the donation
+  size; the new pair spans roughly **10.6–17.5 points for donations of 20–500 meals**.
+  ⚠️ The curve is **not** single-peaked — the criteria cross between exact fit and
+  saturation, leaving a shallow local minimum (D-42). `WEIGHTS` untouched, so `R-31` is
+  unblocked and separate. One source file
+  changed; 25 new tests (`test_matching_scores.py`, the matcher's first direct unit tests);
+  191 → **216 passing**, no existing test modified; `alembic check` clean; no schema, API or
+  frontend change. See `DECISIONS.md` D-42.
+
+
+- **2026-09-05, commit `e7032ea`** — **Task 21: the three defects the health audit
   could reproduce.** `HA-1`: `GET /api/volunteers` was role-gated to `admin`/`ngo` and
   scoped no further, so every courier's name, location and **phone number** was one
   self-registration away from anybody — `ngo` is a self-signup role and `is_verified` gates
@@ -458,7 +487,7 @@ stable as items are resolved, so gaps are expected.
 
 ### High — found by the health audit, 2026-09-05, each reproduced
 
-23. ✅ **Resolved (Task 21, uncommitted).** `GET /api/volunteers` is role-gated **and**
+23. ✅ **Resolved (Task 21, `e7032ea`).** `GET /api/volunteers` is role-gated **and**
     scoped: `_visible_volunteers()` narrows an `ngo` to the couriers on its own donations,
     admin stays unrestricted, everyone else reads nothing. What was open —
     **the whole courier roster —
@@ -471,7 +500,7 @@ stable as items are resolved, so gaps are expected.
     table** — `RecipientOut` was scoped, `VolunteerOut` was not, and no task was filed.
     Now covered by `test_volunteer_reads.py` (8 tests), the read-scope file this endpoint
     never had. See `DECISIONS.md` D-41.
-24. ✅ **Resolved (Task 21, uncommitted).** The release clears `volunteer_id` and no
+24. ✅ **Resolved (Task 21, `e7032ea`).** The release clears `volunteer_id` and no
     longer re-runs the acceptance side effects, so a released pickup returns to the pool
     and one donation counts as one acceptance. What was open — **releasing a pickup did
     not release it.** `VOLUNTEER_ASSIGNED → ACCEPTED` is legal,
@@ -495,7 +524,13 @@ stable as items are resolved, so gaps are expected.
     Reproduced: recovered `(30.3600, 76.3700)` exactly, first try. Whether it matters is a
     product judgement — a community kitchen's address is often public, a shelter's may not
     be — but it is a demonstrated bypass of a scoping decision made on purpose. `HA-3`.
-26. **Two of the matcher's five criteria are the same input inverted.** `_quantity_score`
+26. ✅ **Resolved (Task 22, uncommitted).** `_capacity_score` now measures absolute spare
+    meals, saturating at `FULL_HEADROOM_MEALS`. Over feasible capacities the old pair spanned
+    exactly 5.00 points whatever the donation size; the new pair spans roughly 10.6–17.5
+    points for donations of 20–500 meals, and its maximum is now interior
+    (`capacity = quantity + 100`) rather than on the boundary — though the curve is not
+    single-peaked (D-42). `WEIGHTS` untouched.
+    What was open — **two of the five criteria were the same input inverted.** `_quantity_score`
     and `_capacity_score` take the same two arguments and are monotone in the same ratio
     `r = quantity / capacity`, in opposite directions:
     `0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r`. So 45% of the published weight moves
@@ -503,12 +538,19 @@ stable as items are resolved, so gaps are expected.
     `r = 1`. In practice the ranking is decided by distance (25%) and deadline (15%) —
     reliability is the flat `85` prior for any kitchen under three acceptances. The
     explainability panel renders them as two independent bars, which since I-8 are captioned
-    accurately and are still one number reflected. `HA-4`.
-27. **The matcher compares `Donation.quantity` against `Recipient.capacity` without reading
-    `Donation.unit`.** `quantity` is a count in Meals · Kg · Boxes · Pieces; `capacity` is
+    accurately and now describe two genuinely different measurements. See `DECISIONS.md`
+    D-42; covered by `test_matching_scores.py`.
+27. ✅ **Resolved (Task 22, uncommitted).** Only meal-denominated donations are compared
+    with capacity; any other unit leaves both size criteria unassessed and says so in
+    `reasons`, and nothing is converted. What was open — **the matcher compared
+    `Donation.quantity` against `Recipient.capacity` without reading `Donation.unit`.** `quantity` is a count in Meals · Kg · Boxes · Pieces; `capacity` is
     meals per day. Measured: 100 Kg and 100 Meals score identically (88); 5 Boxes scores 83.
-    `lib/impact.ts` carries a prominent warning about exactly this mixed-unit hazard for
-    display totals — the matcher has no equivalent guard. `HA-5`.
+    `lib/impact.ts` carried a prominent warning about exactly this mixed-unit hazard for
+    display totals and the matcher had no equivalent guard; it does now. See `DECISIONS.md`
+    D-42. ⚠️ **Consequence worth carrying:** a Kg/Boxes/Pieces donation is now ranked on
+    three criteria rather than five. That is honest, not a regression, but the platform's
+    headline score is less discriminating for those donations until a real unit model
+    exists.
 28. **The landing page fabricates more than I-1a recorded.** Beyond the four-stat strip at
     `pages/Landing.tsx:8-13`, there is a second block at `:163-181` — a card with a pulsing
     green dot captioned **"Live this term"**, printing `1,240+`, "meals redistributed across
@@ -596,7 +638,7 @@ longer without saying so.
     into a `Text` column. ⚠️ The health audit measured the cost: a 3 MB data URL is
     accepted and stored, and `AppContext.load()` re-fetches `limit=500` donations after
     **every** mutation, so one photo is 3 MB on every write by every user. Promoted to
-    ✅ **The length half is resolved (Task 21, uncommitted):**
+    ✅ **The length half is resolved (Task 21, `e7032ea`):**
     `DonationCreate.image_url` now carries `max_length=MAX_IMAGE_URL_LENGTH` (256 KiB),
     enforced at the request boundary and published in the OpenAPI document; the column
     stays `Text`, so there is no migration. ⚠️ Real consequence: an unresized phone photo
@@ -705,26 +747,23 @@ credibility rather than about its correctness, and that judgement belongs in thi
 
 ## Immediate priorities
 
-1. ✅ **Done, uncommitted — `HA-1` + `HA-2` + the `image_url` bound** (Task 21). Review and
-   commit. 191 backend tests pass; `alembic check` clean; no schema, migration, frontend,
-   dependency or configuration change.
-2. **Repair the matcher's scoring** (`HA-4`, `HA-5`; `TASKS.md` → *Next* step 2). This is
-   now the next implementation task. De-collinearise `_quantity_score`/`_capacity_score`
-   and make the fit criterion unit-aware, with the boundary unit tests *Backlog → D* wants.
-   No schema change. **M.**
-   ⚠️ Do **not** re-tune `WEIGHTS` before this lands — tuning two collinear criteria is
-   tuning noise.
-3. **Stand up a frontend test harness** (`HA-8`; *Next* step 3). Vitest over the pure
-   modules — `lib/impact.ts`, `lib/geo.ts`, `lib/time.ts`, `lib/adapters.ts` — plus
-   `ProtectedRoute`. Every honesty invariant D-31 → D-40 established is still held by
-   review habit alone. **M.**
-4. **Finish the landing page** (`HA-6` / I-1a; *Next* step 4). **S.**
+1. ✅ **Done and committed — `HA-1` + `HA-2` + the `image_url` bound** (Task 21, `e7032ea`).
+2. ✅ **Done, uncommitted — the matcher's size criteria** (Task 22, `HA-4` + `HA-5`).
+   Review and commit. 216 backend tests pass; `alembic check` clean; one source file changed.
+3. **Stand up a frontend test harness** (`HA-8`; `TASKS.md` → *Next* step 3). This is now the
+   next implementation task. Vitest over the pure modules — `lib/impact.ts`, `lib/geo.ts`,
+   `lib/time.ts`, `lib/adapters.ts` — plus `ProtectedRoute`, and the step added to `ci.yml`.
+   Every honesty invariant D-31 → D-40 established is still held by review habit alone, and
+   `tsc` remains the only frontend gate. **M.**
+4. **Finish the landing page** (`HA-6` / I-1a; *Next* step 4) — two fabricated blocks and a
+   real-time claim, on the only page seen before login. **S.**
 5. Then **stop hardening and build the donor needs board** (*Blocked*) — the smallest real
    feature in the project and the one that gives `requirements` an audience.
 
-Sequenced behind those, unchanged: `HA-3`, then *Backlog → E* (concurrency guard →
-Postgres → deployment configuration), which is where the rate-limit-sharing decision gets
-answered.
+Sequenced behind those, unchanged: `HA-3` (the `/matches` distance disclosure), then
+*Backlog → E* (concurrency guard → Postgres → deployment configuration), which is where the
+rate-limit-sharing decision gets answered. `R-31` (weight tuning) is unblocked by Task 22
+but still wants outcome data the project does not have.
 
 ⚠️ These are **recommendations from analysis, not commitments the project has made.**
 `TASKS.md` → *Next* is the canonical version with scope and estimates; update there

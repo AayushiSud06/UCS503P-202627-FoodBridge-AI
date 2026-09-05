@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-41. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-42. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -11,8 +11,9 @@
 > as `fc91091` and **D-40** (an account reads its own contact details, I-9) as `c274e99`,
 > which is HEAD. Re-verified in the project health audit of 2026-09-05, which changed no
 > source; the corrections it produced are marked in D-05, D-17, D-26 and D-35. **D-41**
-> (courier read scope and the release's second meaning) is in the working tree,
-> uncommitted.
+> (courier read scope and the release's second meaning) is committed as `e7032ea`.
+> **D-42** (matcher unit comparability and the absolute headroom criterion) is in the
+> working tree, uncommitted.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -614,7 +615,7 @@ it must apply this same clause and 404, per D-24. Admin verification
 behind the admin router gate.
 
 ✅ **This decision named the courier roster and did not fix it; that gap is now closed by
-D-41** (Task 21, uncommitted). The first bullet above cites "the same objection the `GET /api/volunteers`
+D-41** (Task 21, `e7032ea`). The first bullet above cites "the same objection the `GET /api/volunteers`
 docstring already raises about the courier roster, on the neighbouring table" — and the
 scope was applied to `RecipientOut` only. **`GET /api/volunteers` remains role-gated and
 unscoped**: `require_roles(admin, ngo)` with no ownership clause, so every account holding
@@ -1208,7 +1209,7 @@ including admin — a dead edge, failing closed. It is a lifecycle-modelling que
 security one, and is left for the Project Manager rather than resolved here.
 
 ✅ **The release this decision authorizes now works — fixed by D-41** (Task 21,
-uncommitted). What was wrong, and why the audit that produced this decision could not have
+`e7032ea`). What was wrong, and why the audit that produced this decision could not have
 seen it: The residue recorded here — "a release followed by a
 re-acceptance increments the owning organisation's `accepted_donations` a second time and
 leaves `volunteer_id` set" — understated its own consequence. **Nothing clears
@@ -1523,3 +1524,126 @@ boundary, published in the OpenAPI document like D-04's admin restriction, with 
 left as `Text` so no migration is needed. That is a constraint rather than a decision; the
 real fix is object storage (`TASKS.md` → *Backlog → F*), and until then an unresized phone
 photo is a 422.
+
+---
+
+## D-42 · Only meals are compared with capacity, and the second size criterion is absolute **[documented]**
+
+**Decision.** Two corrections inside `matching.py`, no weight changed and no schema touched.
+
+1. **`Recipient.capacity` counts meals, and only a donation counted in meals is compared
+   with it.** `matching.CAPACITY_UNIT = "Meals"` names what the product already fixed;
+   `is_comparable_unit()` accepts that unit alone. For any other unit both size criteria
+   return `UNASSESSED_SIZE_SCORE` (50) and `reasons` states that the size was not assessed.
+   **Nothing is converted.**
+2. **`_capacity_score` measures absolute spare meals, not the fill ratio.** Spare capacity
+   after the donation, saturating at `FULL_HEADROOM_MEALS` (100). `_quantity_score` is
+   unchanged and remains the ratio.
+
+**Reasoning.**
+
+- **The unit was being ignored, and the numbers do not line up.** `Donation.quantity` is a
+  count in `Donation.unit`; `Recipient.capacity` is meals per day. Comparing them directly
+  scored 100 Kg exactly as 100 Meals, and 5 Boxes as a rounding error against a 100-meal
+  kitchen. The prose was the same defect out loud: *"Donation exceeds stated capacity by
+  150 kg"*, against a capacity counted in meals.
+- **Capacity's unit was already decided; it was simply never written down.** Three places
+  agree — the NGO profile's "Max Batch Capacity (Meals)", the mobile profile's "*n* meals",
+  and `frontend/src/types/index.ts` ("max meals they can handle"). `CAPACITY_UNIT` records
+  that rather than adding a `capacity_unit` column to restate it. **No migration.**
+- **No conversion was invented, because the repository holds nothing to convert with.**
+  There is no mass or portion field on a donation, no per-category yield table, no
+  configuration. "One box is *n* meals" would be a fabricated constant inside the one number
+  the platform invites people to check by hand (D-05), and it would be wrong per category —
+  a box of bread rolls and a box of rice are not the same meal count. `lib/impact.ts`
+  reached the identical conclusion for display totals and says so; this is that principle
+  applied to the score.
+- **Unassessed, not ineligible — a deliberate departure from D-06.** D-06 gates rather than
+  scores when a *pairing* is not actionable. An unfamiliar unit is not a fact about the
+  pairing: gating would mean a donation in kilograms matched **nobody**, and the seed data
+  itself posts in Kg and Boxes. Instead the criterion abstains.
+- **Abstaining is safe precisely because the unit belongs to the donation.** Every candidate
+  receives the identical value for the same donation, so the two criteria cancel out of the
+  comparison and cannot reorder anything. Ranking falls to distance, deadline and
+  reliability — the criteria that remain meaningful — and the reader is told which question
+  went unanswered rather than being handed a confident 50.
+- **Strict rather than clever about unrecognised units.** The match is exact after trimming
+  and case-folding. A unit added later is unassessed until someone decides what it means,
+  which fails toward saying less rather than measuring wrongly.
+- **The two size criteria were one criterion counted twice.** Both were monotone in
+  `r = quantity / capacity` in opposite directions, and over the feasible range
+  `capacity_score` was an exact affine function of `quantity_score`. Their combined
+  contribution was `0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r`: **45% of the published
+  weight carrying five points of signal**, presented in the explainability panel as two
+  independent bars.
+- **Absolute headroom is the information the ratio discards.** `(quantity, capacity)` is
+  two-dimensional and `r` is one; any scale-free function of the pair collapses back into
+  `r`, so breaking the collinearity *requires* an absolute term. A 1000-meal kitchen taking
+  500 and a 100-meal kitchen taking 50 fit equally well and are not equally free afterwards
+  — one can still take another 500 meals today, the other 50.
+- **`FULL_HEADROOM_MEALS = 100` is a named saturation constant, in the shape the module
+  already uses.** `_deadline_score` saturates at two hours of slack for the same reason.
+  It is anchored on the default `Recipient.capacity`, so "a full day's room still free"
+  means a default-sized kitchen's entire service.
+- **The result is a better ranking, not just a better-behaved formula.** How each criterion
+  moves as candidate capacity grows, for a fixed donation `q`:
+
+  | | `capacity < q` | `capacity = q` | `q < capacity < q + 100` | `capacity >= q + 100` |
+  |---|---|---|---|---|
+  | fit | rises out of the overflow penalty | peaks at 100 | falls | falls toward 40 |
+  | headroom | 0 (does not fit) | 0 | rises 1 point per spare meal | saturated at 100 |
+
+  So **among kitchens the donation fits**, fit alone prefers the smallest and headroom alone
+  the largest — below that point fit falls away too, under the overflow penalty. Together
+  they peak at `capacity = q + FULL_HEADROOM_MEALS`: the kitchen that takes the donation
+  comfortably *and* still keeps a full day's room. That maximum is **global and interior** —
+  the contribution is lower for smaller kitchens and, asymptotically, for arbitrarily large
+  ones — and a criterion counted twice cannot put a maximum anywhere but a boundary, which
+  is exactly where the old pair's sat (`c = q`). On the seeded kitchens, 50 meals now ranks
+  Helping Hands (capacity 150) first on the strength of its headroom despite the *lowest*
+  fit score of the three.
+- ⚠️ **The combined curve is not single-peaked, and that was overstated when this decision
+  was first written.** Between the exact-fit point and the saturation point the two criteria
+  cross, leaving a shallow **local minimum** — so a kitchen slightly larger than the donation
+  scores marginally below one sized exactly to it (for `q = 50`: 25.00 at `c = 50`, dipping
+  to 24.40 near `c = 62`, then climbing to 35.00 at `c = 150`). The global maximum is
+  unaffected and the criteria are still independent; this is an artefact of two honest
+  criteria crossing, not a defect to design around, and it is recorded so nobody reads the
+  peak as a clean unimodal curve.
+- **Discrimination, stated defensibly.** Over feasible capacities for a fixed donation the
+  old pair spanned **exactly 5.00 points** — `0.25(40 + 60r) + 0.20(100 - 50r) = 30 + 5r`,
+  independent of donation size — and moved monotonically, so its best candidate was always
+  the boundary. The new pair spans more, and by how much depends on donation size: roughly
+  **10.6 to 17.5 points for donations of 20 to 500 meals**. ⚠️ An earlier draft quoted
+  "10.5 versus 3.75"; those numbers are specific to one sample of candidate kitchens and are
+  **not** general bounds — over the unrestricted domain both implementations span 0 to 35.
+- **The weights were deliberately not touched.** Correcting what a criterion measures had to
+  come before deciding how much it counts; tuning collinear criteria is tuning noise. `R-31`
+  is now unblocked and is a separate piece of work.
+
+**Constraints.**
+
+- **No schema change, no migration** (`alembic check` clean), **no API shape change** — the
+  explanation travels in the existing `reasons` list, which exists so a score is never a
+  bare number, so no field was added and no frontend mirror had to move.
+- **No frontend change.** Both `MatchAnalysis` captions stay accurate; *"Capacity the kitchen
+  still has spare after taking this donation"* (written for I-8) now describes the
+  implementation more exactly than it did when it was written.
+- ⚠️ **For a single kitchen the two criteria still move in opposite directions** as the
+  donation grows. That is the intended trade-off, not residual collinearity: what was wrong
+  was that the opposition was exactly proportional at every scale, so the pair cancelled
+  everywhere rather than only along that one axis.
+- ⚠️ **A donation in Kg, Boxes or Pieces is now ranked on three criteria rather than five.**
+  That is an honest reduction, not a regression — but it means the platform's headline score
+  is less discriminating for those donations, and the way to change it is a real unit model,
+  not a conversion constant.
+- **`Donation.unit` is still unvalidated on the wire.** Anything a client sends is stored;
+  the matcher simply declines to interpret it. Constraining the column to the four the
+  picker offers is a separate change and was not made here.
+
+**Scope.** `matching.py` only: `CAPACITY_UNIT`, `UNASSESSED_SIZE_SCORE`,
+`FULL_HEADROOM_MEALS`, `is_comparable_unit()`, `_capacity_score()`, and the unit branch plus
+`reasons` in `score_pair()`. `_quantity_score`, `_distance_score`, `_deadline_score`,
+`reliability_score`, `WEIGHTS`, the three hard gates, `rank_recipients` and every caller are
+unchanged. Requirement-aware matching (`R-35`) is untouched and remains a *Blocked*
+question.

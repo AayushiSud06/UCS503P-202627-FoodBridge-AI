@@ -314,16 +314,43 @@ missing coordinates, beyond `MAX_MATCH_RADIUS_KM` (default 8).
 Returns per-criterion sub-scores plus human-readable `reasons` — the score is never a
 bare number.
 
-⚠️ **Two of the five criteria do not carry the weight the table implies** (health audit,
-2026-09-05; `TASKS.md` → *Next* step 2). `_quantity_score` and `_capacity_score` take the
-same two arguments and are monotone in the same ratio `r = quantity / capacity` in opposite
-directions, so together they evaluate to `30 + 5r` out of a possible 45 — **45% of the
-published weight moves five points across the whole feasible range**, then drops 11.5
-points at `r = 1`. And neither reads `Donation.unit`, while `Recipient.capacity` is meals
-per day: 100 Kg and 100 Meals score identically. Ranking is therefore decided in practice
-by distance (25%) and deadline (15%), `reliability_score` being the flat `85` prior for any
-kitchen under three acceptances. **The structure is sound and is not what needs changing —
-the two functions are.**
+**The two size criteria measure different things, and only one of them is a ratio**
+(Task 22, D-42; the health audit found them collinear and that is fixed).
+
+| Criterion | Question | Shape |
+|---|---|---|
+| `quantity_score` | does this donation *fit* this kitchen? | relative — `quantity / capacity`, peaking at a just-filled kitchen, overflow penalised twice as steeply |
+| `capacity_score` | how much room does the kitchen *keep*? | absolute — spare meals left over, saturating at `FULL_HEADROOM_MEALS` (100, the default capacity) |
+
+**Among kitchens the donation actually fits** (`capacity >= quantity`), fit alone prefers
+the smallest and headroom alone the largest; below that point fit falls away too, under the
+overflow penalty. Being independent, together they now peak at the kitchen that takes the
+donation comfortably *and* still keeps a full day's room — a **global maximum at
+`capacity = quantity + FULL_HEADROOM_MEALS`**, which is interior: the contribution is lower
+both for smaller kitchens and, asymptotically, for arbitrarily large ones. A single
+criterion counted twice cannot produce a peak away from the boundary.
+
+⚠️ **The curve is not single-peaked.** Between the exact-fit point and the saturation point
+there is a shallow local minimum, so a kitchen slightly larger than the donation scores
+marginally below one sized exactly to it. That is a known artefact of the two criteria
+crossing, not a defect to design around.
+
+**Discrimination, stated defensibly.** Over feasible capacities for a fixed donation the old
+pair spanned **exactly 5.00 points** (`0.25(40+60r) + 0.20(100-50r) = 30 + 5r`) and moved
+monotonically, so its maximum sat on the boundary. The new pair spans more, and how much
+more depends on donation size — roughly **10.6 to 17.5 points for donations of 20 to 500
+meals**. (An earlier note quoted "10.5 versus 3.75"; those figures are specific to one
+sample of candidate kitchens and are not general bounds.)
+
+⚠️ **Units gate both of them.** `Recipient.capacity` counts **meals** — there is no
+`capacity_unit` column, and the product fixes this in three places (the NGO profile field
+"Max Batch Capacity (Meals)", the mobile profile's "*n* meals", and `types/index.ts`).
+`Donation.unit` is free text (`String(24)`, no enum) and the picker offers Meals · Kg ·
+Boxes · Pieces. Only Meals is comparable, **nothing in the repository can convert the
+others**, so for any other unit both size criteria return `UNASSESSED_SIZE_SCORE` (50) and
+`reasons` says so. Because the unit belongs to the *donation*, that value is identical for
+every candidate and cannot reorder a ranking — such a donation is ranked on distance,
+deadline and reliability, which is the information that stays meaningful. See D-42.
 
 **Swap point:** replacing `score_pair` alone would substitute a learned ranker; the
 router and response shape do not change.

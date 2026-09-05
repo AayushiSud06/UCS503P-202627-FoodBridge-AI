@@ -1,13 +1,14 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05. HEAD is `68d28c5` (the documentation
-> reconciliation); the working tree carries the **uncommitted Task 21 foundation fixes**
-> described under *Current* — `HA-1`, `HA-2` and the `image_url` bound.
+> Verified against the repository on 2026-09-05. HEAD is `e7032ea` (Task 21: roster scope,
+> pickup release, image bound); the working tree carries the **uncommitted Task 22 matcher
+> correction** described under *Current* — `HA-4` and `HA-5`.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
 > fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the I-8 match-criteria wording
-> fix (`ed56bd5`) and the I-9 donor-profile binding fix (`c274e99`, now HEAD).
+> fix (`ed56bd5`), the I-9 donor-profile binding fix (`c274e99`) and the Task 21
+> foundation fixes (`e7032ea`, now HEAD).
 > Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule:** everything under *Completed* is verified present in the
@@ -33,60 +34,64 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 21 — *Next* step 1, complete.** All three of its
-items are implemented and tested; **191 backend tests pass** (168 → 191), `alembic check`
-reports no drift, and no schema, migration, frontend, dependency or configuration file was
-touched. The three defects the health audit reproduced on 2026-09-05 no longer reproduce.
+**Uncommitted in the working tree: Task 22 — *Next* step 2, complete.** The matcher's two
+size criteria are corrected; **216 backend tests pass** (191 → 216), `alembic check` reports
+no drift, and **one file changed** — `code/foodlink/matching.py`. No schema, migration, API,
+frontend, dependency or configuration change, and no weight was touched.
 
-- **`HA-1` — the courier roster is scoped.** `organisations._visible_volunteers(user)`
-  returns the caller's scope as a WHERE clause, in `_visible_recipients`' shape: admin
-  unrestricted, an `ngo` narrowed to the couriers on its **own** donations (joined through
-  `Recipient` so an account with no organisation row matches nothing), everyone else
-  `false()`. The route's `require_roles(admin, ngo)` is unchanged, so donors and couriers
-  still get the same 403 and `/volunteers/me` is untouched. No response shape changed and
-  **no frontend change was needed** — `AdminVolunteers` is the only screen that renders the
-  roster, so no NGO functionality depended on the wider list. See `DECISIONS.md` D-41.
-- **`HA-2` — the release actually releases.** `donations.update_status` clears
-  `volunteer_id` when `ACCEPTED` is reached from `VOLUNTEER_ASSIGNED`, and skips the
-  acceptance side effects when the donation is already bound to the accepting organisation.
-  A released pickup is now visible and claimable to every courier, and one donation counts
-  as one acceptance however many times it is released. `match_score` is no longer re-frozen
-  on a release, which keeps D-30's "the number the decision was made on" true. The state
-  graph, `TRANSITION_ROLES`, `OWNED_TRANSITIONS`, `_needs_ownership` and `_claim_pickup` are
-  all unchanged. See `DECISIONS.md` D-41.
-- **`image_url` is bounded** at `schemas.MAX_IMAGE_URL_LENGTH` = 262,144 characters
-  (256 KiB), enforced by `Field(max_length=...)` on `DonationCreate` so it appears in the
-  OpenAPI document. The column stays `Text` — no migration. ⚠️ **This is a real behavioural
-  bound:** an unresized phone photo is now a 422. Resizing before encoding, or object
-  storage (*Backlog → F*), is what lifts it.
+- **`HA-5` — units.** `Recipient.capacity` counts meals; the product already fixed that in
+  three places and `matching.CAPACITY_UNIT` now names it rather than a new column naming it
+  again. Only a donation counted in meals is compared with capacity. For Kg, Boxes, Pieces
+  or anything unrecognised, both size criteria return `UNASSESSED_SIZE_SCORE` (50) and
+  `reasons` says the size was not assessed. **Nothing is converted** — the repository holds
+  no mass field, no per-category yield table and no conversion rule, and inventing one would
+  put a fabricated constant inside the score the platform asks people to check by hand.
+  Abstaining is safe because the unit belongs to the *donation*: every candidate gets the
+  same value, so the pair cancels out of the comparison and such donations rank on distance,
+  deadline and reliability.
+- **`HA-4` — collinearity.** `_capacity_score` now measures **absolute** spare meals,
+  saturating at `FULL_HEADROOM_MEALS` (100, the default capacity); `_quantity_score` is
+  unchanged and stays the ratio. Breaking the collinearity required an absolute term —
+  any scale-free function of `(quantity, capacity)` collapses back into the ratio. Along the
+  axis the matcher ranks on (one donation, many kitchens) the pair now has a **global
+  maximum at `capacity = quantity + 100`** that is interior — lower for smaller kitchens and,
+  asymptotically, for arbitrarily large ones — where the old pair's maximum sat on the
+  boundary (`capacity = quantity`). The best candidate is the kitchen that takes the donation
+  comfortably *and* keeps a full day's room. On the seeded kitchens a 50-meal donation now
+  ranks Helping Hands first on headroom despite the lowest fit score of the three.
+  ⚠️ **Not a single-peaked curve:** between exact fit and saturation the two criteria cross,
+  leaving a shallow local minimum, so a kitchen slightly larger than the donation scores
+  marginally below one sized exactly to it. Recorded in D-42 rather than designed around.
+- **Discrimination, stated defensibly.** Over feasible capacities for a fixed donation the
+  old pair spanned **exactly 5.00 points** (`30 + 5r`) whatever the donation size; the new
+  pair spans roughly **10.6–17.5 points for donations of 20–500 meals**. ⚠️ The "10.5 vs
+  3.75" figures quoted in the first Task 22 report are **sample-set specific** — one chosen
+  spread of candidate kitchens — and are not general bounds.
+- ⚠️ **`WEIGHTS` deliberately unchanged**, so `R-31` (weight tuning) is now unblocked and is
+  separate work. Correcting what a criterion measures had to precede deciding how much it
+  counts.
 
-⚠️ **One existing test asserted the `HA-2` defect and was rewritten, not deleted.**
-`test_courier_claim.py::test_a_second_courier_cannot_take_a_pickup_that_was_released_to_the_first`
-reached `_claim_pickup`'s already-claimed guard by way of a release that left
-`volunteer_id` set — its own docstring described the bug as the mechanism. It is now
-`test_a_second_courier_can_take_a_pickup_released_by_the_first` and asserts the corrected
-outcome. **No guard coverage was lost:** `ACCEPTED` with a courier still bound is now
-unreachable through the API, so that branch is reachable only as a race, which the three
-file-backed two-transaction tests in the same module already cover.
+**No existing test needed modification.** `test_match_score_consistency.py` reconciles the
+breakdown against the published weights and still passes unchanged, which is the check that
+the contract held.
 
 **Nothing else is in progress.** No feature branch, no TODO/FIXME markers in
-`code/foodlink/` or `frontend/src/`. Group I is closed except the landing page, now
-`HA-6`; the seven-item hardening sequence and the requirement `PATCH` are done. See
-*Completed*.
+`code/foodlink/` or `frontend/src/`. See *Completed*.
 
 ---
 
 ## Next — hardening (recommended, ordered)
 
-**No longer empty.** These four steps are the health audit's confirmed defects in the order
-it recommended, and they are a bounded list rather than an open-ended hardening programme:
-its strategic conclusion is that everything *after* step 4 is unbuilt infrastructure rather
-than broken behaviour, and should be sequenced with the deployment it serves rather than
-ahead of it. **Promotion into *Current* is still a Project Manager call.**
+**Steps 1 and 2 are done** — step 1 as `e7032ea`, step 2 uncommitted (see *Current*).
+These four steps are the health audit's confirmed defects in the order it recommended, and
+they are a bounded list rather than an open-ended hardening programme: its strategic
+conclusion is that everything *after* step 4 is unbuilt infrastructure rather than broken
+behaviour, and should be sequenced with the deployment it serves rather than ahead of it.
+**The next task is step 3.** Promotion into *Current* is still a Project Manager call.
 
-### Step 1 — the three demonstrated defects, as one change
+### ✅ Step 1 — the three demonstrated defects — **DONE (Task 21, `e7032ea`)**
 
-`[HA-1 · HA-2 · B-6 · R-19 · S-6]` — **S**, roughly half a day including tests. Grouped
+`[HA-1 · HA-2 · B-6 · R-19 · S-6 · D-41]` — **S**. Grouped
 because each is a few lines and each needs a regression test that does not exist yet.
 
 - [x] **`HA-1` · Scope `GET /api/volunteers`.** It is gated by `require_roles(admin, ngo)`
@@ -123,12 +128,12 @@ because each is a few lines and each needs a regression test that does not exist
       mutation, so one photo is 3 MB on every write by every user. This is the cheap guard;
       object storage (group F) remains the real fix. `[B-6 · R-19 · S-6 · HA-7]`
 
-### Step 2 — repair the matcher's scoring
+### ✅ Step 2 — repair the matcher's scoring — **DONE (Task 22, uncommitted)**
 
-`[HA-4 · HA-5 · R-13 · D-05]` — **M**. No schema change and no API change; `matching.py`
-and its tests.
+`[HA-4 · HA-5 · R-13 · D-05 · D-42]` — **M**. Delivered as one file, `matching.py`, with no
+schema, API or frontend change and no weight touched.
 
-- [ ] **`HA-4` · `_quantity_score` and `_capacity_score` are the same input inverted.** Both
+- [x] **`HA-4` · `_quantity_score` and `_capacity_score` are the same input inverted.** Both
       take `(quantity, capacity)` and are monotone in the same ratio `r = quantity /
       capacity`, in opposite directions, so their weighted contribution is
       `0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r`: **45% of the published weight moves five
@@ -137,17 +142,18 @@ and its tests.
       `reliability_score` is the flat `85` cold-start prior for any kitchen under three
       acceptances. Since I-8 the explainability panel captions both correctly, which makes
       two collinear bars read as two independent criteria.
-- [ ] **`HA-5` · The fit criterion compares mixed units.** `Donation.quantity` is a count in
+- [x] **`HA-5` · The fit criterion compares mixed units.** `Donation.quantity` is a count in
       `Donation.unit` (Meals · Kg · Boxes · Pieces); `Recipient.capacity` is meals per day;
       `matching.py` never reads `unit`. Measured: 100 Kg and 100 Meals score identically
       (88), 5 Boxes scores 83. `lib/impact.ts` carries a prominent warning about this exact
       hazard for display totals; the matcher has no equivalent guard.
-- [ ] Land the boundary unit tests group D already wants **with** this change, including one
-      asserting the two criteria are not collinear — it fails today, which is the point.
+- [x] Landed the boundary unit tests group D wanted **with** the change:
+      `test_matching_scores.py` (25), including one asserting the two criteria are not
+      collinear along the ranking axis, which fails against the pre-fix code.
       ⚠️ **Do not re-tune `WEIGHTS` before this lands** (`Backlog → G`, `R-31`): tuning two
       collinear criteria is tuning noise.
 
-### Step 3 — a frontend test harness
+### Step 3 — a frontend test harness ← **next**
 
 `[HA-8 · R-14]` — **M**.
 
@@ -186,12 +192,12 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       client-side only; nothing can invalidate an issued token. `[R-11 · S-4 · D-13]` — ~4 h
 - [ ] Issue `PRAGMA foreign_keys = ON` for SQLite through a connection event listener —
       declared foreign keys are unenforced on the default configuration. `[R-15 · S-5 · D-08]` — **S**
-- [x] ✅ **Done (Task 21, uncommitted)** — `image_url` is capped at 256 KiB by
+- [x] ✅ **Done (Task 21, `e7032ea`)** — `image_url` is capped at 256 KiB by
       `schemas.MAX_IMAGE_URL_LENGTH` on `DonationCreate`; the column stays `Text`, an
       unconstrained `Text` column (`code/foodlink/models.py:219`) receiving base64 data URLs
       from the frontend. The cheap guard; object storage (group F) is the real fix.
       `[B-6 · R-19 · S-6 · HA-7]` — **S**
-- [x] ✅ **Done (Task 21, uncommitted)** — `HA-1`: `GET /api/volunteers` is scoped by
+- [x] ✅ **Done (Task 21, `e7032ea`)** — `HA-1`: `GET /api/volunteers` is scoped by
       `_visible_volunteers`, so an `ngo` reads only the couriers on its own donations.
       `[HA-1 · D-26 · repo]` — **S**
 - [ ] **`HA-3` · `GET /donations/{id}/matches` gives back the recipient coordinates D-26
@@ -217,12 +223,11 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 ### B. Correctness & reliability
 
-- [x] ✅ **Done (Task 21, uncommitted)** — `HA-2`: the release clears `volunteer_id` and
+- [x] ✅ **Done (Task 21, `e7032ea`)** — `HA-2`: the release clears `volunteer_id` and
       no longer re-runs the acceptance side effects for a donation already bound here. `[HA-2 · D-35 · D-38 · repo]` — **S**
-- [ ] ⬆️ **Promoted to *Next* step 2** — `HA-4`/`HA-5`: the matcher's `quantity` and
-      `capacity` criteria are algebraically collinear (45% of the weight moves 5 points),
-      and the fit ratio compares `Donation.quantity` against `Recipient.capacity` without
-      reading `Donation.unit`. `[HA-4 · HA-5 · D-05 · R-13]` — **M**
+- [x] ✅ **Done (Task 22, uncommitted)** — `HA-4`/`HA-5`: `_capacity_score` now measures
+      absolute spare meals rather than the fill ratio, and only meal-denominated donations
+      are compared with capacity. `[HA-4 · HA-5 · D-05 · D-42 · R-13]`
 - [ ] Skip explicit nulls in `PATCH /recipients/me` and `PATCH /volunteers/me`. Both assign
       an explicit `null` straight to a non-nullable column, so `{"name": null}` raises an
       uncaught `IntegrityError` — and because no exception handler exists the response has
@@ -259,8 +264,10 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
 
 ### D. Testing
 
-- [ ] ⬆️ **Promoted to *Next* step 2, and widened** — unit tests for `matching.py`'s
-      scoring functions at their boundaries —
+- [x] ✅ **Done (Task 22, uncommitted)** — `test_matching_scores.py` (25) is the matcher's
+      first direct unit-test file: boundaries, overflow, zero capacity, unit comparability,
+      and the collinearity property itself. Originally filed as unit tests for the
+      boundaries —
       `_quantity_score` at the overflow ratio, `_deadline_score` on negative slack, the
       reliability cliff at 3 accepted donations. Partially started: one test in
       `test_match_score_consistency.py` calls `score_pair` directly with an injected `now`
@@ -268,7 +275,7 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       only through the API. `[R-13]` — **M**
 - [ ] Round-trip test for `UtcDateTime`. The decorator exists to prevent one specific
       timezone bug (D-09) and has no direct test. `[§14.4]` — **S**
-- [x] ✅ **Done (Task 21, uncommitted)** — read-scope coverage for the courier roster.
+- [x] ✅ **Done (Task 21, `e7032ea`)** — read-scope coverage for the courier roster.
       `test_volunteer_reads.py` (8) is the missing third of the read-scope trio beside
       `test_donation_reads.py` and `test_recipient_reads.py`; the endpoint previously had
       **no test of any kind**. `test_pickup_release.py` (13) covers what the release edge
@@ -382,9 +389,9 @@ Places where a shipped feature is incomplete — not new ideas.
       this decision is no longer urgent, only open. `[R-30 · QA-1]`
 - [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
 - [ ] Tune the matching weights against real outcome data; revisit the 85 reliability
-      prior. ⚠️ **Blocked on *Next* step 2** (`HA-4`): two of the five criteria are
-      currently collinear, so re-weighting before they are separated is tuning noise.
-      `[R-31 · HA-4]`
+      prior. ✅ **Unblocked by Task 22** — the two size criteria are independent now, so
+      re-weighting measures something. Still wants outcome data the project does not have.
+      `[R-31 · D-42]`
 - [ ] Recurring donation schedules. `Requirement.daily_recurring` exists on the recipient
       side; donations have no equivalent. ⚠️ **The recipient-side flag is storage only:**
       `models.py:293` declares it, `RequirementOut` echoes it, and the NGO UI renders a
@@ -816,9 +823,67 @@ external.
 
 ## Completed (verified in the repository)
 
+### Matcher correctness: unit comparability and absolute headroom — **uncommitted** `[HA-4 · HA-5]`
+
+Task 22 / *Next* step 2. In the working tree, not yet committed. 191 → **216 tests**;
+`alembic check` clean; **one source file changed** (`code/foodlink/matching.py`); no schema,
+migration, API, frontend, dependency or configuration change; no weight altered.
+
+- [x] **`HA-5` · Only meal-denominated donations are compared with capacity.**
+      `CAPACITY_UNIT = "Meals"` names what the product had already fixed in three places —
+      the NGO profile's "Max Batch Capacity (Meals)", the mobile profile's "*n* meals", and
+      `types/index.ts` — rather than adding a `capacity_unit` column to say it a fourth
+      time. `is_comparable_unit()` accepts that unit alone, after trimming and case-folding.
+- [x] **Nothing is converted, deliberately.** No mass field, no per-category yield table and
+      no conversion rule exists anywhere in the repository, and a box of bread rolls is not
+      a box of rice. A fabricated factor inside the one number the platform invites people
+      to check by hand is the defect D-05 exists to prevent. `lib/impact.ts` had already
+      reached the same conclusion for display totals.
+- [x] **Unassessed, not ineligible.** Both size criteria return `UNASSESSED_SIZE_SCORE` (50)
+      for any other unit, with a `reasons` line saying so. Gating instead would mean a
+      donation in kilograms matched **nobody** — and the seed data posts in Kg and Boxes.
+      Safe because the unit belongs to the donation: every candidate gets the same value, so
+      the pair cancels out of the comparison and cannot reorder a ranking. Such donations
+      rank on distance, deadline and reliability.
+- [x] **`HA-4` · `_capacity_score` measures absolute spare meals**, saturating at
+      `FULL_HEADROOM_MEALS` (100, the default capacity), where it used to return
+      `100 * (1 - 0.5 * quantity / capacity)` — an exact affine function of
+      `_quantity_score` over the feasible range. An absolute term was *required*: any
+      scale-free function of `(quantity, capacity)` collapses back into the ratio.
+      `_quantity_score` is unchanged.
+- [x] **What that bought, measured.** The pair's maximum moved off the boundary: it now
+      sits at `capacity = quantity + 100` and is **global and interior**, where the old
+      pair's best candidate was always the smallest kitchen the donation fitted. **Among
+      feasible kitchens** fit alone prefers the smallest and headroom alone the largest —
+      below that point fit falls away too, under the overflow penalty — so together they
+      pick the kitchen that takes the donation comfortably *and* keeps a full day's room.
+      On the seeded kitchens a 50-meal donation now ranks Helping Hands first on headroom
+      despite the lowest fit score of the three.
+- [x] **Discrimination over feasible capacities, for a fixed donation:** the old pair spanned
+      **exactly 5.00 points** (`30 + 5r`, independent of donation size) and moved
+      monotonically; the new pair spans roughly **10.6–17.5 points for donations of 20–500
+      meals**. ⚠️ The "10.5 vs 3.75" pair quoted in the first Task 22 report is specific to
+      one sample of candidate kitchens and is **not** a general bound — across the
+      unrestricted domain both implementations span 0–35.
+- [x] ⚠️ **The combined curve is not single-peaked**, and the first report implied it was.
+      Between exact fit and saturation the criteria cross, leaving a shallow local minimum
+      (for a 50-meal donation: 25.00 at capacity 50, 24.40 near 62, 35.00 at 150). The
+      global maximum and the independence are unaffected. Corrected in D-42.
+- [x] **25 tests** in the new `code/tests/test_matching_scores.py` — the matcher's first
+      direct unit-test file, and the item *Backlog → D* had been asking for. Boundaries,
+      overflow, zero and negative capacity, every unit in the picker, the reasons text, the
+      hard gates, the unchanged weights, and the breakdown reconciling to the headline.
+- [x] **No existing test needed modification.** `test_match_score_consistency.py` reconciles
+      the breakdown against the published weights and passes unchanged, which is the check
+      that the contract held.
+- [x] ⚠️ **`WEIGHTS` untouched on purpose**, so correcting what a criterion measures came
+      before deciding how much it counts. `R-31` is unblocked by this and is separate work.
+- [x] See `DECISIONS.md` D-42.
+
+
 ### Foundation hardening: roster scope, pickup release, image bound — **uncommitted** `[HA-1 · HA-2 · HA-7]`
 
-Task 21 / *Next* step 1. In the working tree, not yet committed. 168 → **191 tests**;
+Task 21 / *Next* step 1, committed as `e7032ea`. 168 → **191 tests**;
 `alembic check` clean; no schema, migration, frontend, dependency or configuration change.
 
 - [x] **`HA-1` · `GET /api/volunteers` is scoped, not merely role-gated.**
