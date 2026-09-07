@@ -199,6 +199,12 @@ def _precise_distance_scope(db: Session, user: User) -> set[int] | None:
     the distances back out of `/matches`, one donation pin at a time. The
     ranking still runs over every eligible kitchen — this decides only which of
     them the reader is told a real position for (`DECISIONS.md` D-45).
+
+    The same scope answers the same question on the donation itself, so it is
+    passed to `serialize.donation_out` as well: `matchScore` and `distanceKm`
+    are the two location-derived figures that reach a reader outside
+    `/matches`, and reading them back from pins of the donor's choosing is the
+    identical attack (`DECISIONS.md` D-47).
     """
     if user.role is UserRole.admin:
         return None
@@ -337,7 +343,11 @@ def create_donation(
 
     db.commit()
     fresh = _get_or_404(db, donation.id)
-    return donation_out(fresh, viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)))
+    return donation_out(
+        fresh,
+        viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)),
+        precise_for=_precise_distance_scope(db, user),
+    )
 
 
 @router.get("", response_model=list[DonationOut])
@@ -373,8 +383,9 @@ def list_donations(
     # One lookup of the caller's own organisation for the whole page; the
     # scoring itself is pure arithmetic over rows already in memory.
     viewer = _viewer_recipient(db, user)
+    precise_for = _precise_distance_scope(db, user)
     return [
-        donation_out(d, viewer_match=_viewer_match(d, viewer))
+        donation_out(d, viewer_match=_viewer_match(d, viewer), precise_for=precise_for)
         for d in db.scalars(stmt.limit(limit))
     ]
 
@@ -387,7 +398,9 @@ def get_donation(
 ) -> DonationOut:
     donation = _get_readable_or_404(db, donation_id, user)
     return donation_out(
-        donation, viewer_match=_viewer_match(donation, _viewer_recipient(db, user))
+        donation,
+        viewer_match=_viewer_match(donation, _viewer_recipient(db, user)),
+        precise_for=_precise_distance_scope(db, user),
     )
 
 
@@ -553,4 +566,8 @@ def update_status(
     _record(db, donation, target, user, note=body.note)
     db.commit()
     fresh = _get_or_404(db, donation_id)
-    return donation_out(fresh, viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)))
+    return donation_out(
+        fresh,
+        viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)),
+        precise_for=_precise_distance_scope(db, user),
+    )

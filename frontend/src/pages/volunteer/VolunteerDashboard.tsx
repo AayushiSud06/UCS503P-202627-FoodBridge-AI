@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
 import { useDonations, useMyVolunteer } from '../../context/AppContext';
 import { deadlineStatus, byUrgency, formatClock } from '../../lib/time';
-import { displayDistanceKm } from '../../lib/geo';
+import { displayDistanceKm, formatTotalDistanceKm } from '../../lib/geo';
 import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
 import { volunteerImpact } from '../../lib/impact';
@@ -142,7 +142,7 @@ export default function VolunteerDashboard() {
               { value: impact.runs, label: 'pickups completed' },
               { value: impact.deliveredMeals, label: 'meals moved' },
               {
-                value: `${impact.distanceKm.toFixed(1)} km`,
+                value: formatTotalDistanceKm(impact.distanceKm, '—'),
                 label: 'straight-line distance',
               },
             ].map(stat => (

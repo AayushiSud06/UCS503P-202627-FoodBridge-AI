@@ -14,6 +14,15 @@ ranking of the donation against the *calling* organisation, from the same
 `score_pair` that `/matches` reports, and it carries the whole breakdown so
 that the headline and the criteria beside it come from one request rather than
 two that would round apart as the deadline decays.
+
+⚠️ **Since D-47 the frozen figure is reader-scoped**, so the tests below that
+are *about* it read it through an administrator. Nothing about what the column
+stores changed — `Donation.match_score` is still the precise frozen decision
+(D-30) — but a reader who may not be told the subject kitchen's position is no
+longer shown it, because the weighted sum moves about one point per 320 m. The
+assertions that used to read the number off an NGO's or a donor's own response
+now read it off an admin's, which is the same number; that the two roles get
+`null` there is pinned in `test_donation_privacy_scope.py`.
 """
 
 from __future__ import annotations
@@ -22,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from conftest import auth, register, register_ngo
+from conftest import admin_token, auth, register, register_ngo
 from foodlink.matching import score_pair
 from foodlink.models import Donation, Recipient
 
@@ -85,6 +94,21 @@ def _listed(client, token: str, donation_id: int) -> dict:
     return row
 
 
+def _frozen_score(client, db_session, donation_id: int) -> int | None:
+    """`Donation.match_score` as a reader entitled to it receives it.
+
+    An administrator, because D-47 scopes the field to readers who may be told
+    the subject kitchen's true position and an administrator already reads the
+    recipient directory in full. This is the stored figure, unmodified — the
+    scope decides who sees it, not what it is.
+    """
+    response = client.get(
+        f"/api/donations/{donation_id}", headers=auth(admin_token(client, db_session))
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["matchScore"]
+
+
 def _own_match(client, token: str, donation_id: int, recipient_id: int) -> dict:
     """The pairing as the analysis panel receives it."""
     response = client.get(
@@ -128,12 +152,18 @@ def test_the_headline_and_its_breakdown_travel_together(client, two_kitchens):
     assert match["reasons"]
 
 
-def test_the_frozen_score_is_not_the_readers_own_score(client, two_kitchens):
+def test_the_frozen_score_is_not_the_readers_own_score(client, db_session, two_kitchens):
     """Why the two disagreed: `matchScore` is about a different organisation.
 
-    That is not a defect to remove — it is the number the donor was shown when
-    the donation was posted. It is a defect to *label* as the reader's own
-    match, which is what the list did.
+    That is not a defect to remove — it is the number that recorded the
+    decision. It is a defect to *label* as the reader's own match, which is
+    what the list did.
+
+    The frozen figure is read through an administrator because since D-47 an
+    organisation is not shown a score about a *peer's* position. That scope is
+    the subject of `test_donation_privacy_scope.py`; what this test is about is
+    the one thing it does not change — the two numbers describe different
+    organisations and cannot be substituted for one another.
     """
     far_token, far_id = two_kitchens["far"]
     near_token, near_id = two_kitchens["near"]
@@ -142,19 +172,32 @@ def test_the_frozen_score_is_not_the_readers_own_score(client, two_kitchens):
     listed = _listed(client, far_token, donation_id)
     near_listed = _listed(client, near_token, donation_id)
 
-    # One frozen number, the same for every reader, describing the winner.
-    assert listed["matchScore"] == near_listed["matchScore"]
-    assert listed["matchScore"] == _own_match(
-        client, near_token, donation_id, near_id
-    )["overallScore"]
+    # One frozen number, describing the winner, and the same one whichever
+    # reader is entitled to it.
+    frozen = _frozen_score(client, db_session, donation_id)
+    assert frozen == _own_match(client, near_token, donation_id, near_id)["overallScore"]
 
     # Each reader's own score differs, and the further kitchen's is lower.
     assert near_listed["viewerMatch"]["overallScore"] > listed["viewerMatch"]["overallScore"]
-    assert listed["viewerMatch"]["overallScore"] != listed["matchScore"]
+    assert listed["viewerMatch"]["overallScore"] != frozen
+
+    # Neither organisation is told the frozen figure about the other: the
+    # donation is still open, so nothing binds it to a kitchen either of them
+    # may be told a position for (D-47).
+    assert listed["matchScore"] is None
+    assert near_listed["matchScore"] is None
 
 
-def test_the_top_match_sees_the_same_number_on_both_surfaces_too(client, two_kitchens):
-    """The winner is the one reader for whom the two happened to agree already."""
+def test_the_top_match_sees_the_same_number_on_both_surfaces_too(
+    client, db_session, two_kitchens
+):
+    """The winner is the one organisation whose own score *is* the frozen one.
+
+    Which stays true after D-47 — the scope changed who is shown the frozen
+    figure, not what it equals. The winner reads its own live score from
+    `viewerMatch` exactly as before, and it still reconciles with the number
+    frozen at posting.
+    """
     near_token, near_id = two_kitchens["near"]
     donation_id = _post_donation(client)
 
@@ -162,7 +205,9 @@ def test_the_top_match_sees_the_same_number_on_both_surfaces_too(client, two_kit
     assert listed["viewerMatch"]["overallScore"] == _own_match(
         client, near_token, donation_id, near_id
     )["overallScore"]
-    assert listed["viewerMatch"]["overallScore"] == listed["matchScore"]
+    assert listed["viewerMatch"]["overallScore"] == _frozen_score(
+        client, db_session, donation_id
+    )
 
 
 def test_a_frozen_score_cannot_track_the_deadline_it_scored(client):
@@ -199,7 +244,9 @@ def test_a_frozen_score_cannot_track_the_deadline_it_scored(client):
 
 # ─── What the field means, and where it is absent ────────────────────────────
 
-def test_the_viewer_score_is_absent_for_a_caller_with_no_organisation(client, two_kitchens):
+def test_the_viewer_score_is_absent_for_a_caller_with_no_organisation(
+    client, db_session, two_kitchens
+):
     """A donor has no kitchen, so there is no pairing to score."""
     donor = register(client, email="lone-donor@test.com", role="donor")
     response = client.post(
@@ -210,7 +257,12 @@ def test_the_viewer_score_is_absent_for_a_caller_with_no_organisation(client, tw
 
     listed = _listed(client, donor, response.json()["id"])
     assert listed["viewerMatch"] is None
-    assert listed["matchScore"] is not None
+    # And neither is the frozen one, for a different reason: the donor chose
+    # this donation's pin, so the score of whichever kitchen ranked first is a
+    # measurement of that kitchen (D-47). It was still written — an
+    # administrator reads it back.
+    assert listed["matchScore"] is None
+    assert _frozen_score(client, db_session, response.json()["id"]) is not None
 
 
 def test_an_unverified_kitchen_gets_no_score_rather_than_a_low_one(client, db_session):

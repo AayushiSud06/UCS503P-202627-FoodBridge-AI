@@ -1935,3 +1935,76 @@ the only screen to read.
   nothing.
 
 ---
+
+## D-47 · The same distance scope decides what a donation says, not just what `/matches` says **[documented]**
+
+**Decision.** `serialize.donation_out` takes a `precise_for` scope — the very set
+`donations._precise_distance_scope` already builds for `/matches` — and withholds the two
+location-derived fields on `DonationOut` from a reader outside it. **`distanceKm`** is
+computed only when the bound recipient is in scope; **`matchScore`** is returned only when
+the frozen score's *subject* is. The subject is `donation.recipient_id` once an
+organisation has accepted, and before that it is whichever kitchen ranked first — which
+nothing in the row names, so an unbound score is precise only for an unrestricted reader.
+Net effect: an administrator and the accepting organisation read both figures exactly; a
+donor, a courier and a peer organisation read `null` for both.
+
+**`Donation.match_score` is unchanged.** The column still stores the precise frozen
+decision D-30 defines, both freezes still call `rank_recipients` with no scope, and the
+value is still written from the kitchen's true coordinates. Only the exposure moved.
+
+**Reasoning.**
+
+- **These are the two readings D-45 wrote down and did not close.** Its own ⚠️ list names
+  them: `match_score` "frozen from a precise ranking and shown to the donor who posted the
+  pin (~320 m granularity)", and `DonationOut.distanceKm` "the exact distance to the
+  kitchen that accepted". Both were filed as `HA-3b`. Closing them one endpoint over is the
+  same decision, not a new one, so it reuses the same scope function rather than inventing
+  a second privacy mechanism.
+- **The courier is the stronger attacker, not the weaker.** The obvious reading is the
+  donor's: they choose the pin, so three donations give three circles. But `_readable_by`
+  shows a courier **every unclaimed `ACCEPTED` pickup, from every donor**, each carrying its
+  kitchen's name — several donations bound to one kitchen from several different donors
+  trilaterate it with no pin-walking at all. A courier also reads `200 []` from
+  `GET /api/recipients` (D-26), so nothing else in the API gives them a coordinate.
+- **Withheld, not rounded, and not re-scored.** Rounding fails to D-45's boundary search:
+  the boundaries of a rounded value sit at known distances. Re-scoring from the blurred
+  position at read time would produce a number that is no longer the frozen record of a
+  decision, which is precisely what D-30 exists to protect — and there is nowhere to
+  reconstruct the freeze's `now` or its subject from. D-33 settles the rest: a screen may
+  not print a plausible number in place of one the server does not have. So `null`.
+- **The seam is at serialization here, and that is not a contradiction of D-45.** D-45
+  moved the blur *upstream* of the scoring because `/matches` publishes the components
+  (`distanceScore`, `deadlineScore`) that are computed from the distance — a serialization
+  transform could not reach them. `DonationOut` publishes no components: `matchScore` is a
+  single frozen scalar and `distanceKm` a single measurement. There is nothing downstream
+  of the seam to leak, so the boundary belongs where the reader is known.
+- **The one surface that keeps the frozen score is the one it is about.** `matchScore` is
+  rendered as "match score at acceptance" on the NGO's accepted-donations panel, and that
+  reader is the accepting organisation. Nothing NGO-facing reads it for a donation it does
+  not own — D-30 already routed those surfaces to `viewerMatch`, which is about the reader
+  by construction and stays unblurred.
+
+⚠️ **Constraints and consequences.**
+
+- **A donor no longer sees a match percentage anywhere.** `CreateDonation` and the mobile
+  capture screen already had a no-score branch and fall back to it; `DonationDetails` hides
+  the badge. The donor still learns that ranking succeeded — `status` reads `MATCHED` and
+  the status event names the top kitchen. Whether a donor should get *some* honest
+  matching signal back is a product question this decision does not answer.
+- **The donor and courier "straight-line distance" impact totals lost their input**, since
+  every `distanceKm` they receive is now null. `lib/impact.sumDistanceKm` returns
+  `number | null` rather than summing nulls as zero, and the five screens that print it
+  show an honest blank: a 0.0 km total would have been exactly the fabricated figure D-33
+  forbids, introduced by this fix. An open donation with no kitchen bound still contributes
+  zero, so the null is "nothing known", not "some missing".
+- **No schema change, no migration, no new endpoint, no matcher change.** `alembic check`
+  clean. Eligibility, the 8 km radius, the weights, the ranking order and the blur grid are
+  untouched, and `tests/test_donation_privacy_scope.py` pins that the stored score still
+  equals the *precise* `score_pair` result and differs from the blurred one.
+- **`_get_or_404` and any future internal reader still see the exact figures**, because
+  `precise_for` defaults to `None` (unrestricted) — the same convention `_readable_by` and
+  `rank_recipients` use.
+- **`HA-3a` remains open and is untouched:** membership in the ranking is still an oracle
+  at the 8 km gate, and the control for it is abuse-limiting on donation creation.
+
+---

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from conftest import auth, register, register_ngo
+from conftest import admin_token, auth, register, register_ngo
 from foodlink.models import Recipient
 from foodlink.schemas import MAX_IMAGE_URL_LENGTH
 
@@ -87,19 +87,28 @@ def test_endpoints_require_a_token(client):
 
 # ─── Creation & matching ─────────────────────────────────────────────────────
 
-def test_creating_a_donation_stamps_it_and_matches(client, recipients):
+def test_creating_a_donation_stamps_it_and_matches(client, db_session, recipients):
     token = register(client, email="d1@test.com", role="donor", org="Central Mess")
     response = client.post("/api/donations", json=make_donation_body(), headers=auth(token))
     assert response.status_code == 201, response.text
 
     body = response.json()
     # A recipient is in range, so the donation should arrive already matched
-    # with a score — but not assigned to anyone.
+    # — but not assigned to anyone.
     assert body["status"] == "MATCHED"
-    assert body["matchScore"] is not None
     assert body["recipientId"] is None
     # The lifecycle history starts on the server, not the client.
     assert [e["toStatus"] for e in body["events"]] == ["AVAILABLE", "MATCHED"]
+
+    # The score *is* frozen — but this reader is the donor who chose the pin,
+    # and the frozen figure is an exact function of the winning kitchen's true
+    # position (D-47). It is read back through an administrator instead, which
+    # is what shows the number was written rather than merely withheld.
+    assert body["matchScore"] is None
+    seen_by_admin = client.get(
+        f"/api/donations/{body['id']}", headers=auth(admin_token(client, db_session))
+    ).json()
+    assert seen_by_admin["matchScore"] is not None
 
 
 def test_deadline_in_the_past_is_rejected(client, recipients):

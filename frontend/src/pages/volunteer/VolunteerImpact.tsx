@@ -43,8 +43,8 @@ export default function VolunteerImpact() {
         />
         <ImpactCard
           title="Distance Covered"
-          value={impact.distanceKm.toFixed(1)}
-          unit="km"
+          value={impact.distanceKm === null ? '—' : impact.distanceKm.toFixed(1)}
+          unit={impact.distanceKm === null ? undefined : 'km'}
           subtitle="Straight-line distance from each donor's pin to the kitchen's. FoodLink does not measure road distance."
           icon={Navigation}
           color="emerald"

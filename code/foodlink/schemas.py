@@ -273,7 +273,15 @@ class DonationOut(Schema):
     volunteer_name: str | None = None
     #: Frozen, and about a *decision*: the top-ranked organisation's score when
     #: the donor posted, replaced by the accepting organisation's own score when
-    #: one takes it. The same number for every reader.
+    #: one takes it. Stored precisely and unchanged (D-30).
+    #:
+    #: **Null for a reader who may not be told the subject's true position.**
+    #: The weighted sum moves ~1 point per 320 m, so the exact figure is a
+    #: distance oracle about a kitchen the reader may not locate — the same
+    #: reading `MatchOut.distanceKm` closed, one endpoint over. Present for an
+    #: administrator, and for the organisation the frozen score is about once
+    #: one is bound; withheld — never rounded, never re-scored — otherwise. See
+    #: `serialize.donation_out` and `DECISIONS.md` D-47.
     match_score: int | None = None
     #: Live, and about the *reader*: this donation ranked against the calling
     #: organisation, from the same `matching.score_pair` `/matches` reports.
@@ -291,6 +299,12 @@ class DonationOut(Schema):
     #: each other: presenting `match_score` as the reader's own match is the
     #: defect this field replaces.
     viewer_match: MatchOut | None = None
+    #: Donor pin to the *bound* kitchen, straight-line, computed rather than
+    #: stored. Null until a recipient is bound — and null after that too for a
+    #: reader outside `donations._precise_distance_scope`, because an exact
+    #: distance to a named organisation is the whole of the trilateration D-45
+    #: closed on `/matches` (D-47). A donor and a courier therefore read null
+    #: here; the accepting organisation and an administrator read the figure.
     distance_km: float | None = None
     created_at: datetime
     events: list[StatusEventOut] = []

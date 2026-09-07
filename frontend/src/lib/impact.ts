@@ -56,14 +56,25 @@ function sumQuantity(donations: Donation[]): number {
 }
 
 /**
- * Straight-line donor-to-kitchen distance over the given donations.
+ * Straight-line donor-to-kitchen distance over the given donations, or `null`.
  *
  * `distanceKm` is the server's haversine between the two pinned coordinates,
  * so it exists only once a donation has a recipient and it is **not** a road
  * distance. Screens must say so; nothing in the repository routes.
+ *
+ * **Null when not one donation carries a distance**, which since D-47 is the
+ * whole of what a donor or a courier is sent: the server withholds the figure
+ * from a reader who may not locate the kitchen, because an exact distance to a
+ * named organisation trilaterates it. Summing that as zero would turn a
+ * withheld measurement into a claim that the journeys covered no ground.
+ * A donation still in the open pool legitimately spans nothing and keeps
+ * contributing zero, which is why this tests for *any* known distance rather
+ * than for a complete set.
  */
-function sumDistanceKm(donations: Donation[]): number {
-  return donations.reduce((total, donation) => total + (donation.distanceKm ?? 0), 0);
+function sumDistanceKm(donations: Donation[]): number | null {
+  const known = donations.filter(d => d.distanceKm !== undefined);
+  if (known.length === 0) return null;
+  return known.reduce((total, donation) => total + (donation.distanceKm ?? 0), 0);
 }
 
 /**
@@ -125,8 +136,9 @@ export interface DonorImpact {
   /** Listings by food category — the donor's own `category` values. */
   categories: ImpactShare[];
   monthly: ImpactMonth[];
-  /** Straight-line distance the matched donations spanned. */
-  distanceKm: number;
+  /** Straight-line distance the matched donations spanned, or null when the
+   *  reader is not told any of them (D-47). */
+  distanceKm: number | null;
 }
 
 export function donorImpact(donations: Donation[], donorId: string): DonorImpact {
@@ -185,8 +197,9 @@ export interface VolunteerImpact {
   runs: number;
   /** True when `runs` came from the server counter rather than the list. */
   runsFromServer: boolean;
-  /** Straight-line distance those runs spanned, donor pin to kitchen pin. */
-  distanceKm: number;
+  /** Straight-line distance those runs spanned, donor pin to kitchen pin, or
+   *  null when the reader is not told any of them (D-47). */
+  distanceKm: number | null;
   /** Kitchens this courier delivered to, by meals carried. */
   drops: ImpactShare[];
 }

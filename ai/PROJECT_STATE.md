@@ -2,16 +2,19 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-05, branch `master`, HEAD `883bcee`
-> (Task 26: the match-distance privacy fix, `HA-3`/D-45). Task 25's donor needs board and
-> requirement read scope (D-44) are committed as `e72d4c2`, the Task 22 matcher correction
+> Last verified against the repository: 2026-09-08, branch `master`, HEAD `8cbb736`
+> (Task 27: reopening retired needs, `F-1`/D-46 — **committed**). Task 26's match-distance
+> privacy fix (`HA-3`/D-45) is committed as `883bcee`, Task 25's donor needs board and
+> requirement read scope (D-44) as `e72d4c2`, the Task 22 matcher correction
 > as `a9f190b`, the Task 23 test harness as `f33aeae` and the Task 24 landing-page
-> correction as `9b11353`. ⚠️ **The working tree carries the uncommitted Task 27
-> requirement-reopen work** — `F-1`/D-46: `GET /api/requirements` takes `includeInactive`,
-> which adds retired rows for an admin or for an NGO's **own** organisation and is refused
-> for a donor, and the NGO portal lists retired needs and reopens one through the existing
-> PATCH. Two backend files, four frontend files, two new frontend test files; 252 backend
-> and 74 frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
+> correction as `9b11353`. ⚠️ **The working tree carries the uncommitted Task 28
+> donation-privacy work** — `HA-3b`/D-47: `serialize.donation_out` takes the existing
+> `_precise_distance_scope` set, so `DonationOut.matchScore` and `DonationOut.distanceKm`
+> reach an administrator and the accepting organisation exactly and a donor, a courier and
+> a peer organisation not at all. `Donation.match_score` still stores the precise frozen
+> decision (D-30) — only the exposure moved. Three backend files, one new backend test
+> file, four corrected tests, six frontend files and one CI step; 263 backend and 75
+> frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
 > I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
@@ -26,7 +29,9 @@
 > confirmed findings are now answered. ⚠️ The `HA-3` fix left two named
 > residuals — `HA-3a` (ranking membership is still an oracle at the 8 km gate) and
 > `HA-3b` (`match_score` and `DonationOut.distanceKm`) — recorded in `TASKS.md` →
-> *Backlog → A* rather than treated as closed.
+> *Backlog → A* rather than treated as closed. **`HA-3b` is closed by the uncommitted
+> Task 28 (D-47); `HA-3a` remains open** and its control is abuse-limiting on donation
+> creation, not another distance representation.
 
 ## What this project is
 

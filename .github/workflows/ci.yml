@@ -1,9 +1,10 @@
 # Automated validation for FoodLink.
 #
-# Three regressions this is meant to catch, and nothing else: a backend test
-# breaking, a TypeScript/build error in the frontend, and a model change
-# committed without an Alembic revision. Deployment is deliberately out of
-# scope — the project has no deployment configuration (see ai/PROJECT_STATE.md).
+# Four regressions this is meant to catch, and nothing else: a backend test
+# breaking, a frontend test breaking, a TypeScript/build error in the
+# frontend, and a model change committed without an Alembic revision.
+# Deployment is deliberately out of scope — the project has no deployment
+# configuration (see ai/PROJECT_STATE.md).
 #
 # `.github/workflows/mkdocs.yml` still owns documentation deployment; the two
 # are kept separate because they answer different questions and one failing
@@ -67,7 +68,7 @@ jobs:
           alembic -c code/alembic.ini check
 
   frontend:
-    name: frontend build
+    name: frontend tests + build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -83,6 +84,12 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      # `npm test` is `vitest run` — the suite established in D-43, run before
+      # the build so a failing assertion is reported as a failing test rather
+      # than lost behind a type error.
+      - name: Run frontend tests
+        run: npm test
 
       # `npm run build` is `tsc && vite build`, so this is the type check too.
       - name: Build frontend

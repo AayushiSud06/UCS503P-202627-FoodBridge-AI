@@ -2,6 +2,7 @@ import { CheckCircle, Package, Route } from 'lucide-react';
 import { useDonations } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
 import { donorImpact } from '../lib/impact';
+import { formatTotalDistanceKm } from '../lib/geo';
 import { MHero, MSection, MDetail, MShare } from './parts';
 
 export default function DonorImpact() {
@@ -73,7 +74,7 @@ export default function DonorImpact() {
             <Route size={14} className="text-emerald-600" /> Straight-line distance
           </span>
         }
-        value={`${impact.distanceKm.toFixed(1)} km`}
+        value={formatTotalDistanceKm(impact.distanceKm)}
       />
 
       <MSection title="Kitchens you supply" />

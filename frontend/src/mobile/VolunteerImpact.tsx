@@ -2,6 +2,7 @@ import { Route, Utensils } from 'lucide-react';
 import { useDonations, useMyVolunteer } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
 import { volunteerImpact } from '../lib/impact';
+import { formatTotalDistanceKm } from '../lib/geo';
 import { MHero, MSection, MDetail, MShare } from './parts';
 
 export default function VolunteerImpact() {
@@ -32,7 +33,7 @@ export default function VolunteerImpact() {
             <Route size={14} className="text-emerald-600" /> Straight-line distance
           </span>
         }
-        value={`${impact.distanceKm.toFixed(1)} km`}
+        value={formatTotalDistanceKm(impact.distanceKm)}
       />
 
       <MSection title="Kitchens you delivered to" />

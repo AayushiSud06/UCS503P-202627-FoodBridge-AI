@@ -83,6 +83,19 @@ export function formatDistanceKm(donation: Donation, fallback = 'Distance unavai
   return km === null ? fallback : `${km} km`;
 }
 
+/**
+ * A *summed* straight-line distance, or an honest blank when none is known.
+ *
+ * `sumDistanceKm` returns null rather than zero when not one donation in the
+ * set carries a distance, which since D-47 is every donation a donor or a
+ * courier reads: the server withholds `distanceKm` from a reader who may not
+ * locate the kitchen. Zero kilometres would be a claim about the journeys, and
+ * a wrong one; the total is unknown, not nil.
+ */
+export function formatTotalDistanceKm(km: number | null, fallback = 'Not available'): string {
+  return km === null ? fallback : `${km.toFixed(1)} km`;
+}
+
 /** One wording for what the number means, so no two screens explain it differently. */
 export const DISTANCE_HINT =
   'Straight-line distance between the two pinned locations — not a road or driving distance';

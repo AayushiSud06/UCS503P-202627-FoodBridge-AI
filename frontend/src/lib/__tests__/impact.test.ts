@@ -51,6 +51,18 @@ describe('donorImpact', () => {
 
     expect(donorImpact(donations, '1').distanceKm).toBe(3.5);
   });
+
+  it('reports an unknown total rather than zero when no distance was sent', () => {
+    // Since D-47 the server withholds `distanceKm` from a donor entirely: an
+    // exact distance to a named kitchen trilaterates it. Zero kilometres would
+    // be a claim about the journeys, and a false one — the total is unknown.
+    const donations = [
+      donation({ id: 1, donorId: 1, status: 'COMPLETED', distanceKm: null }),
+      donation({ id: 2, donorId: 1, status: 'COMPLETED', distanceKm: null }),
+    ];
+
+    expect(donorImpact(donations, '1').distanceKm).toBeNull();
+  });
 });
 
 describe('ngoImpact', () => {

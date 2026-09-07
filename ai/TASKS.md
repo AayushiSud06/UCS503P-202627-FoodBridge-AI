@@ -1,11 +1,12 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-05. HEAD is `883bcee` (Task 26: the
-> match-distance privacy fix, `HA-3`, D-45); the working tree carries the **uncommitted
-> Task 27 requirement-reopen work** (`F-1`, D-46) described under *Current*. Task 25's
-> donor needs board and requirement read scope (D-44) are committed as `e72d4c2`, Task
-> 22's matcher correction as `a9f190b`, Task 23's frontend test harness as `f33aeae` and
-> Task 24's landing-page correction as `9b11353`.
+> Verified against the repository on 2026-09-08. HEAD is `8cbb736` (Task 27: reopening
+> retired needs, `F-1`, D-46 — **committed**); the working tree carries the **uncommitted
+> Task 28 donation-privacy work** (`HA-3b`, D-47) described under *Current*. Task 26's
+> match-distance privacy fix (`HA-3`, D-45) is committed as `883bcee`, Task 25's donor
+> needs board and requirement read scope (D-44) as `e72d4c2`, Task 22's matcher correction
+> as `a9f190b`, Task 23's frontend test harness as `f33aeae` and Task 24's landing-page
+> correction as `9b11353`.
 > The lifecycle write-authorization work is committed — D-34 as `551c96d`, the D-35
 > ownership-takeover follow-up as `efd5fd8` — as are the I-4 notification-honesty pass
 > (`6863451`), the I-5 trust/verification pass (`6c82739`), the I-6 courier status-display
@@ -37,10 +38,60 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 27 — reopening retired requirements, complete.**
-Task 26 is now committed (`883bcee`) and its entry has moved to *Completed*.
+**Uncommitted in the working tree: Task 28 — the remaining distance-privacy leaks,
+complete.** Task 27 is now committed (`8cbb736`, HEAD) and its entry stays below for
+context until it moves to *Completed*.
 
-### Task 27 — `F-1` · a retired requirement gets a reader, and the portal a reopen action `[F-1 · D-29 · D-44 · D-46]`
+### Task 28 — `HA-3b` · the D-45 reader scope reaches the donation, not just `/matches` `[HA-3b · D-26 · D-30 · D-33 · D-45 · D-47]`
+
+**The two readings D-45 wrote down and left open are closed.** Both live on `DonationOut`
+and both are exact functions of a kitchen's true coordinates: `matchScore`, the frozen
+weighted sum (~1 point per 320 m), and `distanceKm`, the donor-pin-to-kitchen measurement
+once a recipient binds. **No schema change, no migration, no new endpoint, no new privacy
+mechanism, no matcher change.**
+
+- **One scope, reused.** `serialize.donation_out` gained `precise_for` — the set
+  `donations._precise_distance_scope` already builds for `/matches`, same convention
+  (`None` unrestricted, a set is the ids allowed). All four `donation_out` call sites pass
+  the reader's. `matching.py` is untouched.
+- **`distanceKm`** is computed only when the bound recipient is in scope. **`matchScore`**
+  is returned only when the frozen score's *subject* is — `donation.recipient_id` once
+  accepted, and before that whichever kitchen ranked first, which nothing in the row names,
+  so an unbound score is precise only for an unrestricted reader.
+- **Verified per role against a throwaway database:** stored `match_score` 83 and the
+  kitchen at 1.54 km; **donor** `null`/`null`, **courier** `null`/`null`, **own NGO**
+  `83`/`1.54`, **admin** `83`/`1.54`, **peer NGO** 404 (an accepted donation was never in
+  its read scope). No recipient coordinate appears in any payload.
+- ⚠️ **The courier is the stronger attacker, not the donor** this item described.
+  `_readable_by` shows a courier every unclaimed `ACCEPTED` pickup from every donor, each
+  naming its kitchen — several donations bound to one kitchen trilaterate it with no
+  pin-walking at all.
+- **`Donation.match_score` keeps its D-30 meaning.** The column still stores the precise
+  frozen decision; both freezes still call `rank_recipients` with no scope. A test pins
+  that the stored value equals the *precise* `score_pair` result and differs from the
+  blurred one — the wrong fix (pushing the scope back into the freeze) fails it.
+- **Withheld, never rounded or re-scored.** Rounding fails D-45's boundary search;
+  re-scoring from a surrogate would stop being the frozen record of a decision. D-33 rules
+  out a plausible substitute. So `null`. See D-47.
+- **Three existing tests in `test_match_score_consistency.py` and one in `test_api.py`
+  were corrected, not weakened**: each asserted that a *non-precise* reader is shown the
+  frozen score. They now read it through an administrator, so what they were actually about
+  — the frozen score describes a different organisation than `viewerMatch`, and a score
+  really is written at posting — is unchanged and still checked.
+- **New `code/tests/test_donation_privacy_scope.py`** (11 tests): the boundary per role,
+  the frozen score's provenance, the unchanged eligible set and order, the 8 km gate on
+  true coordinates, and a guard that `/matches` still behaves as D-45 left it.
+- **Frontend, minimally.** `lib/impact.sumDistanceKm` returns `number | null` instead of
+  summing withheld values as zero, and the five screens printing a donor's or courier's
+  "straight-line distance" total show an honest blank. A `0.0 km` total would have been a
+  fabricated figure introduced by this fix — the same D-33 rule the backend half enforces.
+  `lib/geo.formatTotalDistanceKm` holds the wording once.
+
+Validation: `pytest code/tests` **263/263** (252 → 263), `npm test` **75/75** (74 → 75),
+`npm run typecheck` clean, `npm run build` clean, `alembic check` reports no new upgrade
+operations. `.github/workflows/ci.yml`'s frontend job now runs `npm test` before the build.
+
+### Task 27 — `F-1` · a retired requirement gets a reader, and the portal a reopen action (committed `8cbb736`) `[F-1 · D-29 · D-44 · D-46]`
 
 **An NGO can now see and reopen its own retired needs.** D-29 kept the row on retirement
 and left it unreadable, so reopening was API-only; D-44 narrowed the board without adding
@@ -296,9 +347,10 @@ removed, one labelled, no substitute number introduced; detail under *Completed*
 
 **Then stop hardening.** The audit's recommended first product feature was the **donor
 needs board**, done as Task 25 (`e72d4c2`), and `HA-3` — the `/matches` distance
-disclosure — followed it as Task 26 (see *Current* and D-45). What sequences behind them
-is *Backlog → E* (concurrency guard → Postgres → deployment configuration), with `HA-3a`
-(the residual membership oracle, group A) the nearest remaining security item.
+disclosure — followed it as Task 26 (`883bcee`, D-45). Its named residual `HA-3b` is
+closed by Task 28 (D-47). What sequences behind them is *Backlog → E* (concurrency guard →
+Postgres → deployment configuration), with `HA-3a` (the residual membership oracle, group
+A) the nearest remaining security item.
 
 ---
 
@@ -342,14 +394,17 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       control is abuse-limiting on `POST /api/donations` (nothing rate-limits it today;
       `ratelimit.py` covers login and registration only), not another distance
       representation. `[HA-3a · D-06 · D-27 · D-45 · repo]` — **M**
-- [ ] **`HA-3b` · two smaller distance readings outside `/matches`.** Found while
-      implementing D-45, both left alone as out of that task's scope. `Donation.match_score`
-      is frozen from a precise ranking and shown to the donor who chose the pin — one number
-      per donation, about whichever kitchen ranked first, resolving to ~320 m. And
-      `DonationOut.distanceKm` is the exact donor-pin-to-kitchen distance once a recipient
-      binds, readable by the donor; weaker, because the donor does not choose which kitchen
-      accepts. Neither is the reproduced bypass `HA-3` was, and fixing them touches D-30's
-      frozen score and `serialize.donation_out`. `[HA-3b · D-30 · D-45 · repo]` — **S**
+- [x] ✅ **Done (Task 28, uncommitted)** — `HA-3b`: `serialize.donation_out` takes the
+      `_precise_distance_scope` set and withholds both readings from a reader outside it.
+      `matchScore` is returned only when the frozen score's subject is in scope, `distanceKm`
+      only when the bound recipient is; an administrator and the accepting organisation
+      keep both exactly, a donor, a courier and a peer organisation get `null`.
+      ⚠️ **The courier turned out to be the stronger attacker than the donor this item
+      described** — `_readable_by` shows them every unclaimed `ACCEPTED` pickup from every
+      donor, so several donations bound to one kitchen trilaterate it without choosing any
+      pin. `Donation.match_score` keeps its D-30 meaning: the column still stores the
+      precise frozen decision and both freezes still rank on true coordinates. D-47 records
+      why withholding beats rounding or re-scoring. `[HA-3b · D-30 · D-45 · D-47]` — **S**
 - [ ] Security headers + CSP (and HSTS wherever TLS terminates). Nothing is sent today. A
       CSP is the single largest mitigation available for the localStorage-token choice the
       project has deliberately accepted (D-13). `[R-21 · S-7]` — **S**

@@ -1,11 +1,12 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on **2026-09-05**, at HEAD `883bcee`
-> (Task 26, the match-distance privacy fix, D-45) **plus the uncommitted Task 27 changes**
-> in the working tree — retired requirements gain a reader and the NGO portal a reopen
-> action (D-46), `TASKS.md` → *Current*. Task 25's donor needs board and requirement read
-> scope (D-44) are committed as `e72d4c2`. Earlier verification points: the project health
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-08**, at HEAD `8cbb736`
+> (Task 27, retired requirements gain a reader and the NGO portal a reopen action, D-46)
+> **plus the uncommitted Task 28 changes** in the working tree — the D-45 distance scope
+> now also decides what `DonationOut` says (D-47), `TASKS.md` → *Current*. Task 26's
+> match-distance privacy fix (D-45) is committed as `883bcee`, Task 25's donor needs board
+> and requirement read scope (D-44) as `e72d4c2`. Earlier verification points: the project health
 > audit at `c274e99`, and `23c27f4` on 2026-09-02.
 
 ## Shape
@@ -51,7 +52,7 @@ No Redux, no Axios, no form library.
 | `security.py` | 73 lines: bcrypt, JWT mint/verify, `get_current_user`, `require_roles`. |
 | `ratelimit.py` | `RateLimiter` (sliding window, per key, in this process) + the two route dependencies guarding login and registration. No new dependency; see D-27. |
 | `matching.py` | Haversine + 5 scoring functions + `WEIGHTS` + `rank_recipients`. **Pure — no DB access**, so unit-testable. |
-| `serialize.py` | `donation_out()` — ORM row + relations → wire shape; computes `distanceKm` live. |
+| `serialize.py` | `donation_out()` — ORM row + relations → wire shape; computes `distanceKm` live, and applies the caller's `precise_for` scope to it and to `matchScore` (D-47). |
 | `routers/` | `auth` · `admin` · `donations` · `organisations` · `metrics` |
 | `cli.py` | `create-admin`, `promote`, `reset-password`, `list-admins`. Bootstrap path. |
 | `seed.py` | Demo data with deadlines relative to run time. |
@@ -269,6 +270,17 @@ decided on the true position**, so the ranking itself does not depend on who is 
 See D-45. ⚠️ That gate is the residual: a recipient appears iff the true distance is within
 8 km, which a patient prober can still use (`TASKS.md` → *Backlog → A* / `HA-3a`).
 
+**And the same scope decides what the donation itself says.** `serialize.donation_out()`
+takes `precise_for` — the identical set — and withholds the two location-derived fields on
+`DonationOut` from a reader outside it: `distanceKm` unless the *bound* recipient is in
+scope, and `matchScore` unless the frozen score's **subject** is (the bound recipient once
+one exists; before that an unnamed top-ranked kitchen, so only an unrestricted reader
+qualifies). An administrator and the accepting organisation read both exactly; a donor, a
+courier and a peer organisation read `null`. Withheld rather than rounded, because a
+rounded value's boundaries sit at known distances, and never re-scored, because
+`Donation.match_score` is still the precise frozen decision D-30 defines — the column and
+both freezes are untouched. See D-47.
+
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
 only come from `python -m foodlink.cli create-admin`; subsequent ones from
@@ -316,8 +328,10 @@ Travel time, which `_deadline_score` needs, is derived from it by a flat constan
 `travel_minutes = (distance / 20) * 60`, i.e. 20 km/h assumed city traffic
 (`matching.py:132`). Both are deliberate and both are approximations. **Neither is
 serialised to a client**: `DonationOut.distanceKm` and `MatchOut.distanceKm` carry the
-great-circle kilometres — `MatchOut.distanceKm` only for the organisation the row is about
-(D-45), otherwise `null` — and travel time never leaves the module. Since I-2 the interface
+great-circle kilometres — each only for a reader entitled to the organisation's true
+position, `MatchOut.distanceKm` for the organisation the row is about (D-45) and
+`DonationOut.distanceKm` for the accepting organisation or an administrator (D-47),
+otherwise `null` — and travel time never leaves the module. Since I-2 the interface
 says so — every distance is labelled straight-line, no travel estimate is displayed
 anywhere, and `frontend/src/lib/geo.ts` is the single selector deciding which of the two
 server distances a screen shows (D-33). *Blocked* covers whether to replace the model.
@@ -384,7 +398,7 @@ router and response shape do not change.
 
 | Field | What it is | Where it is shown |
 |---|---|---|
-| `DonationOut.matchScore` | The stored `Donation.match_score`. Frozen: the top match at posting, re-frozen as the accepting organisation's own score at acceptance. The same number for every reader. | Donor screens, admin screens, and the NGO's *accepted* screen — labelled "at acceptance" |
+| `DonationOut.matchScore` | The stored `Donation.match_score`. Frozen: the top match at posting, re-frozen as the accepting organisation's own score at acceptance. Stored precisely, but **reader-scoped on the wire** — `null` unless the caller may be told the subject kitchen's true position, because the weighted sum moves ~1 point per 320 m (D-47). | Admin screens, and the NGO's *accepted* screen — labelled "at acceptance". A donor no longer receives it |
 | `DonationOut.viewerMatch` | The **calling** organisation's own ranking, computed per request by `routers/donations._viewer_match()` through the same `score_pair`. A full `MatchOut`, not just a total. Null unless the caller is an `ngo` with a profile **and** the donation is still in `OPEN_TO_RECIPIENTS`. | Every NGO surface that says "match": desktop and mobile available lists, the dashboard row, and the analysis panel |
 
 Confusing the two is what let one donation read 94% on an NGO's list and 64% in the
@@ -475,7 +489,7 @@ exists per connection, so the default pool would give test and request different
 databases. `app.dependency_overrides[get_db]` swaps the session in without
 application code knowing.
 Plus 22 config unit tests, 22 rate-limit tests and 8 migration tests
-(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **242 in total**
+(`test_migrations.py`, temp file databases, never `DATABASE_URL`) — **263 in total**
 (~205 s, almost entirely real bcrypt hashing). ⚠️ The per-bucket figures in this paragraph
 predate the last few task files and no longer add up to that total; `PROJECT_STATE.md`'s
 status table carries the current per-file breakdown. `test_donation_reads.py` (13),
@@ -531,6 +545,14 @@ six; and the organisation's own row, `viewerMatch`, the eligible set and the fro
 kitchen whose surrogate crosses the radius stays on the side its true position puts it —
 because that is the property a privacy control applied one line too early would silently
 break.
+`test_donation_privacy_scope.py` (11) carries the same boundary one endpoint over (D-47),
+on `DonationOut` rather than `/matches`: a donor and a courier read `null` for both
+`distanceKm` and `matchScore` while still being told the kitchen's *name*, the accepting
+organisation and an administrator read both exactly, and a peer organisation on the open
+pool is refused the frozen score but keeps its own `viewerMatch`. Three of them guard the
+distinction the fix is easiest to collapse — the stored score still equals the **precise**
+`score_pair` result and differs from the blurred one, the eligible set and its order are
+identical for all three readers, and the 8 km gate still reads true coordinates.
 `test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the
@@ -538,7 +560,7 @@ process rather than the per-test database.
 
 ### Frontend — `npm test` in `frontend/`
 
-**59 tests over 8 files**, Vitest 3.2 driven through the project's own
+**75 tests over 10 files**, Vitest 3.2 driven through the project's own
 `vite.config.ts`, so a module resolves in a test exactly as it does in the build (D-43).
 Runner config is the `test` block in that file; there is no separate config and no setup
 file. Default environment is **node**; the four suites that render — `lib/api.test.ts`,
@@ -551,8 +573,9 @@ The seams chosen are the ones carrying logic that `tsc` cannot check, because ev
 field involved is a string or a number on both sides of the change:
 `lib/adapters.ts` (9 — entityId precedence, event→timestamp folding, the
 `deadlineScore`→`pickupAvailabilityScore` rename, feed ordering), `lib/time.ts` (8 —
-urgency bands at their boundaries, the deadline roll-forward), `lib/impact.ts` (6 — D-32,
-`COMPLETED`-only counting and the server counter winning over the loaded list),
+urgency bands at their boundaries, the deadline roll-forward), `lib/impact.ts` (7 — D-32,
+`COMPLETED`-only counting, the server counter winning over the loaded list, and a summed
+distance reported as *unknown* rather than 0 km once D-47 withholds every input),
 `lib/geo.ts` (5 — D-33, `viewerMatch.distanceKm` beating `distanceKm`, and D-45's
 null-distance match falling through to it), `lib/api.ts`
 (8 — token attach, the 401 eviction, Pydantic detail flattening, bodyless 5xx →
