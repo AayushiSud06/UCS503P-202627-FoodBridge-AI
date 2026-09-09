@@ -1,9 +1,10 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-09. HEAD is `d5a6b68`. **Task 28's
-> donation-privacy work (`HA-3b`, D-47) is committed as `d611424`**; the two commits after
-> it are documentation only (the UML set under `docs/uml/`). The working tree carries the
-> **uncommitted Task 29 landing-page cleanup** (D-48) described under *Current*. Task 27
+> Verified against the repository on 2026-09-09. HEAD is `6961555` — **Task 29's
+> landing-page cleanup (D-48) is committed**, and the working tree now carries the
+> **uncommitted Task 30 login-page redesign** (D-49) described under *Current*. **Task 28's
+> donation-privacy work (`HA-3b`, D-47) is committed as `d611424`**; the two commits between
+> them are documentation only (the UML set under `docs/uml/`). Task 27
 > (reopening retired needs, `F-1`, D-46) is committed as `8cbb736`, Task 26's
 > match-distance privacy fix (`HA-3`, D-45) as `883bcee`, Task 25's donor
 > needs board and requirement read scope (D-44) as `e72d4c2`, Task 22's matcher correction
@@ -40,11 +41,52 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 29 — the public landing-page cleanup,
-complete.** Task 28 is now committed (`d611424`) and Task 27 (`8cbb736`); both entries stay
-below for context until they move to *Completed*.
+**Uncommitted in the working tree: Task 30 — the login-page redesign, complete.**
+Task 29 is now committed (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`); those
+entries stay below for context until they move to *Completed*.
 
-### Task 29 · the public landing page is a product page `[D-31 · D-36 · D-48]`
+### Task 30 · the login page is a product screen, and carries no credential `[D-48 · D-49]`
+
+**Frontend only, one page and one new test file.** `pages/Login.tsx` was rebuilt as a
+single two-column card: a deep-moss brand panel — wordmark, the landing page's
+"Good food, *redirected*" line, and Donate / Match / Deliver as a ruled editorial list —
+beside the form, collapsing below `lg` to the form alone with an inline wordmark. The four
+role tiles became one row of equal-width chips on a single accent, with the selected
+role's description on one line beneath them, replacing the 2×2 grid that used four
+different colour schemes. Added: a password reveal toggle, `focus-visible` rings on every
+non-input control, and `aria-pressed` on the chips. Reuses `card`, `input-field`, `label`
+and `btn-primary` from `index.css`; no new dependency, no new UI framework.
+
+- [x] **Every trace of the seeded demo accounts is gone (D-49)** — both the footnote that
+      printed `foodlink123` *and* the `demoEmail` / `DEMO_PASSWORD` constants behind the
+      role tiles' autofill, which typed a seed account into the fields on a click. The
+      accounts themselves are untouched in `foodlink/seed.py` and stay documented for
+      whoever runs a demo in `docs/authentication.md`.
+- [x] **The subtitle no longer sends anyone to a dashboard**: "Sign in to continue to your
+      side of the handover".
+- [x] **Auth untouched.** `signIn` / `signUp` receive exactly what was typed;
+      `AuthContext`, `lib/api.ts`, `HOME_PATH`, `ProtectedRoute`, the `from` redirect,
+      validation, error handling and the expired-session banner are unchanged, as are the
+      `#btn-signin` / `#btn-switch-*` / `#role-*` / `#login-error` element ids. No backend,
+      schema, API, routing or registration change, and **no rename**.
+- [x] **`pages/__tests__/Login.test.tsx` is new — 10 tests**, pinning those contracts
+      across the restyle and asserting the absence of the old subtitle and of every seed
+      credential. Frontend suite: **90 tests over 11 files**.
+- [x] Validation: `npm test` 90/90, `npm run typecheck` clean, `npm run build` clean, and
+      the page driven in the dev server at desktop width and 375 px — no console errors,
+      no horizontal overflow, no clipped chip label, the role chips / reveal toggle /
+      mode switch / validation banner all working, and `POST /api/auth/login` still issued
+      on submit.
+- ⚠️ `npm run lint` **cannot run**: the script calls `eslint`, which is not in
+      `devDependencies` and is not installed. Pre-existing, unrelated to this task.
+- ⚠️ **A signed-in round trip was not exercised** — only the frontend dev server was
+      running, so the submit was verified as far as the request. Nothing on the auth path
+      was edited.
+- ⚠️ In sign-in the role chips now change only the description line and the role carried
+      into sign-up; they never affected the request. Noted in D-49 — a product question
+      about whether sign-in should keep them, not a defect.
+
+### Task 29 · the public landing page is a product page (committed `6961555`) `[D-31 · D-36 · D-48]`
 
 **Frontend only, one page and its test file.** `pages/Landing.tsx` lost the academic
 identification (the `Thapar University · UCS503P` hero label and its rule, the two footer

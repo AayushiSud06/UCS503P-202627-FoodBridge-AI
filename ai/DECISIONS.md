@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-48. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-49. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -2057,3 +2057,53 @@ and **links that do not go anywhere**. Established by the product review behind 
 - **Nothing else changed.** No backend, schema, migration, API, routing, auth or matcher
   change; no other page touched. The section palette and grid are as they were — the
   page is shorter, not restyled.
+
+---
+
+## D-49 · The sign-in screen carries no credential of its own **[documented]**
+
+**Decision.** `pages/Login.tsx` names no account and fills in no account. The seeded demo
+credentials reach the interface nowhere: neither as the footnote that printed
+`foodlink123`, nor as the role tiles' side effect of typing a seed address and that
+password into the email and password fields when one was clicked. The accounts are
+unchanged in `foodlink/seed.py` and stay documented for whoever runs a demonstration in
+`docs/authentication.md` — they simply are not part of the product's own surface.
+Established by the product review behind Task 30, alongside a presentational rebuild of
+the same screen.
+
+**Reasoning.**
+
+- **The footnote and the autofill were one feature, not two.** The footnote existed to
+  explain the autofill ("pick a role above to fill one in"); removing only the text would
+  have left the page still carrying seeded credentials, one interaction deeper and now
+  unannounced. This is D-48's rule applied to the second pre-login screen: the reader is
+  someone deciding whether to sign up, and a page that hands them a working password
+  tells them the thing is a demonstration.
+- **A control that silently overwrites typed input is a defect, not a convenience.** Once
+  the explanation is gone, clicking *Volunteer* after typing your own address would have
+  replaced both fields without a word. Held by a test that types first, then clicks every
+  role, and asserts both fields survive.
+- **Nothing was lost operationally.** The credentials were already recorded in
+  `docs/authentication.md` → *Seed data*, which is where someone preparing a demo looks;
+  the login screen was the wrong place to keep a second copy.
+
+**Constraints.**
+
+- **The auth path is untouched.** `signIn` / `signUp` still receive exactly what was typed,
+  `POST /api/auth/login` is unchanged, and the account — not the tile — still decides the
+  destination through `HOME_PATH`. `AuthContext`, `lib/api.ts`, `ProtectedRoute`, the
+  `from` redirect, validation, error handling and the expired-session banner are as they
+  were, as are the element ids other tooling may key on.
+- ⚠️ **In sign-in the role chips now change only the description line and the role carried
+  into registration.** They never affected the request — that is the point of the comment
+  above `ROLES` — but the autofill was their one sign-in side effect, so what remains
+  there is wayfinding. Whether sign-in should offer them at all is a product question for
+  the next review; removing them was outside Task 30's scope, which was told to preserve
+  the role-selection concept.
+- **Held mechanically.** `pages/__tests__/Login.test.tsx` asserts the absence of
+  `foodlink123`, of all four seed addresses and of the word "demo" anywhere on the page,
+  and pins the contracts a restyle could quietly break: every role selectable, the typed
+  credentials reaching `signIn`, empty-form validation, a rejected sign-in's message, and
+  registration one click away under the selected role.
+- **This is not the rename.** FoodLink AI stands in the wordmark on both the brand panel
+  and the mobile header.
