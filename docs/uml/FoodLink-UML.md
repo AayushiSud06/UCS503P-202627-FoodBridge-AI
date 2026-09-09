@@ -137,6 +137,15 @@ legend instead:
 
 ## 4. Use Case Scenarios
 
+> **A fuller treatment now lives in its own document.**
+> [`FoodLink-Use-Case-Scenarios.md`](FoodLink-Use-Case-Scenarios.md) (and its PDF)
+> is the submission-ready version: it covers all **24** actor-driven use cases
+> rather than the 16 summarised here, names every scenario exactly as the Use
+> Case Diagram labels it, and states for each whether the capability is
+> reachable through the web portal or through the API only. Treat it as
+> authoritative where the two differ; this section is kept as an inline summary
+> so the UML package still reads end to end on its own.
+
 Format: Name · Primary Actor · Goal · Preconditions · Main Success Flow ·
 Alternative / Exception Flows · Postconditions.
 

@@ -8,6 +8,8 @@ prepared for academic submission.
 | File | Artefact |
 | --- | --- |
 | [`FoodLink-UML.md`](FoodLink-UML.md) | The submission document: actors, use case scenarios, activity and class model, modeling notes, verification record |
+| [`FoodLink-Use-Case-Scenarios.md`](FoodLink-Use-Case-Scenarios.md) | **Use Case Scenarios**, standalone — all 24 actor-driven use cases in full template form |
+| `FoodLink-Use-Case-Scenarios.pdf` | The same document, print-ready (A4, 19 pages) |
 | `diagrams/*.drawio` | The same three diagrams as editable diagrams.net files |
 | [`diagrams/01-use-case.puml`](diagrams/01-use-case.puml) | **Use Case Diagram** — 6 actors, 27 use cases, system boundary "FoodLink AI" |
 | [`diagrams/02-activity-donation-lifecycle.puml`](diagrams/02-activity-donation-lifecycle.puml) | **Activity Diagram** — the food donation lifecycle across 4 swimlanes |
