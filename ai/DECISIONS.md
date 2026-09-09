@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-46. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-48. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -2008,3 +2008,52 @@ value is still written from the kitchen's true coordinates. Only the exposure mo
   at the 8 km gate, and the control for it is abuse-limiting on donation creation.
 
 ---
+
+## D-48 · The pre-login page is a product page, not a coursework artefact **[documented]**
+
+**Decision.** `pages/Landing.tsx` is the one screen a stranger sees, and it carries only
+claims about the product a stranger could act on. Three classes of content are excluded
+from it outright, regardless of how well they are labelled: **academic identification**
+(university, course code, semester, prototype number), a **roadmap of unbuilt phases**,
+and **links that do not go anywhere**. Established by the product review behind Task 29.
+
+**Reasoning.**
+
+- **It narrows D-31 for one audience, and only there.** D-31 holds that a forward-looking
+  claim is fine *if labelled*, and the landing page's roadmap was labelled correctly
+  — three phase cards, one marked done and two not. It was still wrong on this page,
+  because the reader is a prospective donor or kitchen deciding whether to sign up, not a
+  reviewer assessing progress. To them "Prototype 2 · ML-assisted recipient ranking" is
+  not context, it is a statement that the thing they are looking at is not finished.
+  D-31 is unchanged everywhere else: `FutureIntelligenceSection` and the matching
+  section's "Currently rule-based · ML-assisted matching planned for Phase 2" line are
+  both behind sign-in and both stay.
+- **A dead link is a claim too.** The four footer links (`About`, `How It Works`,
+  `Contact`, `GitHub`) were `href="#"` — they scrolled the reader to the top of the page
+  they were already on. That is D-36's rule about dead toggles applied to navigation: the
+  remedy is removal, not a placeholder page, because inventing an About or Contact page to
+  justify the link would put the fabrication one level deeper.
+- **The academic framing was load-bearing in the wrong direction.** "Thapar University ·
+  UCS503P" sat directly above the headline and "Built for UCS503P" closed the page; the
+  impact caption opened with "FoodLink AI is a university prototype". Read together they
+  told a visitor the honest matching engine, the append-only ledger and the verification
+  gate below them were coursework. Nothing about the running system changed when they were
+  removed — only who the page appears to be addressed to.
+
+**Constraints.**
+
+- **This is not the rename.** The product is still called FoodLink AI in the navbar, hero,
+  footer, `index.html` title and meta description. Renaming is separate open work and this
+  decision deliberately does not start it.
+- ⚠️ **`index.html`'s meta description still reads "An AI-assisted platform"**, which is
+  the same claim removed from the visible footer, one layer out where nobody was looking.
+  Out of Task 29's scope; recorded in `TASKS.md` -> *Backlog -> I*.
+- **Held mechanically.** `pages/__tests__/Landing.test.tsx` asserts the absence of the
+  academic identifiers, the roadmap phases and any `href="#"` anywhere on the page,
+  alongside D-31's existing absence assertions — so a reintroduced label or dead link
+  fails a test rather than a review. It also pins the content that must survive (both
+  hero CTAs resolving to `/login`, the `#how-it-works` and `#impact` anchors `Navbar`
+  depends on, the handover card), so cleanup cannot quietly become deletion.
+- **Nothing else changed.** No backend, schema, migration, API, routing, auth or matcher
+  change; no other page touched. The section palette and grid are as they were — the
+  page is shorter, not restyled.

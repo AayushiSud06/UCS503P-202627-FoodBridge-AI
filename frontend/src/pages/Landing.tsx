@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Leaf, Heart, Users, ShieldCheck, Sparkles,
-  BarChart2, Check, MapPin, Truck, CheckCircle2, FlaskConical, Rocket,
+  BarChart2, Check, MapPin, Truck,
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 
@@ -98,30 +98,6 @@ const MATCH_REASONS = [
   'Strong reliability history',
 ];
 
-const ROADMAP = [
-  {
-    phase: 'Current prototype',
-    icon: CheckCircle2,
-    accent: 'text-emerald-700 bg-emerald-100',
-    items: ['Role-based dashboards', 'Complete donation lifecycle', 'Rule-based donor-recipient matching', 'Central state management'],
-    done: true,
-  },
-  {
-    phase: 'Prototype 2',
-    icon: FlaskConical,
-    accent: 'text-clay-700 bg-clay-100',
-    items: ['ML-assisted recipient ranking', 'Demand-aware redistribution', 'Volunteer assignment optimization', 'Route optimization'],
-    done: false,
-  },
-  {
-    phase: 'Advanced phase',
-    icon: Rocket,
-    accent: 'text-sky-700 bg-sky-100',
-    items: ['AI food image categorization', 'NLP donation understanding', 'Community surplus heatmap', 'Recurring donor-recipient detection'],
-    done: false,
-  },
-];
-
 function Blob({ className, fill }: { className: string; fill: string }) {
   return (
     <svg viewBox="0 0 200 200" className={className} aria-hidden="true">
@@ -147,13 +123,6 @@ export default function Landing() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
           <div className="grid lg:grid-cols-[1fr,340px] gap-16 items-center">
             <div className="max-w-2xl">
-              <div className="flex items-center gap-3 mb-7">
-                <span className="h-px w-9 bg-clay-500" />
-                <span className="text-xs font-semibold tracking-[0.18em] uppercase text-clay-700">
-                  Thapar University · UCS503P
-                </span>
-              </div>
-
               <h1 className="font-display text-5xl sm:text-6xl lg:text-[4.2rem] font-medium leading-[1.06] tracking-tight text-gray-900 mb-6">
                 Good food, <span className="italic text-emerald-700">redirected</span>
                 <br />— not wasted.
@@ -215,8 +184,8 @@ export default function Landing() {
           </div>
 
           <p className="mt-10 text-center text-xs text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            FoodLink AI is a university prototype. Platform-wide totals are derived from that
-            record and are only shown to signed-in accounts, so none are published here.
+            Platform-wide totals are derived from that record and are only shown to
+            signed-in accounts, so none are published here.
           </p>
         </div>
       </section>
@@ -382,45 +351,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Roadmap ────────────────────────────────────────────────────────── */}
-      <section className="py-24 bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-xl mx-auto mb-16">
-            <p className="text-xs font-semibold text-clay-700 tracking-[0.18em] uppercase mb-3">Roadmap</p>
-            <h2 className="font-display text-3xl sm:text-4xl font-semibold text-gray-900 mb-3">
-              Where this is headed
-            </h2>
-            <p className="text-gray-500">The semester-long development arc for FoodLink AI.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {ROADMAP.map((phase) => {
-              const Icon = phase.icon;
-              return (
-                <div key={phase.phase} className={`rounded-2xl border p-6 ${phase.done ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200'}`}>
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5 ${phase.accent}`}>
-                    <Icon size={14} />
-                    {phase.phase}
-                  </div>
-                  <ul className="space-y-2.5">
-                    {phase.items.map(item => (
-                      <li key={item} className="flex items-start gap-2.5">
-                        {phase.done ? (
-                          <Check size={15} className="text-emerald-700 mt-0.5 shrink-0" />
-                        ) : (
-                          <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 mt-0.5 shrink-0" />
-                        )}
-                        <span className={`text-sm ${phase.done ? 'text-emerald-900' : 'text-gray-600'}`}>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* ── CTA Banner ─────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden py-20 bg-emerald-800">
         <Blob className="absolute -top-24 -left-24 w-96 h-96 opacity-20" fill="#ffffff" />
@@ -438,27 +368,15 @@ export default function Landing() {
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center">
-                  <Leaf size={15} className="text-white" />
-                </div>
-                <span className="text-white font-display font-semibold">FoodLink AI</span>
-              </div>
-              <p className="text-sm">AI-assisted community food redistribution</p>
-              <p className="text-xs text-gray-600 mt-1">UCS503P Software Engineering · Thapar University</p>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center">
+              <Leaf size={15} className="text-white" />
             </div>
-
-            <div className="flex flex-wrap gap-5 text-sm">
-              {['About', 'How It Works', 'Contact', 'GitHub'].map(l => (
-                <a key={l} href="#" className="hover:text-emerald-400 transition-colors">{l}</a>
-              ))}
-            </div>
+            <span className="text-white font-display font-semibold">FoodLink AI</span>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-6 text-center text-xs text-gray-600">
-            © 2024 FoodLink AI — Prototype 0. Built for UCS503P.
-          </div>
+          <p className="text-sm max-w-md">
+            Connecting surplus food with verified community organizations and volunteers nearby.
+          </p>
         </div>
       </footer>
     </div>

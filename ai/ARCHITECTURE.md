@@ -1,10 +1,12 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on **2026-09-08**, at HEAD `8cbb736`
-> (Task 27, retired requirements gain a reader and the NGO portal a reopen action, D-46)
-> **plus the uncommitted Task 28 changes** in the working tree — the D-45 distance scope
-> now also decides what `DonationOut` says (D-47), `TASKS.md` → *Current*. Task 26's
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-09**, at HEAD `d5a6b68`
+> **plus the uncommitted Task 29 landing-page changes** in the working tree (D-48,
+> `TASKS.md` → *Current*). Task 28 is committed as `d611424` — the D-45 distance scope
+> now also decides what `DonationOut` says (D-47) — and the two commits after it are
+> documentation only. Task 27 (retired requirements gain a reader and the NGO portal a
+> reopen action, D-46) is `8cbb736`. Task 26's
 > match-distance privacy fix (D-45) is committed as `883bcee`, Task 25's donor needs board
 > and requirement read scope (D-44) as `e72d4c2`. Earlier verification points: the project health
 > audit at `c274e99`, and `23c27f4` on 2026-09-02.
@@ -560,7 +562,7 @@ process rather than the per-test database.
 
 ### Frontend — `npm test` in `frontend/`
 
-**75 tests over 10 files**, Vitest 3.2 driven through the project's own
+**80 tests over 10 files**, Vitest 3.2 driven through the project's own
 `vite.config.ts`, so a module resolves in a test exactly as it does in the build (D-43).
 Runner config is the `test` block in that file; there is no separate config and no setup
 file. Default environment is **node**; the four suites that render — `lib/api.test.ts`,
@@ -581,8 +583,9 @@ null-distance match falling through to it), `lib/api.ts`
 (8 — token attach, the 401 eviction, Pydantic detail flattening, bodyless 5xx →
 `NetworkError`) and `components/ProtectedRoute.tsx` (5 — the three redirect decisions).
 Two page suites hold content claims rather than arithmetic, which is the other thing `tsc`
-cannot see: `pages/__tests__/Landing.test.tsx` (4 — the absence of the invented platform
-figures) and `pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14 — that a need renders in
+cannot see: `pages/__tests__/Landing.test.tsx` (9 — the absence of the invented platform
+figures, and since Task 29 the absence of the academic identifiers, the roadmap phases and
+any `href="#"`, alongside the hero CTAs, anchors and copy that had to survive the cleanup) and `pages/donor/__tests__/DonorNeedsBoard.test.tsx` (14 — that a need renders in
 full, and that the board claims no fulfilment, commitment, automatic matching or statistic
 it was not given). Both are D-31 held at a boundary.
 

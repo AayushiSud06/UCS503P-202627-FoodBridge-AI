@@ -1,9 +1,11 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-08. HEAD is `8cbb736` (Task 27: reopening
-> retired needs, `F-1`, D-46 — **committed**); the working tree carries the **uncommitted
-> Task 28 donation-privacy work** (`HA-3b`, D-47) described under *Current*. Task 26's
-> match-distance privacy fix (`HA-3`, D-45) is committed as `883bcee`, Task 25's donor
+> Verified against the repository on 2026-09-09. HEAD is `d5a6b68`. **Task 28's
+> donation-privacy work (`HA-3b`, D-47) is committed as `d611424`**; the two commits after
+> it are documentation only (the UML set under `docs/uml/`). The working tree carries the
+> **uncommitted Task 29 landing-page cleanup** (D-48) described under *Current*. Task 27
+> (reopening retired needs, `F-1`, D-46) is committed as `8cbb736`, Task 26's
+> match-distance privacy fix (`HA-3`, D-45) as `883bcee`, Task 25's donor
 > needs board and requirement read scope (D-44) as `e72d4c2`, Task 22's matcher correction
 > as `a9f190b`, Task 23's frontend test harness as `f33aeae` and Task 24's landing-page
 > correction as `9b11353`.
@@ -38,11 +40,44 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 28 — the remaining distance-privacy leaks,
-complete.** Task 27 is now committed (`8cbb736`, HEAD) and its entry stays below for
-context until it moves to *Completed*.
+**Uncommitted in the working tree: Task 29 — the public landing-page cleanup,
+complete.** Task 28 is now committed (`d611424`) and Task 27 (`8cbb736`); both entries stay
+below for context until they move to *Completed*.
 
-### Task 28 — `HA-3b` · the D-45 reader scope reaches the donation, not just `/matches` `[HA-3b · D-26 · D-30 · D-33 · D-45 · D-47]`
+### Task 29 · the public landing page is a product page `[D-31 · D-36 · D-48]`
+
+**Frontend only, one page and its test file.** `pages/Landing.tsx` lost the academic
+identification (the `Thapar University · UCS503P` hero label and its rule, the two footer
+lines, the `© 2024 — Prototype 0. Built for UCS503P.` bar, and the impact caption's
+opening "FoodLink AI is a university prototype"), the whole **Roadmap / "Where this is
+headed"** section with its three phase cards and the `ROADMAP` constant behind it, and the
+four footer links (`About`, `How It Works`, `Contact`, `GitHub`) which were all `href="#"`.
+The footer's "AI-assisted community food redistribution" is replaced by one line that
+describes what the product does and claims no AI. **No rename** — FoodLink AI stands in the
+navbar, hero, footer and `index.html`. Reasoning and the boundary against D-31 in D-48.
+
+- [x] **Working navigation was verified before anything was removed.** `#how-it-works` and
+      `#impact` are real sections `Navbar` links to from both its desktop and mobile menus,
+      and all three `/login` CTAs are real routes in `App.tsx`; every one is untouched. The
+      only self-returning links on the page were the four footer ones.
+- [x] **Preserved deliberately:** the hero headline and product description, both hero
+      CTAs, the "How a handover is recorded" card, the How It Works, Community, matching
+      and impact sections, and the labelled example match card. The matching section's
+      "Currently rule-based · ML-assisted matching planned for Phase 2" line stays — removing
+      it would make that section claim *more* than the product does (D-31).
+- [x] **`pages/__tests__/Landing.test.tsx` grew from 4 tests to 9.** The five added assert
+      the absence of the academic identifiers, the roadmap phases, the four footer links
+      and any `href="#"`, and the presence of the content and destinations that had to
+      survive. Frontend suite: **80 tests over 10 files**.
+- [x] Validation: `npm test` 80/80, `npm run typecheck` clean, `npm run build` clean, and
+      the page rendered in the dev server at 1024 px and 390 px — no console errors, no
+      horizontal overflow, no gap where either removed block had been.
+- ⚠️ `npm run lint` **cannot run**: the script calls `eslint`, which is not in
+      `devDependencies` and is not installed. Pre-existing, unrelated to this task.
+- ⚠️ **`index.html`'s meta description still says "An AI-assisted platform"** — the same
+      claim removed from the visible footer. Out of scope here; see *Backlog · I*.
+
+### Task 28 — `HA-3b` · the D-45 reader scope reaches the donation, not just `/matches` (committed `d611424`) `[HA-3b · D-26 · D-30 · D-33 · D-45 · D-47]`
 
 **The two readings D-45 wrote down and left open are closed.** Both live on `DonationOut`
 and both are exact functions of a kitchen's true coordinates: `matchScore`, the frozen
@@ -394,7 +429,7 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       control is abuse-limiting on `POST /api/donations` (nothing rate-limits it today;
       `ratelimit.py` covers login and registration only), not another distance
       representation. `[HA-3a · D-06 · D-27 · D-45 · repo]` — **M**
-- [x] ✅ **Done (Task 28, uncommitted)** — `HA-3b`: `serialize.donation_out` takes the
+- [x] ✅ **Done (Task 28, `d611424`)** — `HA-3b`: `serialize.donation_out` takes the
       `_precise_distance_scope` set and withholds both readings from a reader outside it.
       `matchScore` is returned only when the frozen score's subject is in scope, `distanceKm`
       only when the bound recipient is; an administrator and the accepting organisation
@@ -922,6 +957,15 @@ Places where a shipped feature is incomplete — not new ideas.
       were not given an invented source. The comparison with `VolunteerProfile.tsx`'s
       `useEffect` does not carry over for the same reason: it syncs from a `Volunteer` row
       that loads asynchronously, while `user` is already present before this page renders.
+
+- [ ] **I-10 · `frontend/index.html`'s document metadata still claims AI.** The `<title>`
+      and `<meta name="description">` read *"FoodLink AI — Turning Surplus Food Into Community
+      Impact. An **AI-assisted** platform connecting surplus food with community
+      organizations."* That is the same claim Task 29 removed from the visible landing-page
+      footer, surviving one layer out where no screen shows it and no test looks — but a
+      search engine, a link preview and a browser tab all do. Found during Task 29 and left
+      alone: the file is branding metadata, and the project rename will rewrite both strings
+      anyway. Fold it into that work rather than editing the same two lines twice.
 
 ---
 

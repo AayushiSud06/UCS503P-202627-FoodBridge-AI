@@ -8,7 +8,7 @@ echo ========================================
 echo.
 
 echo Starting backend...
-start "FoodLink Backend" cmd /k "cd /d "%~dp0code" && ..\.venv\Scripts\python.exe -m uvicorn foodlink.main:app --reload"
+start "FoodLink Backend" cmd /k "cd /d "%~dp0code" && set FOODLINK_DEV_INSECURE_SECRET=1 && ..\.venv\Scripts\python.exe -m uvicorn foodlink.main:app --reload"
 
 echo Starting frontend...
 start "FoodLink Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
