@@ -1,9 +1,11 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-10. **Task 32's courier-history fix (D-51) is
-> now committed** — HEAD is `a58a914`, and the header below that used to call it
-> uncommitted was stale. The working tree carries the **uncommitted Task 33 roadmap
-> removal** described under *Current*. Task 31's availability fix (D-50) is `2ce3d71`,
+> Verified against the repository on 2026-09-10. **Task 33's recipient-panel roadmap
+> removal is now committed** as `db000d9`, which is HEAD — the header that called it
+> uncommitted was stale, as was the HEAD it named. The working tree carries the
+> **uncommitted Task 34 removal** (the admin dashboard's *Intelligence Roadmap*) described
+> under *Current*. Task 32's courier-history fix (D-51) is `a58a914`,
+> Task 31's availability fix (D-50) is `2ce3d71`,
 > Task 30's
 > login-page redesign (D-49) is `f863a94` and Task 29's landing-page cleanup (D-48) is
 > `6961555`. **Task 28's
@@ -45,12 +47,61 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 33 — the recipient explainability panel no longer
-carries an ML roadmap, complete.** Task 32 is now committed (`a58a914`, now HEAD), Task 31
-(`2ce3d71`), Task 30 (`f863a94`), Task 29 (`6961555`), Task 28 (`d611424`) and Task 27
-(`8cbb736`); those entries stay below for context until they move to *Completed*.
+**Uncommitted in the working tree: Task 34 — the admin dashboard no longer carries an
+Intelligence Roadmap, complete.** Task 33 is now committed (`db000d9`, now HEAD), Task 32
+(`a58a914`), Task 31 (`2ce3d71`), Task 30 (`f863a94`), Task 29 (`6961555`), Task 28
+(`d611424`) and Task 27 (`8cbb736`); those entries stay below for context until they move
+to *Completed*.
 
-### Task 33 · the ML Architecture Roadmap leaves the recipient's match panel `[repo · D-31 · D-48]`
+### Task 34 · the Intelligence Roadmap leaves the admin dashboard `[repo · D-31 · D-48]`
+
+**Frontend only, one page and one new test file, 24 lines deleted.** The admin *Platform
+Overview* closed with an *Intelligence Roadmap* card: three phase blocks naming an
+ML-assisted recipient ranker, demand-aware redistribution, volunteer route optimisation,
+AI food-image categorisation, NLP donation understanding and a community heatmap, each
+with a done/not-done marker. Every phase was labelled, so D-31 permitted it, and the
+product review removed it anyway for D-48's reason two screens along: the reader here is a
+platform operator reading real metrics, and an unbuilt PyTorch ranker is not something
+they can act on from a control panel.
+
+- [x] **It was inline markup, not a component.** The card lived directly in
+      `pages/admin/AdminDashboard.tsx` with its phase array written inline, so there was no
+      component to delete and no other consumer to check.
+      `components/FutureIntelligenceSection.tsx` is a **different** surface and is
+      untouched — see below.
+- [x] **Nothing became dead with it.** The card's two icons, `CheckCircle` and `Clock`,
+      are still read by the *Completed* and *Active Donations* stat cards, so the import
+      line is unchanged.
+- [x] **The two-column grid went with it, because it held exactly those two cards.**
+      `Recent Activity` was the roadmap's only sibling in `grid lg:grid-cols-2`; leaving
+      the wrapper would have left that card at half width beside an empty column on `lg`.
+      It is now a full-width card in the page's own `space-y-8` stack, like *All Donations*
+      below it. No other class, colour, spacing or grid on the page changed.
+- [x] **Everything else on the page is untouched:** all seven `StatCard` metrics, the
+      weekly meals chart, the food-category chart and its totals panel, the activity feed,
+      the full donations table with its status pills, and `useDonations`/`useStats`/
+      `useActivity`. No backend, API, schema, analytics, admin-action, routing or
+      authorization change.
+- [x] **Deliberately not swept.** `components/FutureIntelligenceSection.tsx` — the admin
+      Analytics *Future Intelligence Architecture* roadmap — is a separate surface and a
+      separate task; the landing page's *"Currently rule-based · ML-assisted matching
+      planned for Phase 2"* line is D-48's and stays.
+- [x] **Validated.** `npm test` **114/114** (14 files; 6 new in
+      `pages/admin/__tests__/AdminDashboard.test.tsx`, 108 → 114), `npm run typecheck`
+      clean, `npm run build` clean. The three absence tests were confirmed to **fail**
+      against the pre-removal page; the three preservation tests pass on both sides, which
+      is what makes them a guard against cleanup becoming deletion rather than a
+      restatement. The backend suite was **not** re-run: no backend file was touched.
+- ⚠️ **No authenticated browser pass.** `/admin` is behind `ProtectedRoute` and
+      `AppProvider` loads nothing without a signed-in account, and the agent operating
+      rules forbid entering a password to authenticate. The dev server was run and
+      `/admin` redirected to the sign-in screen with no console error; the page itself is
+      covered by the jsdom render above, which drives the real provider, the real adapters
+      and the real page. Same gap reported for Tasks 31–33.
+- ⚠️ `npm run lint` **cannot run**: the script calls an `eslint` that is not a dependency.
+      Pre-existing, unrelated — still *Backlog → H*.
+
+### Task 33 · the ML Architecture Roadmap leaves the recipient's match panel (committed `db000d9`) `[repo · D-31 · D-48]`
 
 **Frontend only, one component and its page's test file, five lines deleted.** The panel on
 *Available Donations* closed with a purple note reading *"ML Architecture Roadmap: …
@@ -77,7 +128,8 @@ can act on. It sat under the one panel whose whole purpose is to explain a score
 - [x] **Deliberately not swept.** `components/FutureIntelligenceSection.tsx` and
       `pages/admin/AdminDashboard.tsx`'s *Intelligence Roadmap* are the admin portal's and
       are separate tasks; the landing page's *"Currently rule-based · ML-assisted matching
-      planned for Phase 2"* line is D-48's and stays.
+      planned for Phase 2"* line is D-48's and stays. ⚠️ **The dashboard half is now done —
+      Task 34, above.** `FutureIntelligenceSection` is still separate and still untouched.
 - [x] **Validated.** `npm test` **108/108** (13 files; 2 new in
       `pages/ngo/__tests__/NGOAvailableDonations.test.tsx`, 106 → 108), `npm run typecheck`
       clean, `npm run build` clean. The absence test was confirmed to **fail** against the

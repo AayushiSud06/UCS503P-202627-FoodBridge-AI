@@ -161,49 +161,21 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Activity + Donations table */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Activity */}
-        <div className="card p-6">
-          <h2 className="section-title mb-4">Recent Activity</h2>
-          <div className="space-y-3">
-            {activity.slice(0, 8).map(log => (
-              <div key={log.id} className="flex items-start gap-3">
-                <div className="mt-1.5 shrink-0">
-                  {ACTIVITY_ICON[log.type] ?? <div className="w-2 h-2 rounded-full bg-gray-300" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-700">{log.message}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatRelativeTime(log.timestamp)}</p>
-                </div>
+      {/* Recent Activity */}
+      <div className="card p-6">
+        <h2 className="section-title mb-4">Recent Activity</h2>
+        <div className="space-y-3">
+          {activity.slice(0, 8).map(log => (
+            <div key={log.id} className="flex items-start gap-3">
+              <div className="mt-1.5 shrink-0">
+                {ACTIVITY_ICON[log.type] ?? <div className="w-2 h-2 rounded-full bg-gray-300" />}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Intelligence Roadmap */}
-        <div className="card p-6">
-          <h2 className="section-title mb-4">Intelligence Roadmap</h2>
-          <div className="space-y-4">
-            {[
-              { phase: 'Current Prototype', color: 'text-emerald-600 bg-emerald-50', items: ['Rule-based donor-recipient matching', 'Complete donation lifecycle', 'Role-based dashboards'], done: true },
-              { phase: 'Prototype 2', color: 'text-purple-600 bg-purple-50', items: ['ML-assisted recipient ranking', 'Demand-aware redistribution', 'Volunteer route optimization'], done: false },
-              { phase: 'Advanced Phase', color: 'text-blue-600 bg-blue-50', items: ['AI food image categorization', 'NLP donation understanding', 'Community heatmap'], done: false },
-            ].map(phase => (
-              <div key={phase.phase} className={`rounded-xl p-4 ${phase.color}`}>
-                <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider mb-2">
-                  {phase.done ? <CheckCircle size={13} /> : <Clock size={13} />}
-                  {phase.phase}
-                </p>
-                {phase.items.map(item => (
-                  <div key={item} className="flex items-start gap-2 mb-1">
-                    <div className={`w-3 h-3 rounded-full border-2 mt-0.5 shrink-0 ${phase.done ? 'bg-emerald-500 border-emerald-500' : 'border-current'}`} />
-                    <span className="text-xs">{item}</span>
-                  </div>
-                ))}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-700">{log.message}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatRelativeTime(log.timestamp)}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
 
