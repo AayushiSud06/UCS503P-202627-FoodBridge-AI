@@ -63,7 +63,11 @@ export default function NGOAvailable() {
         <MEmpty
           icon={Package}
           title="Nothing available"
-          hint="No surplus is listed near you right now. New donations appear here the moment they are posted."
+          hint={
+            awaitingVerification
+              ? `Open donations are shown once an administrator has verified ${myRecipient?.name ?? 'your organisation'}.`
+              : 'No surplus is listed near you right now. New donations appear here the moment they are posted.'
+          }
         />
       ) : (
         available.map(d => {

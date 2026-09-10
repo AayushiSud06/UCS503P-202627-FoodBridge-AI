@@ -1,8 +1,8 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
-> **Verified against `master` at `640af0c` (clean tree) on 2026-09-10** by the health audit
-> of that date. ⚠️ marks a known weakness with its `TASKS.md` id.
+> **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
+> date; updated for the uncommitted Task 37 read-scope change (D-53). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -125,23 +125,24 @@ every request, so suspension is immediate (D-03). No refresh, revocation, MFA or
 verification. Admin is not self-signup (D-04); the admin router is gated once.
 
 **Four layers:** role (`require_roles`) → ownership (a WHERE clause) → lifecycle legality →
-trust (`Recipient.is_verified`, admin-set, read by ranking and acceptance only, D-37).
+trust (`Recipient.is_verified`, admin-set, read by ranking, acceptance and the `ngo` open-pool
+read scope, D-37, D-53).
 ⚠️ Verification is not revoked when the organisation edits its name or coordinates (P1-2).
 
 **Read scopes** — each is a helper returning a WHERE clause (`None` = unrestricted):
 
 | Data | admin | donor | ngo | volunteer | Helper |
 |---|---|---|---|---|---|
-| Donations (list, by id, `/matches`) | all | own | open pool (status **and** deadline, D-50) + own org's | unclaimed `ACCEPTED` + own runs | `donations._readable_by` (D-24) |
+| Donations (list, by id, `/matches`) | all | own | own org's, plus the open pool (status **and** deadline, D-50) **only if the org is verified** (D-53); no org row → none | unclaimed `ACCEPTED` + own runs | `donations._readable_by` (D-24) |
 | Recipients (`RecipientOut`, has phone) | all | none | own row | none | `organisations._visible_recipients` (D-26) |
 | Couriers (`VolunteerOut`, has phone) | all | 403 | couriers on own donations | 403 | `organisations._visible_volunteers` (D-41) |
 | Requirements | all active | active, verified orgs' | own (retired too with `includeInactive`) | none | `_visible_requirements` + `_may_read_inactive` (D-44, D-46) |
 | True distances / frozen score | all | none | own org | none | `donations._precise_distance_scope` (D-45, D-47) |
 | Requirement inputs to ranking | all | verified orgs | own org | none | `donations._requirement_disclosure_scope` (D-52) |
 
-Denial is a 404 for donations and an empty list for directories. ⚠️ The ngo and volunteer
-donation scopes are open to **unverified, self-signup** accounts and carry exact donor
-coordinates and names (P1-1).
+Denial is a 404 for donations and an empty list for directories. ⚠️ The volunteer donation
+scope is still open to any **self-signup** courier and carries exact donor coordinates and
+names (P1-1b, DQ-1); the ngo scope has required verification since D-53.
 
 ## API — prefix `/api`, camelCase bodies, docs at `/docs`
 
@@ -225,7 +226,7 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
 
 ## Testing
 
-**Backend — `pytest code/tests`: 331 tests, ~229 s** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 335 tests, ~4 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
@@ -241,7 +242,7 @@ Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, c
 concurrency. Missing: concurrency on any other transition, cancellation accounting,
 verification-on-edit, unverified-account read scope, `UtcDateTime`, input size bounds.
 
-**Frontend — `npm test`: 121 tests over 15 files, ~3 s.** Vitest on the project's own
+**Frontend — `npm test`: 122 tests over 15 files, ~3 s.** Vitest on the project's own
 `vite.config.ts`; node environment by default, jsdom per file where rendering. Covers the
 `lib/` arithmetic (adapters, time, geo, impact, api), `ProtectedRoute`, the requirements
 slice, and content/absence tests for Landing, Login, DonorNeedsBoard, NGORequirements,

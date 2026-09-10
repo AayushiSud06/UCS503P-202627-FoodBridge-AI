@@ -72,8 +72,9 @@ export default function AdminOrganizations() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Partner Organizations Directory</h1>
         <p className="text-gray-500 mt-1">
-          Verification is what lets a kitchen accept food. Unverified organisations can sign in and
-          browse, but are left out of match rankings entirely.
+          Verification is what lets a kitchen see and accept open donations. Unverified
+          organisations can sign in and post requirements, but see no open donations and are left
+          out of match rankings entirely.
         </p>
       </div>
 

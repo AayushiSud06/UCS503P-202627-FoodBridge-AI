@@ -161,21 +161,32 @@ def _readable_by(db: Session, user: User):
     clause for the list and for a lookup by id:
 
     * donor — the donations they posted, and nothing else.
-    * ngo — the open pool every organisation is invited to consider, plus the
-      donations bound to their own organisation once they accept one. The pool
-      is the *still collectable* one (`_open_to_recipients`); an overdue
-      donation nobody took is nothing an organisation can act on, so it drops
-      out of the offer here. It does not drop out of anybody's history: this
-      narrows the shared pool only, and the second half of the clause keeps
-      every donation this organisation accepted readable however long ago its
-      deadline was.
+    * ngo — the open pool, **only once an administrator has verified the
+      organisation**, plus the donations bound to their own organisation once
+      they accept one. The pool is the *still collectable* one
+      (`_open_to_recipients`); an overdue donation nobody took is nothing an
+      organisation can act on, so it drops out of the offer here. It does not
+      drop out of anybody's history: this narrows the shared pool only, and the
+      second half of the clause keeps every donation this organisation accepted
+      readable however long ago its deadline was.
+
+      Verification gates the pool because `ngo` is a self-signup role: without
+      it, one registration bought every open donation's exact pickup pin,
+      address text and donor name, for an account that could not accept any of
+      them anyway (the `ACCEPTED` gate refuses an unverified organisation). It
+      is D-41's lesson — holding a self-signup role is not permission to read
+      people — applied to donors. It is read live, so revoking verification
+      closes the pool on the next request and leaves the organisation's own
+      donations readable.
     * volunteer — pickups that are waiting for a courier, plus every donation
       they are the courier for, whatever state it has reached (their history).
     * admin — unrestricted.
 
-    A recipient/courier profile that does not exist yet narrows the clause
-    rather than widening it: such an account still sees the open pool, but has
-    nothing of its own to add.
+    A profile that does not exist yet narrows the clause rather than widening
+    it. An `ngo` account with no organisation row reads nothing — there is no
+    organisation to have been verified — and a volunteer account with no
+    courier row still sees the unclaimed pickups but has nothing of its own to
+    add.
     """
     if user.role is UserRole.admin:
         return None
@@ -184,11 +195,13 @@ def _readable_by(db: Session, user: User):
         return Donation.donor_id == user.id
 
     if user.role is UserRole.ngo:
-        clause = _open_to_recipients()
         recipient = db.scalar(select(Recipient).where(Recipient.user_id == user.id))
-        if recipient is not None:
-            clause = or_(clause, Donation.recipient_id == recipient.id)
-        return clause
+        if recipient is None:
+            return false()
+        own = Donation.recipient_id == recipient.id
+        if not recipient.is_verified:
+            return own
+        return or_(_open_to_recipients(), own)
 
     if user.role is UserRole.volunteer:
         clause = and_(

@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-52. **All 52 are implemented in commits up
-> to `640af0c`; re-verified against a clean working tree by the health audit of
-> 2026-09-10.** Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-53. **D-01…D-52 are implemented in commits
+> up to `640af0c`** (re-verified by the health audit of 2026-09-10); **D-53 is uncommitted
+> in the working tree** (Task 37). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -31,7 +31,7 @@
 > | D-21 | `create_all` at startup | superseded by D-23 |
 > | D-22 | Fail-closed signing key with dev opt-in | in force |
 > | D-23 | Alembic owns the schema; runs in the lifespan | in force |
-> | D-24 | Donation read scope is a WHERE clause; denial 404 | ⚠️ scope open to unverified self-signup accounts (P1-1) |
+> | D-24 | Donation read scope is a WHERE clause; denial 404 | ngo half gated on verification by D-53; ⚠️ courier half open (P1-1b) |
 > | D-25 | CI validates, never deploys, holds no secret | in force; frontend tests run since `d611424` |
 > | D-26 | Recipient reads scoped; denial is an empty list | in force |
 > | D-27 | Per-process sliding-window auth rate limit | in force; donation creation unlimited (P2-1) |
@@ -60,6 +60,7 @@
 > | D-50 | Availability is a deadline as well as a status | in force |
 > | D-51 | Courier history ends at `DELIVERED` | in force |
 > | D-52 | Requirements break ties and explain; never move the score | in force; verified by audit repro |
+> | D-53 | An NGO reads the open pool only once verified | uncommitted (Task 37) |
 >
 > Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
 > against the kitchen (P1-4).
@@ -565,10 +566,11 @@ eligibility relationship in the schema, so "donations a courier is eligible for"
 mean "not yet claimed". A geographic or availability-based courier scope would need a new
 relationship.
 
-⚠️ **Audit 2026-09-10: the `ngo` and `volunteer` scopes are open to self-signup accounts.**
-`is_verified` gates ranking and acceptance, not this read, and couriers have no vetting at
-all — so a stranger with a fresh `ngo` or `volunteer` account reads every open donation's
-exact pin, address text and donor name (reproduced). `TASKS.md` P1-1 / DQ-1.
+⚠️ **Audit 2026-09-10: the `ngo` and `volunteer` scopes were open to self-signup
+accounts**, so a stranger with a fresh account read every open donation's exact pin,
+address text and donor name (reproduced). **The `ngo` half is closed by D-53** (the pool
+requires a verified organisation). The `volunteer` half is open — couriers have no vetting
+at all — `TASKS.md` P1-1b / DQ-1.
 
 ⚠️ **The write path was left untouched here, and that was wrong.** This section used to
 read that `update_status` could keep the unscoped `_get_or_404` "because its authorisation
@@ -667,8 +669,8 @@ readable by any self-signup `ngo` account (`HA-1`).
 ✅ **The `/matches` bypass of this scoping is closed by D-45** — by blurring the kitchen's
 position upstream of scoring, not by rounding the distance (rounding leaves boundaries at
 known distances). Residual `HA-3a`, the eligibility gate as an oracle, is `TASKS.md` P2-1.
-⚠️ The same "self-signup role is not permission to read people" lesson has not yet been
-applied to **donors** — see the note on D-24.
+The same "self-signup role is not permission to read people" lesson is applied to donors'
+pickup data for the `ngo` role by D-53; ⚠️ the courier half is open (P1-1b).
 
 ---
 
@@ -2405,3 +2407,48 @@ and reader are one organisation there.
   identically, and it cannot see what food a kitchen wants. That is the price of the two
   refusals above, and promoting it to a weighted criterion is a separate decision that
   should wait for a controlled food category and for outcome data.
+
+---
+
+## D-53 · An NGO reads the open donation pool only once it is verified **[documented]**
+
+**Decision.** `routers/donations._readable_by`'s `ngo` branch: no organisation row →
+`false()`; an unverified organisation → its own donations only
+(`Donation.recipient_id == own`); a verified one → the open pool (`_open_to_recipients`,
+D-50) **or** its own. `Recipient.is_verified` is read on every request. Uncommitted (Task 37).
+
+**Reasoning.**
+
+- **`ngo` is a self-signup role** — the D-26 → D-41 lesson. `DonationOut` carries the
+  donor's exact pin, address text, name, photo and event notes, and before this one
+  registration bought all of it. An unverified organisation can neither be ranked
+  (`score_pair`) nor accept (the `ACCEPTED` gate), so the pool gave it data and no action.
+- **Excluded from the scope, not redacted.** The clause fails closed before serialisation,
+  so the list, the id lookup and `/matches` narrow together and the denial is D-24's 404.
+  Redacting fields would need a second field-level policy in `serialize.py` and would still
+  expose ids, existence, quantities and deadlines.
+- **The existing boolean, with its D-37 meaning.** No column, no migration, no second
+  authorization mechanism; `is_verified` already gates the two things an organisation does
+  with the pool.
+- **The organisation's own donations stay readable** whatever its verification, because
+  they are its history and because owned transitions (`COMPLETED`, the release) resolve
+  through that half of the scope. What revoking verification should do to in-flight
+  donations remains the open question in `TASKS.md`.
+- **No organisation row reads nothing.** Before, such an account (reachable by an admin
+  re-roling a user to `ngo`) still saw the pool.
+
+**Constraints.**
+
+- ⚠️ **Couriers are unchanged** — any self-signup `volunteer` still reads unclaimed
+  `ACCEPTED` pickups with exact pins (P1-1b, DQ-1).
+- `ACCEPTED` from the open pool is not read-scoped, so an unverified kitchen posting it by
+  id still gets the pre-existing 403 "awaiting verification"; that and the transition 409s
+  are a pre-existing existence/status oracle (`TASKS.md` P3).
+- Verification still survives self-edits (P1-2), so a verified organisation that relocates
+  keeps pool access until that is fixed.
+- UI copy that told unverified kitchens they could "browse" was corrected on four screens
+  (desktop/mobile Available, mobile NGO profile, admin Organisations); the Available empty
+  states say the pool opens on verification.
+- `test_match_score_consistency.py::test_an_unverified_kitchen_gets_no_score_rather_than_a_low_one`
+  read the pool as an unverified kitchen — it encoded the defect and was corrected, not
+  relaxed.

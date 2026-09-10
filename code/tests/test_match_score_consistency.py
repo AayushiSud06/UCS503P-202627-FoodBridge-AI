@@ -266,17 +266,31 @@ def test_the_viewer_score_is_absent_for_a_caller_with_no_organisation(
 
 
 def test_an_unverified_kitchen_gets_no_score_rather_than_a_low_one(client, db_session):
-    """Ineligibility is a gate, not a number — the same rule `/matches` applies."""
-    token, _ = register_ngo(
+    """Ineligibility is a gate, not a number — the same rule `/matches` applies.
+
+    ⚠️ Corrected by Task 37 (P1-1a). This used to read the kitchen's (absent)
+    score *through* the open pool, which asserted that an unverified kitchen may
+    read that pool — the privacy defect itself. It may not any more, so the gate
+    is checked where the kitchen is still visible — the ranking an administrator
+    reads — and the refusal of the pool is checked directly.
+    """
+    token, recipient_id = register_ngo(
         client, db_session, email="unverified@test.com", org="Awaiting Trust",
         verified=False, **NEAR,
     )
     donation_id = _post_donation(client)
 
-    assert _listed(client, token, donation_id)["viewerMatch"] is None
+    listed = client.get("/api/donations", headers=auth(token))
+    assert donation_id not in {d["id"] for d in listed.json()}
     assert client.get(
         f"/api/donations/{donation_id}/matches", headers=auth(token)
-    ).json() == []
+    ).status_code == 404
+
+    ranked = client.get(
+        f"/api/donations/{donation_id}/matches",
+        headers=auth(admin_token(client, db_session)),
+    ).json()
+    assert recipient_id not in {m["recipientId"] for m in ranked}
 
 
 def test_a_kitchen_outside_the_radius_gets_no_score(client, db_session):

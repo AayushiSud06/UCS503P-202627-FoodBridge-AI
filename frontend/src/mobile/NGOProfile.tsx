@@ -42,8 +42,8 @@ export default function NGOProfile() {
 
       {me && !me.isVerified && (
         <p className="px-5 py-3.5 text-sm text-amber-800 bg-amber-50 border-b border-amber-100 leading-relaxed">
-          An administrator has to vouch for your organisation before it can accept donations. You
-          can browse and post requirements in the meantime.
+          An administrator has to vouch for your organisation before it can see or accept open
+          donations. You can post requirements in the meantime.
         </p>
       )}
 

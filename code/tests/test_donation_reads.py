@@ -103,6 +103,93 @@ def test_an_ngo_reads_a_donation_it_accepted(client, db_session):
     assert donation_id in listed_ids(client, ngo)
 
 
+def test_an_unverified_ngo_is_refused_the_open_pool(client, db_session):
+    """A self-signup kitchen reads nothing of the pool until it is vouched for.
+
+    Refused, not redacted: the list holds no row at all, and the id lookup and
+    `/matches` answer the same 404 as an id that never existed — so no pickup
+    pin, address or donor name reaches serialisation for this caller.
+    """
+    donor = register(client, email="unv-donor@test.com", role="donor")
+    donation_id = post_donation(client, donor)
+    pending, _ = register_ngo(
+        client, db_session, email="unv-ngo@test.com", org="Walk-In Kitchen", verified=False
+    )
+
+    listed = client.get("/api/donations", headers=auth(pending))
+    assert listed.status_code == 200
+    assert listed.json() == []
+    assert read_status(client, pending, donation_id) == 404
+    assert client.get(
+        f"/api/donations/{donation_id}/matches", headers=auth(pending)
+    ).status_code == 404
+
+
+def test_verification_opens_the_pool_and_revocation_closes_it(client, db_session):
+    """The gate reads `is_verified` live, in both directions."""
+    donor = register(client, email="gate-donor@test.com", role="donor")
+    donation_id = post_donation(client, donor)
+    ngo, recipient_id = register_ngo(
+        client, db_session, email="gate-ngo@test.com", org="Soon Vouched", verified=False
+    )
+    root = admin_token(client, db_session)
+
+    assert read_status(client, ngo, donation_id) == 404
+
+    assert client.post(
+        f"/api/admin/recipients/{recipient_id}/verify", headers=auth(root)
+    ).status_code == 200
+    assert read_status(client, ngo, donation_id) == 200
+    assert donation_id in listed_ids(client, ngo)
+
+    assert client.delete(
+        f"/api/admin/recipients/{recipient_id}/verify", headers=auth(root)
+    ).status_code == 200
+    assert read_status(client, ngo, donation_id) == 404
+    assert donation_id not in listed_ids(client, ngo)
+
+
+def test_an_organisation_that_loses_verification_keeps_its_own_donations(client, db_session):
+    """Only the shared pool closes; what the organisation accepted stays its record."""
+    donor = register(client, email="kept-donor@test.com", role="donor")
+    accepted_id = post_donation(client, donor)
+    ngo, recipient_id = register_ngo(
+        client, db_session, email="kept-ngo@test.com", org="Once Vouched"
+    )
+    assert client.post(
+        f"/api/donations/{accepted_id}/status", json={"status": "ACCEPTED"}, headers=auth(ngo)
+    ).status_code == 200
+
+    assert client.delete(
+        f"/api/admin/recipients/{recipient_id}/verify",
+        headers=auth(admin_token(client, db_session)),
+    ).status_code == 200
+    open_id = post_donation(client, donor)
+
+    assert read_status(client, ngo, accepted_id) == 200
+    assert listed_ids(client, ngo) == {accepted_id}
+    assert read_status(client, ngo, open_id) == 404
+
+
+def test_an_ngo_account_with_no_organisation_reads_nothing(client, db_session):
+    """No organisation row means nothing verified, so the scope fails closed.
+
+    Reachable through the API: an administrator can re-role an existing
+    account to `ngo`, and nothing creates the organisation row for it.
+    """
+    donor = register(client, email="bare-donor@test.com", role="donor")
+    donation_id = post_donation(client, donor)
+    bare = register(client, email="bare-ngo@test.com", role="donor")
+    root = admin_token(client, db_session)
+    bare_id = client.get("/api/auth/me", headers=auth(bare)).json()["id"]
+    assert client.patch(
+        f"/api/admin/users/{bare_id}", json={"role": "ngo"}, headers=auth(root)
+    ).status_code == 200
+
+    assert client.get("/api/donations", headers=auth(bare)).json() == []
+    assert read_status(client, bare, donation_id) == 404
+
+
 def test_an_ngo_cannot_read_a_donation_another_kitchen_accepted(client, db_session):
     donor = register(client, email="rival-donor@test.com", role="donor")
     donation_id = post_donation(client, donor)
@@ -196,6 +283,9 @@ def test_reading_by_id_is_scoped_exactly_like_the_list(client, db_session):
     donor = register(client, email="scope-donor@test.com", role="donor")
     other = register(client, email="scope-other@test.com", role="donor")
     ngo, _ = register_ngo(client, db_session, email="scope-ngo@test.com", org="Helping Hands")
+    pending, _ = register_ngo(
+        client, db_session, email="scope-pending@test.com", org="Pending Kitchen", verified=False
+    )
     courier = register(client, email="scope-courier@test.com", role="volunteer")
     root = admin_token(client, db_session)
 
@@ -207,7 +297,7 @@ def test_reading_by_id_is_scoped_exactly_like_the_list(client, db_session):
     ).status_code == 200
 
     every_id = {open_id, other_id, accepted_id}
-    for token in (donor, other, ngo, courier, root):
+    for token in (donor, other, ngo, pending, courier, root):
         visible = listed_ids(client, token)
         for donation_id in every_id:
             expected = 200 if donation_id in visible else 404

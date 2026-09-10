@@ -1,7 +1,8 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-10, `master` at `640af0c`, clean working
-> tree**, by the full health audit of that date. Context: `PROJECT_STATE.md`.
+> **Verified against the repository on 2026-09-10, `master` at `fdcb5a5`, plus the
+> uncommitted Task 37 (P1-1a) changes.** The full health audit of that date was run against
+> `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
 > recommended or open work derived from analysis, not a commitment. Each item traces to
@@ -17,7 +18,8 @@
 
 ## Current
 
-Nothing in progress. The 2026-09-10 audit changed documentation only.
+**Task 37 · P1-1a — implemented, uncommitted, awaiting review.** An `ngo` account reads the
+open donation pool only once its organisation is verified (D-53). See P1-1 below.
 
 ## P0 — urgent
 
@@ -27,22 +29,24 @@ Nothing in progress. The 2026-09-10 audit changed documentation only.
 
 ### P1-1 · Unverified self-signup accounts read donors' exact pickup locations
 - **Category:** SECURITY ISSUE (privacy)
-- **Why it matters:** `ngo` and `volunteer` are self-signup roles, and `is_verified` gates
-  ranking and acceptance, not reads. `_readable_by` gives **any** `ngo` account the whole
-  `AVAILABLE`/`MATCHED` pool and **any** `volunteer` every unclaimed `ACCEPTED` pickup, each
-  carrying `latitude`/`longitude`, free-text `location`, `donorName`, `donorOrganization`,
-  the photo, and event notes (including `"Top match: <rival kitchen>"`). It is the D-26 →
-  D-41 lesson ("holding a self-signup role is not permission to read people") applied to
-  donors, who may be individuals at home.
-- **Subsystem:** `routers/donations._readable_by` (`donations.py:186-200`), `serialize.donation_out`
-- **Evidence:** repro — an unverified kitchen registered seconds earlier and a fresh courier
-  both read the donor's exact pin and name. Registration costs one email (10/hour/IP).
-- **Smallest scope:** (a) require `Recipient.is_verified` in the `ngo` open-pool half of
-  `_readable_by` — an unverified kitchen cannot accept anyway, and `NGOAvailableDonations`
-  already has an awaiting-verification state; tests in `test_donation_reads.py`.
-  (b) the courier half needs *Decisions needed* DQ-1 (no courier vetting exists).
-- **Dependencies:** DQ-1 for (b) only. **Risk if postponed:** donor addresses harvestable by
-  strangers.
+- **Why it matters:** `ngo` and `volunteer` are self-signup roles. `DonationOut` carries
+  `latitude`/`longitude`, free-text `location`, `donorName`, `donorOrganization`, the photo
+  and event notes — for donors who may be individuals at home. The D-26 → D-41 lesson
+  ("holding a self-signup role is not permission to read people") applied to donors.
+- ✅ **(a) `ngo` half — FIXED by Task 37 (uncommitted, awaiting review), D-53.**
+  `_readable_by`'s `ngo` branch now returns the open pool only when the caller's
+  `Recipient.is_verified` is true; an unverified organisation reads only its own donations,
+  and an `ngo` account with no organisation row reads nothing. Excluded from the scope, not
+  redacted: list `[]`, id lookup and `/matches` 404. Verification is read live (revocation
+  closes the pool next request). Four new tests in `test_donation_reads.py` plus the
+  unverified kitchen added to its list-vs-id consistency loop; one test in
+  `test_match_score_consistency.py` that asserted the pool read was corrected. All five
+  fail against the pre-fix router. UI copy promising unverified kitchens could "browse"
+  corrected on four screens.
+- ⚠️ **(b) `volunteer` half — STILL OPEN.** Any self-signup courier still reads every
+  unclaimed `ACCEPTED` pickup with the exact pin and donor name (`_readable_by` volunteer
+  branch, unchanged). Blocked on DQ-1 (no courier vetting exists).
+- **Risk if (b) postponed:** donor addresses harvestable by one courier registration.
 
 ### P1-2 · Verification survives the organisation editing what was verified
 - **Category:** SECURITY ISSUE (trust model)
@@ -163,7 +167,12 @@ the accepting kitchen) — record the score on the event; `TRANSITION_ROLES` lis
 `PATCH /admin/users/{id}`) and `GET /donations/{id}`, `GET /recipients/me` have **no frontend
 consumer** — suspension is possible only through `/docs`; courier `latitude`/`longitude` is
 write-only (D-40's rule); `Volunteer.rating` and `matching.COLD_STORAGE` are dead;
-`mobile/useIsMobile.ts` is never imported.
+`mobile/useIsMobile.ts` is never imported. `POST /donations/{id}/status` runs the
+transition-table check on an **unscoped** read before any scope check, so any authenticated
+caller can learn any donation id's existence and current status from the 409/403 wording
+(pre-existing; status only, no location). The NGO dashboard / mobile home "Nothing
+available" empty states do not mention verification (D-53 made them empty for unverified
+kitchens; the Available pages already say why).
 
 **Product features (optional)** — controlled food category on `Requirement` so D-52 can
 compare food, not only size (`R-35`, `R-32`); donor needs board on `/m/*`; needs board
@@ -234,6 +243,7 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
+| uncommitted | Task 37 · P1-1a: the open pool requires a verified organisation (D-53) |
 | `640af0c` | Task 36 · requirement-aware tie-break and reasons (D-52) |
 | `ca8bef6`, `df74466`, `cb65f38`, `db000d9` | Tasks 35–33 · the three post-login roadmap surfaces removed (D-48) |
 | `a58a914` | Task 32 · courier history ends at `DELIVERED` (D-51) |

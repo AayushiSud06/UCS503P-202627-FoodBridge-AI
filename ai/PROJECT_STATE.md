@@ -2,9 +2,9 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built), `TASKS.md`
 > (what is left, prioritised), `DECISIONS.md` (why it is built that way).
-> **Last verified: 2026-09-10, `master` at `640af0c`, clean working tree**, by a full
-> project health audit that changed no application source. This file describes the
-> present; how the project got here is in git history and `DECISIONS.md`.
+> **Last verified: 2026-09-10, `master` at `fdcb5a5` plus the uncommitted Task 37
+> (P1-1a) changes.** The full health audit of that date ran against `640af0c`. This file
+> describes the present; how the project got here is in git history and `DECISIONS.md`.
 
 ## What this project is
 
@@ -29,7 +29,9 @@ separate, undecided work.
   audit reproductions run against the real app).
 - **Five P1s**, all confirmed by reproduction or direct code reading — see `TASKS.md` → P1:
   1. Self-registered, **unverified** accounts read every open donation's exact donor pin,
-     address text and donor name (`ngo` → open pool; `volunteer` → unclaimed pickups).
+     address text and donor name. ✅ The `ngo` half is fixed by Task 37 (uncommitted,
+     D-53): the open pool now requires a verified organisation. ⚠️ The `volunteer` half
+     (unclaimed pickups) is open, pending DQ-1.
   2. `Recipient.is_verified` **survives the organisation editing its own name and
      coordinates**, so verification is decorative after first approval.
   3. Every lifecycle transition except the courier claim is read-then-write, and **races
@@ -50,10 +52,10 @@ separate, undecided work.
 | Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle still open (P2-1) |
 | Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48). ⚠️ residual copy: mobile header hard-codes seeded org names, donor create page still has a "Future Intelligence" note (P2-4) |
 | Frontend mobile | ✅ `/m/*` screens exist; ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20) |
-| Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP (process-local). No revocation, no CSP |
+| Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP (process-local). No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53, uncommitted) |
 | Concurrency | ✅ courier claim atomic (D-28). ⚠️ all other transitions racy (P1-3) |
-| Backend tests | ✅ **331 passed** (~229 s, bcrypt-bound), 20 files |
-| Frontend tests | ✅ **121 passed** over 15 files (~3 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
+| Backend tests | ✅ **335 passed** (~4 min, bcrypt-bound), 20 files |
+| Frontend tests | ✅ **122 passed** over 15 files (~3 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
 | CI | ✅ backend `pytest` + `alembic upgrade head && alembic check`; frontend `npm test` + `npm run build` |
 | Migrations | ✅ Alembic, one revision `ae4636b1e6d4`; `alembic check` clean; applied in the app lifespan |
 | Deployment | ❌ none of any kind |
@@ -62,10 +64,11 @@ separate, undecided work.
 `FOODLINK_DEV_INSECURE_SECRET=1`, for the backend, the CLI **and** `alembic`.
 `Start_FoodLink.bat` sets the dev flag. Tests set their own key in `conftest.py`.
 
-## Recently completed (newest first; all committed)
+## Recently completed (newest first)
 
 | Commit | Work | Decision |
 |---|---|---|
+| uncommitted | Task 37 — P1-1a: unverified NGOs excluded from the open donation pool | D-53 |
 | `640af0c` | Task 36 — requirement-aware ranking: tie-break + reason line, score untouched | D-52 |
 | `ca8bef6`, `df74466` | Task 35 — admin Analytics "Future Intelligence" section and component removed | D-48 |
 | `cb65f38` | Task 34 — admin dashboard "Intelligence Roadmap" removed | D-48 |
@@ -97,9 +100,9 @@ recipient read scope (`16497ea`), auth rate limiting (`91544e3`), atomic courier
 
 ## Immediate next step
 
-Work the five P1s in `TASKS.md`. P1-3 (conditional transition writes) and P1-5 (image
-resize) need no product input; P1-1, P1-2 and P1-4 each need one small decision recorded in
-`TASKS.md` → *Decisions needed* before implementation.
+Review Task 37 (P1-1a). Then P1-3 (conditional transition writes) and P1-5 (image resize),
+which need no product input; P1-1b, P1-2 and P1-4 each need one decision recorded in
+`TASKS.md` → *Decisions needed* first.
 
 ## Conventions worth preserving
 

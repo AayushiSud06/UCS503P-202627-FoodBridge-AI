@@ -37,6 +37,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { User } from '../../../types';
+import type { ApiRecipient } from '../../../lib/api';
 import { apiDonation, apiMatch, apiMetrics } from '../../../test/fixtures';
 
 /** The instant every deadline below is expressed relative to. */
@@ -47,7 +48,7 @@ const auth = vi.hoisted(() => ({ user: null as User | null }));
 const apiMock = vi.hoisted(() => ({
   listDonations: vi.fn(async () => [] as unknown[]),
   listRequirements: vi.fn(async () => []),
-  listRecipients: vi.fn(async () => []),
+  listRecipients: vi.fn(async () => [] as unknown[]),
   listVolunteers: vi.fn(async () => []),
   myVolunteer: vi.fn(async () => null),
   metrics: vi.fn(async () => apiMetrics()),
@@ -238,6 +239,43 @@ describe('the Available Donations page', () => {
     await waitFor(() => expect(container.textContent).toContain('No available donations'));
     expect(container.textContent).not.toContain('Yesterday rotis');
     expect(container.textContent).toContain('0 donations available for pickup');
+  });
+});
+
+describe('an organisation awaiting verification', () => {
+  // The server leaves an unverified kitchen out of the open pool entirely
+  // (`routers/donations._readable_by`, D-53), so its list is empty for a reason
+  // the page has to state — and the page must not still promise browsing.
+  afterEach(() => {
+    apiMock.listRecipients.mockResolvedValue([]);
+  });
+
+  it('is told why the pool is empty, and is not told it can browse', async () => {
+    apiMock.listRecipients.mockResolvedValue([
+      {
+        id: 7,
+        name: 'Walk-In Kitchen',
+        type: 'Community Kitchen',
+        location: 'Model Town',
+        latitude: 30.34,
+        longitude: 76.38,
+        capacity: 100,
+        contactPerson: 'Kitchen Lead',
+        phone: null,
+        isVerified: false,
+        reliabilityScore: 85,
+        acceptedDonations: 0,
+      } satisfies ApiRecipient,
+    ]);
+    const container = renderWith([], <NGOAvailableDonations />);
+
+    await waitFor(() => expect(container.textContent).toContain('Awaiting verification'));
+    expect(container.textContent).toContain('before it can see or accept open donations');
+    expect(container.textContent).toContain(
+      'Open donations are shown once an administrator has verified your organisation.',
+    );
+    expect(container.textContent).not.toMatch(/browse/i);
+    expect(container.textContent).not.toContain('match your location');
   });
 });
 

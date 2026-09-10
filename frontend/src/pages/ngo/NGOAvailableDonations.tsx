@@ -29,8 +29,9 @@ export default function NGOAvailableDonations() {
   // a second live call would decay a point away from the first one.
   const analysis = selectedDonation?.viewerMatch;
 
-  // An unverified organisation may browse but cannot take custody; saying so
-  // up front beats letting them click and collect a 403.
+  // An unverified organisation is not shown the open pool at all — the server
+  // leaves it out of the read scope until an administrator verifies it (D-53) —
+  // so an empty list here has to say why rather than "nothing near you".
   const awaitingVerification = myRecipient !== null && myRecipient.isVerified === false;
 
   const handleAccept = async (donation: Donation) => {
@@ -63,8 +64,8 @@ export default function NGOAvailableDonations() {
           <div>
             <p className="text-sm font-semibold text-amber-900">Awaiting verification</p>
             <p className="text-xs text-amber-800 mt-0.5">
-              An administrator has to vouch for {myRecipient?.name} before it can accept
-              donations. You can browse in the meantime.
+              An administrator has to vouch for {myRecipient?.name} before it can see or
+              accept open donations. They will appear here once it is verified.
             </p>
           </div>
         </div>
@@ -74,7 +75,11 @@ export default function NGOAvailableDonations() {
         <EmptyState
           icon={Package}
           title="No available donations"
-          description="No food donations match your location right now. Check back soon."
+          description={
+            awaitingVerification
+              ? 'Open donations are shown once an administrator has verified your organisation.'
+              : 'No food donations match your location right now. Check back soon.'
+          }
         />
       ) : (
         <div className="grid lg:grid-cols-3 gap-6">
