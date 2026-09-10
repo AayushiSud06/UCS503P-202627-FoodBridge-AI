@@ -933,12 +933,18 @@ twelve findings against this line; the resulting work is `TASKS.md` → *Backlog
   those but still defects: standalone literals presented under a "real-time" or "verified"
   heading, and settings that accept input and discard it.
 - **Labelling is a real remedy, not a loophole.** `components/FutureIntelligenceSection.tsx`
-  describes a neural ranker, route optimisation and vision models the project has not
-  built, and the audit passed it: every entry carries an explicit `phase` and `status`
-  badge, and the section is titled as future work. Likewise `MatchAnalysis`'s "Rule-Based
+  described a neural ranker, route optimisation and vision models the project has not
+  built, and the audit passed it: every entry carried an explicit `phase` and `status`
+  badge, and the section was titled as future work. Likewise `MatchAnalysis`'s "Rule-Based
   Model" chip beside its "AI Match Analysis" heading. The distinction that matters is not
   ambition versus modesty — it is whether a reader can tell which of the two they are
   looking at.
+  ⚠️ **The worked example is gone from the repository** — the product review removed all
+  three labelled roadmap surfaces (Tasks 33, 34 and 35), and `FutureIntelligenceSection.tsx`
+  was deleted with the last of them. **This decision is unchanged:** they were removed for
+  D-48's audience reason, not because the labelling failed D-31's test, and the surviving
+  example is the "Rule-Based Model" chip above, which stays. Read the deleted component as
+  the standard a label has to meet, not as something still on screen.
 - **It keeps D-05 enforceable at the edge.** D-05 forbids describing the matcher as
   machine learning. That is a rule about the backend, and it held; the phrase "AI Scanning
   Active" over a table nothing scans is the same violation one layer out, where nobody was
@@ -1262,8 +1268,9 @@ what the system does. `is_available` is untouched. This is D-31 applied to notif
 - **Removed rather than disabled, because they were never settings.** A disabled control
   still says "this preference exists and will work later" — a roadmap commitment the
   project has not made, and one D-31 permits only where a phase label appears at the point
-  of the claim. `FutureIntelligenceSection` earns its `SMS`/`dispatch` mentions that way
-  (`status: 'Planned'`, `phase: 'Phase 2'`) and is deliberately left alone; a lone greyed
+  of the claim. `FutureIntelligenceSection` earned its `SMS`/`dispatch` mentions that way
+  (`status: 'Planned'`, `phase: 'Phase 2'`) and was deliberately left alone here — the
+  component has since been deleted by Task 35, for D-48's reason rather than this one; a lone greyed
   checkbox on a settings screen carries no such frame. The desktop donor's pair was the
   worst case, because the form's own submit button then answered *"Profile saved."*
 - **The adjacent prose mattered more than the controls.** A toggle a user never touches
@@ -2035,6 +2042,15 @@ and **links that do not go anywhere**. Established by the product review behind 
   D-31 is unchanged everywhere else: `FutureIntelligenceSection` and the matching
   section's "Currently rule-based · ML-assisted matching planned for Phase 2" line are
   both behind sign-in and both stay.
+  ⚠️ **That last sentence no longer describes the repository, and the boundary it drew has
+  moved.** The product review went on to remove all three labelled roadmap surfaces behind
+  sign-in — the recipient match panel (Task 33), the admin dashboard (Task 34) and
+  `FutureIntelligenceSection` itself, deleted (Task 35) — each time on this decision's
+  audience argument rather than on D-31's labelling test. So the reasoning below is intact
+  but its stated scope ("for one audience, and only there") has in practice been applied to
+  every signed-in operator surface as well. The landing page's own Phase 2 line still
+  stays. **Whether that widening should be written up as a decision in its own right is a
+  Project Manager call and has not been made** — it is recorded here rather than assumed.
 - **A dead link is a claim too.** The four footer links (`About`, `How It Works`,
   `Contact`, `GitHub`) were `href="#"` — they scrolled the reader to the top of the page
   they were already on. That is D-36's rule about dead toggles applied to navigation: the

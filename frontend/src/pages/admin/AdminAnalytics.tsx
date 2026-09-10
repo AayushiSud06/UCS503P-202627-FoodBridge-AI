@@ -1,6 +1,5 @@
 import { TrendingUp, Zap, Clock, ShieldCheck } from 'lucide-react';
 import StatCard from '../../components/StatCard';
-import FutureIntelligenceSection from '../../components/FutureIntelligenceSection';
 import { useStats, useDonations } from '../../context/AppContext';
 import type { Donation } from '../../types';
 
@@ -193,8 +192,6 @@ export default function AdminAnalytics() {
           </div>
         </div>
       </div>
-
-      <FutureIntelligenceSection />
     </div>
   );
 }
