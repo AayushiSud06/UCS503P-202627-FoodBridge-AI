@@ -4,12 +4,35 @@ import { useCurrentUser } from '../../context/AuthContext';
 import StatusBadge from '../../components/StatusBadge';
 import { formatDistanceKm } from '../../lib/geo';
 import EmptyState from '../../components/EmptyState';
+import type { DonationStatus } from '../../types';
+
+/**
+ * The runs a courier has finished.
+ *
+ * `DELIVERED` as well as `COMPLETED`, because **`DELIVERED` is the furthest state
+ * a courier can drive**: `TRANSITION_ROLES[COMPLETED]` is `{ngo, admin}`, so
+ * receipt is the kitchen's to confirm and may follow minutes later, days later,
+ * or never. Filtering on `COMPLETED` alone meant a courier's own last action
+ * erased the run from their portal — it left `VolunteerTasks`' active list and
+ * arrived in neither this log nor that page's completed section.
+ *
+ * `TaskCard` already reads the two states as one ("Delivery Completed"), and
+ * `mobile/VolunteerHistory` already filtered on both; this is the desktop screen
+ * agreeing with them. The `StatusBadge` on each row still tells them apart, so a
+ * run awaiting the kitchen's confirmation is not shown as confirmed.
+ *
+ * ⚠️ Deliberately **not** the set `lib/impact.volunteerImpact` counts. That one is
+ * `COMPLETED` only, and says why: its run total has to match the server's
+ * `Volunteer.completed_deliveries` counter, which increments on that transition.
+ * This is a log of what the courier did; that is a figure tied to a counter.
+ */
+export const COURIER_FINISHED: DonationStatus[] = ['DELIVERED', 'COMPLETED'];
 
 export default function VolunteerHistory() {
   const donations = useDonations();
   const user = useCurrentUser();
-  const completed = donations.filter(d =>
-    d.status === 'COMPLETED' && d.volunteerId === user.entityId
+  const completed = donations.filter(
+    d => COURIER_FINISHED.includes(d.status) && d.volunteerId === user.entityId,
   );
 
   return (

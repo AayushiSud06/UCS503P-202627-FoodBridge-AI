@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-50. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-51. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -22,7 +22,9 @@
 > behind — **D-47** (the distance scope decides what a donation says) as `d611424`,
 > **D-48** (the pre-login page is a product page) as `6961555` and **D-49** (the sign-in
 > screen carries no credential) as `f863a94`, which is HEAD. **D-50** (availability is a
-> deadline as well as a status, Task 31) is **uncommitted in the working tree**.
+> deadline as well as a status, Task 31) is committed as `2ce3d71`, which is HEAD.
+> **D-51** (a courier's history ends at `DELIVERED`, Task 32) is **uncommitted in the
+> working tree**.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -2188,3 +2190,60 @@ collectable. Established by Task 31.
   confirmed to fail against the previous router — the donation was listed, and the
   acceptance answered 200. `pages/ngo/__tests__/NGOAvailableDonations.test.tsx` (6) holds
   the client half on a frozen clock, including the boundary instant.
+
+---
+
+## D-51 · A courier's history ends at `DELIVERED`, not at `COMPLETED` **[documented]**
+
+**Decision.** The runs the courier portal records as finished are **`DELIVERED` or
+`COMPLETED`** — `COURIER_FINISHED` in `pages/volunteer/VolunteerHistory.tsx`, read by that
+log and by the *Recently Completed* section of `pages/volunteer/VolunteerTasks.tsx`. It is
+deliberately **not** the set `lib/impact.volunteerImpact` counts, which stays `COMPLETED`
+only. Established by Task 32. No backend, lifecycle, schema or authorization change.
+
+**Reasoning.**
+
+- **`DELIVERED` is the furthest state a courier can drive.**
+  `TRANSITION_ROLES[COMPLETED]` is `{ngo, admin}` — receipt is the kitchen's to confirm,
+  and it may follow minutes later, days later, or never (nothing obliges a kitchen to
+  confirm, and no sweep does it for them). Treating `COMPLETED` as "the courier is done"
+  put the courier's own record behind somebody else's action.
+- **The consequence was a run vanishing, not merely appearing late.** `VolunteerTasks`'
+  active list is `ACCEPTED`/`VOLUNTEER_ASSIGNED`/`PICKED_UP` and its completed section was
+  `COMPLETED`; the history log was `COMPLETED`. So the moment a courier marked a run
+  delivered it left the first set and reached neither of the others — invisible on every
+  desktop courier surface, for an unbounded interval, immediately after the one action that
+  should have recorded it.
+- **The portal already contradicted itself, which is the evidence this is a defect and not
+  a policy.** `pages/volunteer/TaskCard.tsx` renders `DELIVERED` and `COMPLETED`
+  identically, as *"Delivery Completed"*, and `mobile/VolunteerHistory.tsx` already
+  filtered on both. The desktop log was the one surface that disagreed, so this is it
+  catching up rather than a new rule.
+- **Defined once, because duplicated status sets drifting is what caused it.** The two
+  desktop screens now read one exported constant instead of repeating the literal.
+
+**Constraints.**
+
+- ⚠️ **Not the impact set, and the two must not be merged.** `volunteerImpact` counts
+  `COMPLETED` only and documents why: its run total has to agree with the server's
+  `Volunteer.completed_deliveries`, which `update_status` increments on the `COMPLETED`
+  transition. A log of what the courier did and a figure pinned to a server counter are
+  different questions; making them one set would either overstate the counter or understate
+  the log.
+- **`StatusBadge` still separates them on every row**, so a run awaiting the kitchen's
+  confirmation reads *Delivered* and not *Completed*. Widening the filter widened what is
+  listed, not what is claimed about it.
+- **The backend was never at fault and is untouched.** `_readable_by`'s volunteer clause is
+  `(ACCEPTED AND volunteer_id IS NULL) OR volunteer_id == mine` — the second half carries
+  no status term, so a courier already read every run of theirs at every stage. Ownership,
+  `OWNED_TRANSITIONS`, the state graph and `AppContext`'s write-then-refetch are all as
+  they were; the refetch after `updateDonationStatus` already existed, so no polling,
+  timer or extra state was added.
+- **A run still in progress stays out of the log.** `VOLUNTEER_ASSIGNED` and `PICKED_UP`
+  belong to the tasks screen, and a test asserts the widening did not sweep them in.
+- **Held mechanically.** `tests/test_volunteer_delivery_history.py` (8 tests) pins the API
+  contract the screen depends on — a courier reads their run at every stage including after
+  `DELIVERED`, cannot reach `COMPLETED` themselves (403), keeps the run after the kitchen
+  confirms, and never sees another courier's — and all 8 pass against the pre-fix backend,
+  which is how the backend was ruled out. `pages/volunteer/__tests__/VolunteerHistory.test.tsx`
+  (7) holds both screens; 4 of the 7 fail against the pre-fix filters.

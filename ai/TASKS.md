@@ -1,9 +1,10 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-10. HEAD is `f863a94` — **Task 30's
-> login-page redesign (D-49) is committed**, and the working tree now carries the
-> **uncommitted Task 31 availability fix** (D-50) described under *Current*. Task 29's
-> landing-page cleanup (D-48) is `6961555`. **Task 28's
+> Verified against the repository on 2026-09-10. HEAD is `2ce3d71` — **Task 31's
+> availability fix (D-50) is committed**, and the working tree now carries the
+> **uncommitted Task 32 courier-history fix** (D-51) described under *Current*. Task 30's
+> login-page redesign (D-49) is `f863a94` and Task 29's landing-page cleanup (D-48) is
+> `6961555`. **Task 28's
 > donation-privacy work (`HA-3b`, D-47) is committed as `d611424`**; the two commits between
 > them are documentation only (the UML set under `docs/uml/`). Task 27
 > (reopening retired needs, `F-1`, D-46) is committed as `8cbb736`, Task 26's
@@ -42,12 +43,46 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 31 — overdue donations leave the recipient offer,
-complete.** Task 30 is now committed (`f863a94`, now HEAD) — this section previously said
-it was uncommitted — Task 29 (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`);
-those entries stay below for context until they move to *Completed*.
+**Uncommitted in the working tree: Task 32 — a delivered run reaches the courier's
+history, complete.** Task 31 is now committed (`2ce3d71`, now HEAD), Task 30 (`f863a94`),
+Task 29 (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`); those entries stay below
+for context until they move to *Completed*.
 
-### Task 31 · an overdue donation is not an available donation `[repo · B-1 · QA-7 · R-8 · D-50]`
+### Task 32 · a courier's finished run is `DELIVERED`, not only `COMPLETED` `[repo · D-51]`
+
+**Frontend only, two screens in one folder, no backend change.** A courier who marked a
+run delivered watched it disappear from their whole portal. `DELIVERED` is the furthest
+state a courier can drive — `TRANSITION_ROLES[COMPLETED]` is `{ngo, admin}`, receipt being
+the kitchen's to confirm — but the desktop history log and the *Recently Completed* section
+of the tasks page both filtered on `COMPLETED`, while the active list is
+`ACCEPTED`/`VOLUNTEER_ASSIGNED`/`PICKED_UP`. So the run left the first set and reached
+neither of the others, for however long the kitchen took to confirm.
+
+- [x] **Root cause is the screen filter, and the backend was ruled out first.**
+      `_readable_by`'s volunteer clause carries no status term on the `volunteer_id == mine`
+      half, so the API already returned the run at every stage. The 8 new backend tests
+      pass against the **pre-fix** backend, which is the evidence for that.
+- [x] **One definition instead of two literals.** `COURIER_FINISHED`
+      (`pages/volunteer/VolunteerHistory.tsx`) is `['DELIVERED', 'COMPLETED']`, read by the
+      log and by the tasks page's completed section. Duplicated status sets drifting is what
+      caused this — `TaskCard` already treated the two states as one *"Delivery Completed"*,
+      and `mobile/VolunteerHistory` already filtered on both.
+- [x] **Deliberately not the impact set.** `lib/impact.volunteerImpact` stays `COMPLETED`
+      only, because its run total has to match the server's `Volunteer.completed_deliveries`
+      counter (D-51). Untouched.
+- [x] **Nothing else changed.** No lifecycle state, no transition, no schema, no API, no
+      authorization, no new global state, no polling or timer — `AppContext`'s existing
+      write-then-refetch after `updateDonationStatus` already reloads the slice. A run in
+      progress still stays out of the log, and `StatusBadge` still separates *Delivered*
+      from *Completed* on every row.
+- [x] **Validated.** 283 backend tests pass (8 new, `tests/test_volunteer_delivery_history.py`);
+      106 frontend tests pass (7 new, `pages/volunteer/__tests__/VolunteerHistory.test.tsx`,
+      of which 4 fail against the pre-fix filters); `tsc --noEmit` and `npm run build`
+      clean. ⚠️ No browser/manual pass — `.claude/launch.json` carries no backend entry and
+      no way to set `FOODLINK_SECRET_KEY`, so a live run would mean editing tracked tooling
+      and pointing the API at a throwaway database. Same gap reported for Task 31.
+
+### Task 31 · an overdue donation is not an available donation (committed `2ce3d71`) `[repo · B-1 · QA-7 · R-8 · D-50]`
 
 **Backend read scope + one server-side guard + one shared frontend selector.** Availability
 was defined by status alone, so an unclaimed donation whose pickup deadline had passed sat

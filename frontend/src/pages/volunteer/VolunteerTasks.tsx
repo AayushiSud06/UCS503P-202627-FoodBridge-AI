@@ -3,6 +3,7 @@ import EmptyState from '../../components/EmptyState';
 import { useDonations } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
+import { COURIER_FINISHED } from './VolunteerHistory';
 
 export default function VolunteerTasks() {
   const donations = useDonations();
@@ -13,8 +14,11 @@ export default function VolunteerTasks() {
     ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status)
   );
 
-  const completedTasks = donations.filter(d =>
-    d.status === 'COMPLETED' && d.volunteerId === user.entityId
+  // The same set Volunteer History records, for the same reason: a run the
+  // courier has just marked delivered has left `activeTasks` above and would
+  // otherwise appear in neither section of this page.
+  const completedTasks = donations.filter(
+    d => COURIER_FINISHED.includes(d.status) && d.volunteerId === user.entityId,
   );
 
   return (
