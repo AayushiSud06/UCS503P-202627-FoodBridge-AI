@@ -20,17 +20,24 @@
  *    the timeline, the donor's own listings — reads that hook, so the narrowing
  *    has to be confined to the new selector.
  *
+ * The last describe holds the explainability panel this page renders for the
+ * selected donation (`components/MatchAnalysis.tsx`, its only consumer): the
+ * scored criteria, the reasons and the accept flow are all still there, and the
+ * "ML Architecture Roadmap" note that used to close the panel is not. That note
+ * described a PyTorch ranker the project has not built, on the one panel whose
+ * purpose is to explain a score that was actually computed (D-06).
+ *
  * Only `api` and the two identity hooks are stubbed. The provider, the adapters,
  * the selector and the page are the real code, and the donations are built
  * through the real `toDonation` adapter from the real `ApiDonation` shape.
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { User } from '../../../types';
-import { apiDonation, apiMetrics } from '../../../test/fixtures';
+import { apiDonation, apiMatch, apiMetrics } from '../../../test/fixtures';
 
 /** The instant every deadline below is expressed relative to. */
 const NOW = new Date('2026-09-05T12:00:00.000Z');
@@ -231,5 +238,55 @@ describe('the Available Donations page', () => {
     await waitFor(() => expect(container.textContent).toContain('No available donations'));
     expect(container.textContent).not.toContain('Yesterday rotis');
     expect(container.textContent).toContain('0 donations available for pickup');
+  });
+});
+
+describe('the match analysis panel on that page', () => {
+  /** Renders the page with one scorable donation and selects it. */
+  async function selectScoredDonation() {
+    const container = renderWith(
+      [
+        apiDonation({
+          id: 1,
+          foodName: 'Vegetable pulao',
+          pickupDeadline: deadline(120),
+          viewerMatch: apiMatch(),
+        }),
+      ],
+      <NGOAvailableDonations />,
+    );
+
+    await waitFor(() => expect(container.textContent).toContain('Vegetable pulao'));
+    fireEvent.click(screen.getByRole('heading', { name: 'Vegetable pulao' }));
+    return container;
+  }
+
+  it('still explains the score, and still offers the donation', async () => {
+    const container = await selectScoredDonation();
+
+    // The panel: its heading, the organisation it is about, all four scored
+    // criteria and the reasons the server sent with them.
+    expect(container.textContent).toContain('AI Match Analysis');
+    expect(container.textContent).toContain('Helping Hands');
+    expect(container.textContent).toContain('Distance & Logistics');
+    expect(container.textContent).toContain('Quantity Compatibility');
+    expect(container.textContent).toContain('Recipient Capacity');
+    expect(container.textContent).toContain('Pickup Availability');
+    expect(container.textContent).toContain('3.4 km away');
+    expect(container.textContent).toContain('Admin-verified recipient organisation');
+
+    // And the rest of the detail column, which the removal must not disturb.
+    expect(container.textContent).toContain('Ready to accept?');
+    expect(container.querySelector('#btn-accept-donation')).not.toBeNull();
+    expect(container.textContent).toContain('Donation Timeline');
+  });
+
+  it('shows no ML architecture roadmap', async () => {
+    const container = await selectScoredDonation();
+
+    expect(container.textContent).not.toMatch(/ML Architecture Roadmap/i);
+    expect(container.textContent).not.toMatch(/MAUT/);
+    expect(container.textContent).not.toMatch(/PyTorch/i);
+    expect(container.textContent).not.toMatch(/gradient-boosted/i);
   });
 });

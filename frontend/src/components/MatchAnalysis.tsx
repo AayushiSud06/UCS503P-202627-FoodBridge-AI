@@ -156,11 +156,6 @@ export default function MatchAnalysisPanel({
           </ul>
         </div>
       )}
-
-      {/* Architecture Note */}
-      <div className="p-3 bg-purple-50/60 border border-purple-100 rounded-xl text-[11px] text-purple-900 leading-relaxed">
-        <strong className="font-semibold text-purple-950">ML Architecture Roadmap:</strong> Currently scored via multi-attribute utility theory (MAUT). Phase 2 integrates FastAPI PyTorch endpoint with gradient-boosted ranker and distance matrix optimization.
-      </div>
     </div>
   );
 }

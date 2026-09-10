@@ -1,8 +1,10 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-10. HEAD is `2ce3d71` — **Task 31's
-> availability fix (D-50) is committed**, and the working tree now carries the
-> **uncommitted Task 32 courier-history fix** (D-51) described under *Current*. Task 30's
+> Verified against the repository on 2026-09-10. **Task 32's courier-history fix (D-51) is
+> now committed** — HEAD is `a58a914`, and the header below that used to call it
+> uncommitted was stale. The working tree carries the **uncommitted Task 33 roadmap
+> removal** described under *Current*. Task 31's availability fix (D-50) is `2ce3d71`,
+> Task 30's
 > login-page redesign (D-49) is `f863a94` and Task 29's landing-page cleanup (D-48) is
 > `6961555`. **Task 28's
 > donation-privacy work (`HA-3b`, D-47) is committed as `d611424`**; the two commits between
@@ -43,12 +45,56 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 32 — a delivered run reaches the courier's
-history, complete.** Task 31 is now committed (`2ce3d71`, now HEAD), Task 30 (`f863a94`),
-Task 29 (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`); those entries stay below
-for context until they move to *Completed*.
+**Uncommitted in the working tree: Task 33 — the recipient explainability panel no longer
+carries an ML roadmap, complete.** Task 32 is now committed (`a58a914`, now HEAD), Task 31
+(`2ce3d71`), Task 30 (`f863a94`), Task 29 (`6961555`), Task 28 (`d611424`) and Task 27
+(`8cbb736`); those entries stay below for context until they move to *Completed*.
 
-### Task 32 · a courier's finished run is `DELIVERED`, not only `COMPLETED` `[repo · D-51]`
+### Task 33 · the ML Architecture Roadmap leaves the recipient's match panel `[repo · D-31 · D-48]`
+
+**Frontend only, one component and its page's test file, five lines deleted.** The panel on
+*Available Donations* closed with a purple note reading *"ML Architecture Roadmap: …
+Phase 2 integrates FastAPI PyTorch endpoint with gradient-boosted ranker and distance
+matrix optimization."* — a labelled roadmap claim, so D-31 permitted it, and the product
+review removed it anyway for D-48's reason one screen along: the reader here is a kitchen
+deciding whether to take food today, and an unbuilt PyTorch ranker is not something they
+can act on. It sat under the one panel whose whole purpose is to explain a score that
+*was* computed (D-06), which is what made it the wrong note in the wrong place.
+
+- [x] **It lived in the shared component, and the component is not shared.**
+      `components/MatchAnalysis.tsx` has exactly one consumer,
+      `pages/ngo/NGOAvailableDonations.tsx` — verified before editing, which is why removing
+      it there touches no other portal. `lib/hooks.useMatchAnalysis` is a different thing
+      (donor-side, D-30) and is untouched.
+- [x] **Nothing became dead with it.** The note used no icon, constant or prop of its own;
+      every import in the file is still read, `Info` included — it captions the
+      *Rule-Based Model* chip, which D-31 names as the acceptable labelled claim and which
+      **stays**.
+- [x] **Everything else on the page is untouched:** the four scored criteria and their
+      captions (I-8), the reliability panel, the reasons list, the compatibility label, the
+      Accept flow, `useAvailableDonations` (D-50), the timeline, the empty and
+      awaiting-verification states, and the styling of what remains.
+- [x] **Deliberately not swept.** `components/FutureIntelligenceSection.tsx` and
+      `pages/admin/AdminDashboard.tsx`'s *Intelligence Roadmap* are the admin portal's and
+      are separate tasks; the landing page's *"Currently rule-based · ML-assisted matching
+      planned for Phase 2"* line is D-48's and stays.
+- [x] **Validated.** `npm test` **108/108** (13 files; 2 new in
+      `pages/ngo/__tests__/NGOAvailableDonations.test.tsx`, 106 → 108), `npm run typecheck`
+      clean, `npm run build` clean. The absence test was confirmed to **fail** against the
+      pre-removal component; its companion — the panel still explaining the score — passes
+      on both sides, which is what makes it a preservation guard rather than a restatement.
+      The backend suite was **not** re-run: no backend file was touched.
+- ⚠️ **No authenticated browser pass.** The page needs a signed-in kitchen, and the agent
+      operating rules forbid entering a password to authenticate — so the seeded account
+      route earlier tasks used was not available. The dev server and a throwaway seeded API
+      were run and the app booted with no console error; the page itself is covered by the
+      jsdom render above, which drives the real provider, the real adapters and the real
+      page. The removed note was the **last** child of a `space-y-6` stack, so it left no
+      trailing margin behind it.
+- ⚠️ `npm run lint` **cannot run**: the script calls an `eslint` that is not a dependency.
+      Pre-existing, unrelated — still *Backlog → H*.
+
+### Task 32 · a courier's finished run is `DELIVERED`, not only `COMPLETED` (committed `a58a914`) `[repo · D-51]`
 
 **Frontend only, two screens in one folder, no backend change.** A courier who marked a
 run delivered watched it disappear from their whole portal. `DELIVERED` is the furthest
