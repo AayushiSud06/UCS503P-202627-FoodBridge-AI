@@ -1,35 +1,68 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-52. D-01 to D-31 were verified on
-> 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
-> decision the QA audit of that date settled, and the four questions it left open are in
-> `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
-> **D-33** (distance, routing and GPS wording, I-2) as `fcbd03b`. **D-34**/**D-35**
-> (lifecycle write authorization) are committed as `551c96d` and `efd5fd8`, **D-36**
-> (notifications, I-4) as `6863451`, **D-37** (verification wording, I-5) as `6c82739`,
-> **D-38** (courier status display, I-6) as `b41c4e6`, **D-39** (overdue deadlines, I-7)
-> as `fc91091` and **D-40** (an account reads its own contact details, I-9) as `c274e99`,
-> which is HEAD. Re-verified in the project health audit of 2026-09-05, which changed no
-> source; the corrections it produced are marked in D-05, D-17, D-26 and D-35. **D-41**
-> (courier read scope and the release's second meaning) is committed as `e7032ea`.
-> **D-42** (matcher unit comparability and the absolute headroom criterion) is committed as
-> `a9f190b` and **D-43** (the frontend test harness) as `f33aeae`, which is HEAD.
-> **D-44** (requirement read scope and the donor needs board) is committed as `e72d4c2`
-> and **D-45** (match distance is scoped to the organisation it describes, `HA-3`) as
-> `883bcee`. Re-checked against the repository on 2026-09-10, HEAD `f863a94`:
-> **D-46** (retired requirements get a reader, and the lifecycle filter is a second axis)
-> is committed as `8cbb736` — the sentence here said it was uncommitted, and had been left
-> behind — **D-47** (the distance scope decides what a donation says) as `d611424`,
-> **D-48** (the pre-login page is a product page) as `6961555` and **D-49** (the sign-in
-> screen carries no credential) as `f863a94`, which is HEAD. **D-50** (availability is a
-> deadline as well as a status, Task 31) is committed as `2ce3d71`, which is HEAD.
-> **D-51** (a courier's history ends at `DELIVERED`, Task 32) is committed as `a58a914`.
-> **D-52** (a standing need breaks a tie and explains itself, Task 36) is **uncommitted in
-> the working tree** — with `matching.py`, `routers/donations.py` and one new backend test
-> file. ⚠️ Several provenance sentences above this one still describe work as uncommitted
-> that has since been committed; only D-51's was corrected, because D-52's line sits beside
-> it and two contradictory claims in one sentence would be worse than a stale one. The rest
-> is a documentation pass of its own.
+> Decisions evident in the repository, D-01 to D-52. **All 52 are implemented in commits up
+> to `640af0c`; re-verified against a clean working tree by the health audit of
+> 2026-09-10.** Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> needed*. Read the index below first and open an entry only when you need its reasoning.
+> ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
+>
+> | ID | Decision (one line) | Status / audit note |
+> |---|---|---|
+> | D-01 | Append-only, server-stamped `status_events` ledger | in force |
+> | D-02 | Lifecycle rules as data (`ALLOWED_TRANSITIONS`, `TRANSITION_ROLES`) | in force |
+> | D-03 | Re-read the user row each request; ignore the token's role | in force |
+> | D-04 | Admin only via CLI or another admin | in force |
+> | D-05 | Explainable weighted heuristic, not ML | in force; collinearity note resolved by D-42 |
+> | D-06 | Ineligibility gates, not low scores | in force |
+> | D-07 | No service/repository layer | in force |
+> | D-08 | SQLite default, Postgres-capable | in force; Postgres untested |
+> | D-09 | `UtcDateTime` normalises to UTC | in force; no direct test |
+> | D-10 | Warm editorial palette overriding Tailwind names | in force |
+> | D-11 | Write-then-refetch, not optimistic | in force |
+> | D-12 | `lib/api.ts` is the only fetch | in force |
+> | D-13 | JWT in `localStorage`, no refresh | in force |
+> | D-14 | Route guards are UX, not security | in force |
+> | D-15 | Derived values as properties (except frozen `match_score`) | in force |
+> | D-16 | Self-service schemas omit privileged fields | in force |
+> | D-17 | Integration tests, no mocks | in force (counts corrected) |
+> | D-18 | Human-readable errors; one login failure message | in force |
+> | D-19 | Vite proxies `/api` in dev | in force |
+> | D-20 | Separate mobile tree at `/m/*` | rationale unknown |
+> | D-21 | `create_all` at startup | superseded by D-23 |
+> | D-22 | Fail-closed signing key with dev opt-in | in force |
+> | D-23 | Alembic owns the schema; runs in the lifespan | in force |
+> | D-24 | Donation read scope is a WHERE clause; denial 404 | ⚠️ scope open to unverified self-signup accounts (P1-1) |
+> | D-25 | CI validates, never deploys, holds no secret | in force; frontend tests run since `d611424` |
+> | D-26 | Recipient reads scoped; denial is an empty list | in force |
+> | D-27 | Per-process sliding-window auth rate limit | in force; donation creation unlimited (P2-1) |
+> | D-28 | Courier claim is a conditional UPDATE | ⚠️ "other transitions inert on SQLite" was wrong (P1-3) |
+> | D-29 | Requirement lifecycle is `is_active` + one PATCH | in force |
+> | D-30 | Frozen `matchScore` vs live `viewerMatch` | in force |
+> | D-31 | Interface claims must be honourable; labelled roadmaps allowed | in force |
+> | D-32 | Per-account impact from own rows, not `/metrics` | in force |
+> | D-33 | Straight-line distance named as such; no travel time shown | in force |
+> | D-34 | Owned transitions re-read through the read scope | in force |
+> | D-35 | `ACCEPTED` owned once the donation left the pool | in force |
+> | D-36 | Dead toggles removed, not disabled | in force |
+> | D-37 | One verification boolean, one meaning | ⚠️ survives self-edits of name/coordinates (P1-2) |
+> | D-38 | Lifecycle status decides courier display | in force |
+> | D-39 | Passed deadline annotated, not enforced (display) | in force; enforcement for the pool added by D-50 |
+> | D-40 | An account reads contact details it may write | in force; courier lat/long still write-only |
+> | D-41 | Courier scope via donations; release is not an acceptance | in force; its image cap lacks a client resize (P1-5) |
+> | D-42 | Only meals vs capacity; absolute headroom | in force |
+> | D-43 | Vitest on the project's Vite config | in force |
+> | D-44 | Requirements scoped by role; donors see verified orgs' | in force |
+> | D-45 | Match distance belongs to the org it describes (blur) | in force; `HA-3a` residual open |
+> | D-46 | `includeInactive` is a second axis; donors excluded | in force |
+> | D-47 | Same scope governs `DonationOut` location-derived fields | in force |
+> | D-48 | Pre-login and post-login pages carry no roadmap/course artefacts | in force; donor create page residue (P2-4) |
+> | D-49 | Sign-in screen carries no credential | in force |
+> | D-50 | Availability is a deadline as well as a status | in force |
+> | D-51 | Courier history ends at `DELIVERED` | in force |
+> | D-52 | Requirements break ties and explain; never move the score | in force; verified by audit repro |
+>
+> Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
+> against the kitchen (P1-4).
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -132,18 +165,10 @@ means replacing `score_pair` only; the router and the response shape do not chan
 constant and haversine straight-line distance are approximations (no routing API).
 ⚠️ **Never describe this system as AI/ML** — the repo name is misleading.
 
-⚠️ **Two of the five criteria do not behave as five criteria** (health audit, 2026-09-05).
-`_quantity_score` and `_capacity_score` take the same `(quantity, capacity)` and are
-monotone in the same ratio `r` in opposite directions, so their weighted contribution is
-`0.25(40 + 60r) + 0.20(100 − 50r) = 30 + 5r` — **45% of the published weight moves five
-points across the entire feasible range**, then drops 11.5 at `r = 1`. And neither reads
-`Donation.unit`, though `quantity` is a count in Meals · Kg · Boxes · Pieces while
-`capacity` is meals per day: 100 Kg and 100 Meals score identically. So "a marker can
-verify it by hand" still holds and "five weighted criteria" does not — the explainability
-panel renders two collinear bars as two independent ones, which since I-8 are individually
-captioned correctly. **The decision stands and the structure is not what needs changing;
-the two functions are.** `TASKS.md` → *Next* step 2 (`HA-4`, `HA-5`). Re-tuning `WEIGHTS`
-(`R-31`) is blocked behind it.
+✅ **Resolved by D-42 (`a9f190b`).** The health audit of 2026-09-05 found `_quantity_score`
+and `_capacity_score` collinear (`30 + 5r`) and blind to `Donation.unit`. Headroom is now
+absolute and only meal-denominated donations are compared with capacity. `R-31` (weight
+tuning) is unblocked but still wants outcome data.
 
 ---
 
@@ -340,7 +365,7 @@ check — new self-service endpoints must follow the same discipline.
 **Decision.** The **37 integration tests** — `test_api.py` (15) and `test_auth_admin.py`
 (22) — exercise the full HTTP stack against in-memory SQLite via `StaticPool` and
 `app.dependency_overrides[get_db]`, with no mocks. ⚠️ **37 is the integration subset, not
-the suite**: the backend suite is **168 tests** at HEAD `c274e99`, the rest being the
+the suite**: the backend suite is **331 tests** at `640af0c`, the rest being the
 read-scope, lifecycle-authorization, requirement-lifecycle, courier-claim,
 match-score-consistency, rate-limit, config and migration files added since. Those follow
 the same no-mocks discipline; the config, rate-limit and matching-boundary tests are the
@@ -352,11 +377,10 @@ notes the API "has no path to a first administrator by design, so tests reach in
 database exactly as `create-admin` does, then authenticate normally through the API" —
 respecting the security boundary rather than bypassing it.
 
-**Constraints.** ~130 s runtime for the full 168, almost entirely real bcrypt hashing (the
-original 37 ran in ~19 s). `matching.py` is still reached almost entirely through HTTP —
-one test in `test_match_score_consistency.py` calls `score_pair` directly with an injected
-`now`, and the individual `_*_score` helpers have no direct test at all, which is how the
-collinearity in D-05 went unnoticed. Zero frontend tests.
+**Constraints.** Runtime is bcrypt-bound: **331 tests, ~229 s** at `640af0c` (the
+original 37 ran in ~19 s). Since D-42 the matcher also has direct unit tests
+(`test_matching_scores.py`, `test_requirement_matching.py`); the frontend has its own suite
+(D-43). The lack of direct matcher tests is how the D-05 collinearity went unnoticed.
 
 ---
 
@@ -541,6 +565,11 @@ eligibility relationship in the schema, so "donations a courier is eligible for"
 mean "not yet claimed". A geographic or availability-based courier scope would need a new
 relationship.
 
+⚠️ **Audit 2026-09-10: the `ngo` and `volunteer` scopes are open to self-signup accounts.**
+`is_verified` gates ranking and acceptance, not this read, and couriers have no vetting at
+all — so a stranger with a fresh `ngo` or `volunteer` account reads every open donation's
+exact pin, address text and donor name (reproduced). `TASKS.md` P1-1 / DQ-1.
+
 ⚠️ **The write path was left untouched here, and that was wrong.** This section used to
 read that `update_status` could keep the unscoped `_get_or_404` "because its authorisation
 is `TRANSITION_ROLES` plus ownership" — but no working ownership test existed for
@@ -583,8 +612,9 @@ Alembic step is given a literal placeholder `FOODLINK_SECRET_KEY`, not a reposit
   3.10+ regardless (the root `pyproject.toml`'s `requires-python = ">=3.8"` is template
   residue and wrong). Node 20 is the current LTS and is what Vite 5 targets.
 
-**Constraints.** CI proves the backend and the type layer, not the frontend's behaviour —
-there are no frontend tests, so `tsc` passing is the whole frontend signal. The workflow
+**Constraints.** Since `d611424` the frontend job runs `npm test` (D-43) before the build,
+so frontend behaviour is gated as far as the suite reaches. No lint step (the script is dead)
+and no dependency audit. The workflow
 deliberately contains no deployment: the project has no deployment configuration, and
 inventing one in CI would be the wrong place to start.
 
@@ -631,23 +661,14 @@ it must apply this same clause and 404, per D-24. Admin verification
 behind the admin router gate.
 
 ✅ **This decision named the courier roster and did not fix it; that gap is now closed by
-D-41** (Task 21, `e7032ea`). The first bullet above cites "the same objection the `GET /api/volunteers`
-docstring already raises about the courier roster, on the neighbouring table" — and the
-scope was applied to `RecipientOut` only. **`GET /api/volunteers` remains role-gated and
-unscoped**: `require_roles(admin, ngo)` with no ownership clause, so every account holding
-the `ngo` role reads every courier's name, location, availability and **phone**. Because
-registration hands that role to a stranger and `is_verified` gates ranking and acceptance
-but not this endpoint, the cost of the whole roster is one throwaway email address —
-reproduced in the health audit of 2026-09-05. No decision was ever recorded for it and no
-task was filed until that audit. **D-41 applies this decision's own shape one table over**,
-which is what it should have done here.
+D-41** (Task 21, `e7032ea`): the courier roster had been left role-gated but unscoped,
+readable by any self-signup `ngo` account (`HA-1`).
 
-⚠️ **A second, narrower bypass of this scoping exists in `/matches`.** `RecipientOut`
-withholds `latitude`/`longitude` from a donor, and `MatchOut.distanceKm` gives them back: a
-donor reads `200 []` here by design, then posts three donations at pins of its choosing and
-trilaterates any verified organisation from the three distances — recovered exactly in the
-same audit. `TASKS.md` → *Backlog → A* / `HA-3`. Rounding the serialised distance is the
-cheap answer; removing the field is not, because I-2/D-33 depends on it.
+✅ **The `/matches` bypass of this scoping is closed by D-45** — by blurring the kitchen's
+position upstream of scoring, not by rounding the distance (rounding leaves boundaries at
+known distances). Residual `HA-3a`, the eligibility gate as an oracle, is `TASKS.md` P2-1.
+⚠️ The same "self-signup role is not permission to read people" lesson has not yet been
+applied to **donors** — see the note on D-24.
 
 ---
 
@@ -784,11 +805,13 @@ on SQLite and PostgreSQL.
   expires `volunteer_id`/`volunteer` rather than assigning them — assigning would make
   the ORM re-write the value it just wrote, unguarded.
 - ⚠️ **Only the claim is protected this way.** Every other transition still reads
-  `donation.status`, checks it in Python and writes. SQLite serialises those today; on
-  PostgreSQL two concurrent transitions on one donation can still both succeed and
-  append two events. Generalising the guard to `update_status` as a whole is real
-  remaining work, tracked in `TASKS.md`, and was kept out of this change because it
-  touches every lifecycle path rather than the one with a known defect.
+  `donation.status`, checks it in Python and writes. **Correction (audit 2026-09-10):**
+  this constraint used to say SQLite serialises those, making the race inert — it does
+  not. pysqlite holds no lock across a plain `SELECT` (the reason the pre-fix claim race
+  reproduced on SQLite), and the same interleaving against `ACCEPTED` on a migrated
+  file-backed database gave both kitchens a `200`, two `ACCEPTED` events and an inflated
+  counter for the loser. Generalising the conditional write to `update_status` is
+  `TASKS.md` P1-3.
 
 ---
 
@@ -840,8 +863,8 @@ organisation's id answers 404.
   need that simply lapsed produce the identical row. Anything that later needs to tell
   them apart needs a schema change, and this decision is what it would be revisiting.
 - **No schema change:** `alembic check` reports no drift.
-- Requirements still do not influence matching — `rank_recipients` has never read them,
-  and this did not change that.
+- This decision did not make requirements a matching input. **D-52 later did**, bounded:
+  an active need breaks ties and adds a `reasons` line; it never moves a score.
 
 ---
 
@@ -1726,11 +1749,12 @@ D-33 and D-40 each closed with *"Nothing tests this"*; that is what the harness 
 and fails the suite.
 
 ⚠️ **Consequences.**
-- **Not wired into CI.** `ci.yml` still runs `npm run build` only, so the suite gates
-  nothing automatically yet. Adding the step is outstanding work, not a decision.
-- **No coverage thresholds, and no E2E or visual-regression layer.** Six modules are
-  covered; 29 desktop pages and 26 mobile screens are not. The harness is a foundation,
-  and its value is that the next frontend task adds a file rather than a toolchain.
+- **Wired into CI since `d611424`** — the frontend job runs `npm test` before the build.
+- **No coverage thresholds, and no E2E or visual-regression layer.** At `640af0c` the suite
+  is 121 tests over 15 files — the `lib/` modules, the route guard, the requirements slice
+  and eight pages; no mobile screen and no `AppContext` write path is covered. The harness
+  is a foundation, and its value is that the next frontend task adds a file rather than a
+  toolchain.
 - **`npm run lint` remains dead** — the script has always referenced an `eslint` that is
   not a dependency. Untouched here; it predates this work.
 
