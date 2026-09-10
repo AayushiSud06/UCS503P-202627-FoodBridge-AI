@@ -49,11 +49,89 @@
 
 ## Current
 
+**Uncommitted in the working tree: Task 36 — requirement-aware matching, designed,
+approved and implemented.** `[R-35 · QA-2 · D-05 · D-06 · D-42 · D-44 · D-46 · D-52]`
+Two source files and one new backend test file; **no schema change, no migration, no API
+shape change and no frontend change.** Entry below.
+
+⚠️ **Task 35 is committed**, as `df74466` (now HEAD, after `ca8bef6`) —
+`components/FutureIntelligenceSection.tsx` is no longer in the repository. The paragraph
+below still calls it uncommitted and was left as found: correcting the provenance across
+this file and `PROJECT_STATE.md` is a documentation pass of its own, not part of a
+design investigation.
+
 **Uncommitted in the working tree: Task 35 — the admin Analytics page no longer carries a
 Future Intelligence Architecture section, complete.** Task 34 is now committed (`cb65f38`,
 now HEAD), Task 33 (`db000d9`), Task 32 (`a58a914`), Task 31 (`2ce3d71`), Task 30
 (`f863a94`), Task 29 (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`); those
 entries stay below for context until they move to *Completed*.
+
+### Task 36 · a standing need breaks a tie and explains itself `[R-35 · QA-2 · D-05 · D-06 · D-42 · D-44 · D-46 · D-52]`
+
+**Design, approval and implementation in one task.** The complaint it started from —
+editing a requirement changes no donation's score — was never a cache or refresh problem:
+`matching.py` had never referenced `Requirement`, so there was nothing stale to
+invalidate. The investigation is summarised in D-52; what was built is the smallest
+extension that makes a standing need count without touching the score.
+
+- [x] **`overall_score` and `WEIGHTS` are byte-for-byte unchanged**, and that is the
+      property the design rests on rather than a side effect. A requirement in the score
+      would be a requirement in `Donation.match_score` — frozen, platform-wide, and read by
+      callers who may not read requirements at all — i.e. an unscopeable disclosure channel
+      of exactly the kind D-45 and D-47 closed for distance. Pinned from both ends: a
+      parametrised unit test over every shape a requirement can take, and an API test that
+      the frozen `matchScore` is the same number with and without one.
+- [x] **A tie-break, not a criterion.** `matching._ranking_key` sorts on `overall_score`
+      first, then requirement standing, fit, urgency and recipient id. The last key makes
+      the order **total** — before this, ties fell through to `list.sort`'s stability and
+      therefore to whatever `select(Recipient)` returned, so two equally-scored kitchens
+      could swap places between requests. That was a pre-existing defect this change was
+      the occasion to fix.
+- [x] **Quantity compares only identical units, and nothing converts** (D-42's rule at a
+      second pair of numbers). Broader here than for capacity: a requirement carries its own
+      unit, so all four of Meals · Kg · Boxes · Pieces compare when both sides agree. Fit is
+      `100` at or above the stated need — **no penalty for exceeding it**, since a standing
+      need is a request and overflow is already priced twice against capacity — and
+      `40 + 60r` below it.
+- [x] **Food type is not assessed, and that is the answer rather than a deferral.**
+      `Requirement.food_type` is free text against a donation vocabulary enforced only in
+      the browser; the obvious substring rule is actively wrong, since `"Non-Vegetarian"`
+      contains `"Vegetarian"`. Making it real needs a controlled category on `Requirement` —
+      *Backlog → G*, not started.
+- [x] **Urgency orders and never scores**, and is deliberately never named in a reason: the
+      NGO posting form defaults it to `High`, so printing it back would advertise a field
+      worth inflating. `daily_recurring` and `beneficiary_count` remain non-inputs.
+- [x] **Multiple needs resolve deterministically; retired needs reach nobody.**
+      `best_requirement_fit` picks by assessable · fit · urgency · oldest · lowest id, and
+      filters `is_active` a second time after the router's query already did.
+- [x] **Privacy through the existing pattern, not a new one.**
+      `donations._requirement_disclosure_scope` is `_precise_distance_scope`'s shape over
+      D-44's published answer. A kitchen outside a reader's scope is ranked exactly as it
+      was before the feature existed — the *input* is withheld, not just the text, so the
+      ordering channel closes with it. `MatchOut` gained no field; `_match_out` now
+      enumerates the wire shape by hand so `requirement_fit` cannot be published by
+      accident.
+- [x] **Bounded queries, held by test.** One `IN` for `/matches`, one for the caller's own
+      organisation on the `viewerMatch` path resolved before the loop. Six donations cost
+      the same one requirement query as one donation; four candidate kitchens cost one.
+- [x] **Validated.** `pytest code/tests` **331/331** (283 → 331, ~238 s), **no existing
+      test modified**; `npm test` 121/121; `npm run typecheck` and `npm run build` clean;
+      `alembic check` reports no new upgrade operations. Four mutations confirmed the new
+      tests bite: removing the tie-break fails 4, bypassing the disclosure scope fails 2,
+      folding fit into `overall_score` fails 5, and admitting retired needs fails 3.
+      Verified end to end against a live server on a seeded throwaway database — a
+      requirement edit changed the reason on the next read with the score unmoved, retiring
+      it removed the line, and each kitchen was told about its own demand and never its
+      rival's while a courier was told nothing.
+- ⚠️ **No authenticated browser pass.** `/ngo/available` is behind `ProtectedRoute` and the
+      agent operating rules forbid entering a password to authenticate. The dev server was
+      run against the throwaway API and the route redirected to sign-in with no console
+      error; the live-server API pass above is what covers the behaviour instead. Same gap
+      reported for Tasks 31–35.
+- ⚠️ **The signal is modest by construction** — it moves nothing unless two candidates score
+      identically, and it cannot see what food a kitchen wants. Promoting it to a weighted
+      criterion is a separate decision (`R-31`) that wants a controlled food category and
+      outcome data first.
 
 ### Task 35 · the Future Intelligence Architecture leaves the admin Analytics page `[repo · D-31 · D-36 · D-48]`
 
@@ -900,6 +978,14 @@ Places where a shipped feature is incomplete — not new ideas.
       every distance is now labelled straight-line and no travel time is displayed — so
       this decision is no longer urgent, only open. `[R-30 · QA-1]`
 - [ ] Recipient food-category preferences. Would also give `COLD_STORAGE` a purpose. `[R-32]`
+- [ ] **A controlled food category on `Requirement`, so requirement-aware matching can see
+      what food a kitchen wants.** Task 36 built the quantity half and deliberately left
+      this: `Requirement.food_type` is free text while `Donation.category` is a six-value
+      picker enforced only in the browser, so no honest comparison exists and D-52 refused
+      to invent one. It needs a nullable column plus a migration, a decision about whether
+      the donation picker becomes a backend enum, and a decision about existing rows —
+      product questions, not effort. Until then a donation is matched to a need by size
+      alone. Overlaps `R-32` above. `[R-35 · D-52 · repo]` — **M**
 - [ ] **Narrow the donor needs board by distance.** It is platform-wide today (D-44) and
       cannot be otherwise: a donor account stores **no coordinates** — `users` has none,
       and `Donation.latitude/longitude` belong to a donation, not to the person who posted
@@ -1286,18 +1372,20 @@ settled. They sit here rather than in *Backlog* so that nobody implements one by
   be considered first: keep haversine, apply a calibrated detour factor, and **say so** in
   the UI. **Do not implement any of this before the decision.**
 
-- **Should requirements actually drive matching?** `[QA-2 · R-32]`
-  They do not today — `matching.py` never sees a `Requirement`. Making them count means
-  choosing what a requirement *is* to the matcher: a sixth weighted criterion (the
-  `WEIGHTS` dict must keep summing to 1.0, so every existing weight is re-tuned by the
-  choice), or a gate like verification and radius (D-06's shape — but a kitchen with no
-  posted requirement would then rank nowhere, which is worse than today), or a tie-break.
-  It also needs a matching rule between a donation's free-text `category` and a
-  requirement's free-text `food_type` — neither is a controlled vocabulary, so this
-  overlaps R-32 (recipient food-category preferences) and would give `COLD_STORAGE` its
-  purpose at last. **Scope if approved: M–L**, mostly in `matching.py` and its tests, and
-  it changes every score on every screen — which is a demo-visible event worth scheduling
-  deliberately.
+- ~~**Should requirements actually drive matching?**~~ ✅ **Answered and built — Task 36,
+  D-52.** `[QA-2 · R-32]`
+  Yes, as a **tie-break and an explanation** — the third of the three options this entry
+  listed. The sixth-criterion option was rejected because `WEIGHTS` must keep summing to
+  1.0, so it re-tunes all five and moves every score on every screen (R-31 wants outcome
+  data the project does not have); the gate option was rejected for the reason recorded
+  here, that a kitchen with no posted need would rank nowhere. **Nothing changed every
+  score on every screen** — `overall_score` is untouched by construction.
+  **The food-type half was not built, and the reason is the one this entry identified.**
+  `Requirement.food_type` is free text and `Donation.category` is a picker enforced only in
+  the browser, so there is no comparison to make; the substring rule is actively wrong
+  (`"Non-Vegetarian"` contains `"Vegetarian"`). Quantity is compared instead, and only
+  between identical units. What food a kitchen wants therefore still does not count — see
+  *Backlog → G* for what it would cost. `COLD_STORAGE` is untouched and still dead.
 
 - ~~**Should donors see a needs board?**~~ ✅ **Answered and built — Task 25, D-44.**
   `[QA-3 · §8.2]`

@@ -72,7 +72,7 @@ as ML.
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 283 tests passing (~208 s), and the breakdown adds up — `test_donation_privacy_scope.py` had been missing from this row: 39 integration + 25 matcher-scoring + 24 requirement-read-scope + 22 rate-limit + 22 config + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 12 match-distance-privacy + **12 available-donation-deadline** + 11 recipient-read-scope + 11 match-score-consistency + 11 donation-privacy-scope + 9 courier-claim + **8 volunteer-delivery-history** + 8 volunteer-read-scope + 8 migration |
+| Backend tests | ✅ 331 tests passing (~238 s): **48 requirement-matching** + 39 integration + 25 matcher-scoring + 24 requirement-read-scope + 22 rate-limit + 22 config + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 12 match-distance-privacy + 12 available-donation-deadline + 11 recipient-read-scope + 11 match-score-consistency + 11 donation-privacy-scope + 9 courier-claim + 8 volunteer-delivery-history + 8 volunteer-read-scope + 8 migration |
 | Frontend tests | ✅ 106 tests passing (~3 s): 14 donor-needs-board + 11 time + 10 login + 9 landing + 9 adapters + 8 ngo-requirements + 8 api-client + **7 volunteer-history** + 7 requirements-slice + 7 impact + 6 ngo-available-donations + 5 geo + 5 route-guard. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 13 test files against 86 non-test files under `frontend/src` — a foundation, not a sweep |
 | CI | ✅ GitHub Actions runs the backend tests, the frontend build and `alembic check`. ⚠️ **The frontend test suite is not a CI step yet** — the frontend job still runs `npm run build` only |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
@@ -85,6 +85,28 @@ the same `Settings` object. The error message states both options. Tests supply 
 own key in `conftest.py` and need no setup.
 
 ## Recently completed (newest first)
+
+- **2026-09-10, uncommitted working tree** — **Task 36: a standing need finally counts,
+  without touching the score.** `[R-35 · D-52]` The complaint was that editing a requirement
+  changed no donation's match score. It was never a cache: `matching.py` had never
+  referenced `Requirement`. It does now, and what it does with one is deliberately bounded —
+  **`overall_score`, `WEIGHTS`, the five criteria and the three gates are byte-for-byte
+  unchanged**, so `Donation.match_score` still carries no requirement-derived information.
+  A requirement instead **breaks a tie** (`_ranking_key`: `overall_score` first, then
+  requirement standing, fit, urgency and recipient id — a **total** order, where ties
+  previously fell through to `select(Recipient)`'s row order) and **adds a line to
+  `reasons`**. Quantity is compared with `quantity_needed` only when the two units are
+  identical, and nothing is converted; exceeding a stated need is not penalised. **Food type
+  is not assessed at all** — free text against a browser-only donation vocabulary, where the
+  obvious substring rule is actively wrong (`"Non-Vegetarian"` contains `"Vegetarian"`) —
+  and `daily_recurring`, `beneficiary_count` and `notes` stay non-inputs. Urgency orders and
+  never scores, and is never named in a reason, because the posting form defaults it to
+  `High`. Retired needs reach nobody, filtered in the router's query and again in the
+  matcher. Privacy reuses D-44's answer through `_requirement_disclosure_scope` in
+  `_precise_distance_scope`'s shape: a kitchen outside a reader's scope is ranked exactly as
+  it was before the feature existed, because the **input** is withheld rather than the text.
+  **Two source files, one new test file; no schema, migration, API-shape or frontend
+  change.** 331 backend and 121 frontend tests pass, no existing test modified.
 
 - **2026-09-05, uncommitted working tree** — **Task 27: a retired requirement gets a
   reader.** `[F-1 · D-46]` D-29 kept the row on retirement and left it unreadable, so
@@ -599,9 +621,12 @@ predicate beside the existing scope, a second selector over the existing slice a
 section on one page — no schema change and no second source of truth.
 
 Everything else sits in `TASKS.md` → *Backlog* (grouped hardening, then optional expansion
-and cleanup) or *Blocked*, which now holds **seven** open decisions: the original four,
-plus road distance, requirement-aware matching and a real impact report. The needs-board
-question is answered and closed. None of the rest has been committed to.
+and cleanup) or *Blocked*, which now holds **six** open decisions: the original four, plus
+road distance and a real impact report. The needs-board question is answered and closed, and
+so is **requirement-aware matching** — answered by Task 36 as a tie-break and an explanation
+rather than as a criterion or a gate (D-52). What that left open is narrower and now sits in
+*Backlog → G*: a controlled food category on `Requirement`, without which the matcher can
+compare a need's *size* but not what food it asks for. None of the rest has been committed to.
 
 ## Known issues and blockers
 
@@ -821,8 +846,12 @@ credibility rather than about its correctness, and that judgement belongs in thi
     corrected seven strings across the desktop and mobile requirement surfaces plus four
     toasts that promised donor visibility no donor screen provides. `daily_recurring` is
     still stored and displayed — now as "Needed daily", describing the need rather than a
-    scheduler. **Requirements remain a notice board and the matcher is unchanged;** whether
-    to make ranking requirement-aware is still the first *Blocked* question (R-35).
+    scheduler. ⚠️ **The matcher half has since changed and the wording has not been
+    revisited** (Task 36, D-52): requirements now break ties and explain themselves, though
+    they still do not move a score, and `daily_recurring` is still acted on by nothing. The
+    corrected strings claim *less* than the system now does, so nothing on screen is
+    dishonest — but whether any of them should be re-widened is an open product question
+    and was deliberately out of Task 36's scope.
 20. ✅ **Resolved (`fcbd03b`, 2026-09-03) — the GPS and routing claims are gone.**
     `navigator.geolocation` is still called only to pin a donation at creation; a courier's
     position is never read or stored, and there is no map or routing provider anywhere —

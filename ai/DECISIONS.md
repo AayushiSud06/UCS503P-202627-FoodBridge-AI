@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-51. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-52. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -23,8 +23,13 @@
 > **D-48** (the pre-login page is a product page) as `6961555` and **D-49** (the sign-in
 > screen carries no credential) as `f863a94`, which is HEAD. **D-50** (availability is a
 > deadline as well as a status, Task 31) is committed as `2ce3d71`, which is HEAD.
-> **D-51** (a courier's history ends at `DELIVERED`, Task 32) is **uncommitted in the
-> working tree**.
+> **D-51** (a courier's history ends at `DELIVERED`, Task 32) is committed as `a58a914`.
+> **D-52** (a standing need breaks a tie and explains itself, Task 36) is **uncommitted in
+> the working tree** — with `matching.py`, `routers/donations.py` and one new backend test
+> file. ⚠️ Several provenance sentences above this one still describe work as uncommitted
+> that has since been committed; only D-51's was corrected, because D-52's line sits beside
+> it and two contradictory claims in one sentence would be worse than a stale one. The rest
+> is a documentation pass of its own.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -1671,8 +1676,10 @@ photo is a 422.
 `FULL_HEADROOM_MEALS`, `is_comparable_unit()`, `_capacity_score()`, and the unit branch plus
 `reasons` in `score_pair()`. `_quantity_score`, `_distance_score`, `_deadline_score`,
 `reliability_score`, `WEIGHTS`, the three hard gates, `rank_recipients` and every caller are
-unchanged. Requirement-aware matching (`R-35`) is untouched and remains a *Blocked*
-question.
+unchanged. ~~Requirement-aware matching (`R-35`) is untouched and remains a *Blocked*
+question.~~ **Answered by D-52 (Task 36):** requirements now break ties and explain
+themselves, and this decision's two rules are what shaped that one — only identical units
+are compared, and nothing is converted.
 
 ---
 
@@ -2263,3 +2270,114 @@ only. Established by Task 32. No backend, lifecycle, schema or authorization cha
   confirms, and never sees another courier's — and all 8 pass against the pre-fix backend,
   which is how the backend was ruled out. `pages/volunteer/__tests__/VolunteerHistory.test.tsx`
   (7) holds both screens; 4 of the 7 fail against the pre-fix filters.
+
+---
+
+## D-52 · A standing need breaks a tie and explains itself; it never moves the score **[documented]**
+
+**Decision.** `matching.score_pair` now reads a recipient's **active** standing needs. What
+it does with them is bounded on purpose:
+
+1. **`overall_score` is untouched.** It is the same weighted sum over the same five
+   criteria with the same `WEIGHTS`, so `Donation.match_score` carries no
+   requirement-derived information and the published explainability contract — the
+   breakdown reconciles to the headline by the stated weights — holds unchanged.
+2. **Requirements break ties.** `matching._ranking_key` orders candidates by
+   `overall_score` first and only then by requirement standing, fit, urgency and, last,
+   recipient id.
+3. **Requirements explain themselves** in the existing `reasons` list. No field was added
+   to `MatchOut`, so there is no API or frontend change at all.
+
+Only two requirement fields are read: `quantity_needed` and `unit`, compared against the
+donation's own, and `urgency` as a tie-break. `food_type`, `beneficiary_count`,
+`daily_recurring` and `notes` are not inputs.
+
+**Reasoning.**
+
+- **A requirement in the score would be a requirement in `Donation.match_score`.** That
+  column is frozen, platform-wide, and read by callers who may not read requirements at
+  all — a courier reads none, a kitchen reads only its own (D-44). A number computed from
+  private demand and published to those readers is an unscopeable disclosure channel, which
+  is exactly what D-45 and D-47 had to close for distance. Keeping the signal in `reasons`
+  keeps the disclosure somewhere a scope can reach it. **This is the load-bearing reason
+  for the whole shape**, not a scoping convenience.
+- **A sixth weighted criterion was rejected.** `WEIGHTS` must keep summing to 1.0, so
+  adding one re-tunes all five — moving every score on every screen, which R-31 says wants
+  outcome data the project does not have, and which D-42 deliberately deferred so that
+  correcting *what* a criterion measures came before deciding *how much* it counts.
+- **A gate was rejected.** D-06 gates what a recipient may not act on. A kitchen can
+  perfectly well take food it never posted a need for, and gating on requirements would
+  make a kitchen that has posted none rank nowhere — worse than before the feature existed.
+- **Food type is not assessed, and that is the honest answer rather than a deferral.**
+  `Requirement.food_type` is free text (`"Hot vegetarian meals"`, `"Packaged dry rations"`)
+  while `Donation.category` is a six-value picker enforced only in the browser. There is no
+  shared vocabulary to compare, and the obvious substring rule is actively wrong —
+  `"Non-Vegetarian"` contains `"Vegetarian"`. A token or fuzzy rule would be a fabricated
+  classifier inside a ranking the platform asks to be checked by hand, which is what D-05
+  and D-42 forbid. Making it real needs a controlled category on `Requirement`, a schema
+  change, and a product decision; it is recorded in `TASKS.md` as open, not started.
+- **Quantity compares only identical units, and nothing converts.** D-42's rule, applied to
+  a second pair of numbers. It is broader here than for capacity: a requirement carries its
+  own unit, so all four of Meals · Kg · Boxes · Pieces are comparable when both sides agree,
+  where `Recipient.capacity` has no unit column and is meals by convention.
+- **Exceeding a stated need is not penalised.** A standing need is a request, not a
+  ceiling, and overflow is already priced twice against capacity by `_quantity_score` and
+  `_capacity_score`. Charging a third time would rebuild the collinearity D-42 removed.
+- **Urgency orders, and never scores.** It is declared by the organisation it flatters,
+  stored in an unvalidated `String(16)`, never expired — and the NGO posting form defaults
+  it to `High`. A field that defaults to its maximum must not move a number the platform
+  presents as evidence. It is also deliberately **not named in any reason**: printing it
+  back would advertise a field worth inflating.
+- **`daily_recurring` and `beneficiary_count` are still not inputs.** Nothing re-posts a
+  requirement and no scheduler exists (`ARCHITECTURE.md` constraint 7), so recurrence says
+  nothing about *this* donation; and a headcount is not a quantity in any of the four
+  units, so comparing it with one would be the conversion this decision refuses to invent.
+- **One need, chosen by a total order.** A kitchen may post any number of needs. Aggregating
+  them was rejected — summing `quantity_needed` across needs posted in different units is
+  the mixed-unit arithmetic D-42 forbids. `best_requirement_fit` picks by *assessable before
+  unassessable · higher fit · higher urgency · older need · lower id*. The id is last
+  because it is the only field guaranteed unique: `created_at` is second-resolution on
+  SQLite (D-44) and ties readily, and `Recipient.requirements` declares no `order_by`, so
+  without a total order the answer would have followed database row order.
+- **Retired needs are invisible to matching, filtered twice.** In the router's query and
+  again in `best_requirement_fit`. A retired requirement is off the demand board (D-29) and
+  a donor may not read one at all (D-46); letting one reach a `reasons` line would hand a
+  donor exactly the history `_may_read_inactive` refuses them.
+- **Ties are worth deciding well, and were being decided by accident.** `overall_score` is
+  rounded to an integer, so exact ties between candidates are common. Before this the sort
+  was stable over whatever `select(Recipient)` returned, so two equally-scored kitchens
+  could swap places between requests. The new key is total; that is a correctness
+  improvement this change happened to be the occasion for.
+
+**Privacy.** `donations._requirement_disclosure_scope` decides whose needs may shape what a
+caller is told, in `_precise_distance_scope`'s shape and reusing D-44's published answer
+rather than inventing a second authorization model: `None` for an administrator, every
+**verified** recipient for a donor (the needs board they already read — and every ranked
+kitchen is verified, since `score_pair` gates on it), its own organisation for an `ngo`,
+nothing for a courier. **A caller outside the scope for a kitchen is not shown a narrowed
+explanation — that kitchen is ranked exactly as it was before this feature existed.**
+Withholding the *input* rather than the output closes the ordering channel as well as the
+text, which is the lesson D-45 recorded about sorting. `viewerMatch` needs no scope: subject
+and reader are one organisation there.
+
+**Constraints.**
+
+- **No schema change, no migration** (`alembic check` reports no new upgrade operations),
+  **no API shape change and no frontend change.** The explanation travels in the existing
+  `reasons` list, which exists precisely so a score is never a bare number (D-06).
+- **`matching.py` stays pure.** Requirements are passed in, never queried, so D-05's swap
+  point and the module's unit-testability are unaffected. Omitting them is byte-for-byte
+  today's behaviour, which is asserted directly.
+- **`MatchResult.requirement_fit` is internal.** `donations._match_out` now enumerates the
+  wire fields by hand instead of splatting the dataclass, so a field added to it cannot
+  reach a client through Pydantic's silent extra-ignoring.
+- **Bounded queries.** One `IN` over the disclosable recipient ids for `/matches`; one for
+  the caller's own organisation on the `viewerMatch` path, resolved before the loop so a
+  hundred donations cost one requirement query rather than a hundred. Both are held by
+  test. The acceptance freeze passes none — one candidate, no ordering to break.
+- ⚠️ **The pre-existing "load every recipient, filter the radius in Python" shape is
+  untouched** (`R-10`). Requirements multiply rows fetched, not queries.
+- ⚠️ **The signal is modest by construction.** It moves nothing unless two candidates score
+  identically, and it cannot see what food a kitchen wants. That is the price of the two
+  refusals above, and promoting it to a weighted criterion is a separate decision that
+  should wait for a controlled food category and for outcome data.

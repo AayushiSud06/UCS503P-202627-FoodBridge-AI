@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,10 +11,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..matching import rank_recipients, score_pair
+from ..matching import MatchResult, rank_recipients, score_pair
 from ..models import (
-    ALLOWED_TRANSITIONS, Donation, DonationStatus, Recipient, StatusEvent, User,
-    UserRole, Volunteer,
+    ALLOWED_TRANSITIONS, Donation, DonationStatus, Recipient, Requirement, StatusEvent,
+    User, UserRole, Volunteer,
 )
 from ..schemas import DonationCreate, DonationOut, MatchOut, StatusUpdate
 from ..security import get_current_user, require_roles
@@ -259,7 +260,125 @@ def _precise_distance_scope(db: Session, user: User) -> set[int] | None:
     return {recipient.id} if recipient is not None else set()
 
 
-def _viewer_match(donation: Donation, recipient: Recipient | None) -> MatchOut | None:
+def _requirement_disclosure_scope(db: Session, user: User) -> set[int] | None:
+    """The recipients whose standing needs may shape what this caller is told.
+
+    `None` is unrestricted, matching `_readable_by` and
+    `_precise_distance_scope`. This is the same question those answer, asked
+    about a different kind of private data — and it is answered by reusing the
+    scope `GET /api/requirements` already publishes (D-44) rather than by
+    inventing a second authorization model:
+
+    * admin — unrestricted, as everywhere else.
+    * donor — every **verified** organisation, which is exactly the donor needs
+      board. Every recipient a ranking can contain is verified already
+      (`score_pair` gates on it), so in practice this withholds nothing from a
+      donor that the needs board does not already give them.
+    * ngo — its own organisation only. A kitchen reads its own board and no
+      rival's (D-44), and `/matches` on an open donation lists rivals; without
+      this, a requirement-derived reason would be a cross-organisation
+      disclosure to a peer. `ngo` is a self-signup role, which is the D-26 →
+      D-41 lesson about treating "is an organisation" as "may read other
+      organisations".
+    * volunteer — nothing. A courier reads no requirements at all today, yet
+      `_readable_by` lets them reach `/matches` for every unclaimed `ACCEPTED`
+      pickup. That makes them the strongest reader here, exactly as D-47 found
+      for distance.
+
+    A caller outside the scope for a given kitchen is not shown a *narrowed*
+    explanation — that kitchen is simply ranked as it was before this feature,
+    on its five weighted criteria alone. Withholding the input rather than the
+    output is what keeps the ordering channel closed as well as the text.
+    """
+    if user.role is UserRole.admin:
+        return None
+
+    if user.role is UserRole.donor:
+        return set(db.scalars(select(Recipient.id).where(Recipient.is_verified.is_(True))))
+
+    recipient = _viewer_recipient(db, user)
+    return {recipient.id} if recipient is not None else set()
+
+
+def _active_requirements_for(db: Session, recipient: Recipient | None) -> list[Requirement]:
+    """One organisation's active standing needs — one query, or none at all.
+
+    For the `viewerMatch` path, where the organisation being scored *is* the
+    caller. Resolved once per request and reused across every donation on the
+    page, so a list of a hundred donations costs one requirement query rather
+    than a hundred.
+    """
+    if recipient is None:
+        return []
+    return list(
+        db.scalars(
+            select(Requirement).where(
+                Requirement.recipient_id == recipient.id,
+                Requirement.is_active.is_(True),
+            )
+        )
+    )
+
+
+def _active_requirements_by_recipient(
+    db: Session, recipient_ids: list[int]
+) -> dict[int, list[Requirement]]:
+    """Active standing needs for many organisations, grouped — in one query.
+
+    One `IN` over the ids, grouped in Python, rather than a load per candidate:
+    a ranking touches every recipient, so a per-row lookup would be the N+1 this
+    endpoint's `selectinload` discipline exists to avoid.
+
+    **Active only, in the query.** A retired need must not reach a ranking or an
+    explanation — it is off the demand board (D-29) and a donor may not read one
+    at all (D-46) — so the filter belongs here as well as in
+    `matching.best_requirement_fit`. Loading through
+    `selectinload(Recipient.requirements)` would have been shorter and would
+    have loaded retired rows with the rest, which is why it is not used.
+    """
+    grouped: dict[int, list[Requirement]] = {}
+    if not recipient_ids:
+        return grouped
+
+    for requirement in db.scalars(
+        select(Requirement).where(
+            Requirement.recipient_id.in_(recipient_ids),
+            Requirement.is_active.is_(True),
+        )
+    ):
+        grouped.setdefault(requirement.recipient_id, []).append(requirement)
+    return grouped
+
+
+def _match_out(result: MatchResult) -> MatchOut:
+    """A ranking result as the wire shape, field by field.
+
+    Enumerated rather than splatted (`MatchOut(**result.__dict__)`) so the
+    boundary is explicit: `MatchResult.requirement_fit` is internal to ranking
+    and explanation, and Pydantic would otherwise drop it silently — which
+    works, but leaves the next field added to the dataclass one config change
+    away from being published. What a reader learns about a kitchen's demand
+    reaches them through `reasons` and nowhere else.
+    """
+    return MatchOut(
+        recipient_id=result.recipient_id,
+        recipient_name=result.recipient_name,
+        overall_score=result.overall_score,
+        distance_km=result.distance_km,
+        distance_score=result.distance_score,
+        quantity_score=result.quantity_score,
+        capacity_score=result.capacity_score,
+        deadline_score=result.deadline_score,
+        reliability_score=result.reliability_score,
+        reasons=result.reasons,
+    )
+
+
+def _viewer_match(
+    donation: Donation,
+    recipient: Recipient | None,
+    requirements: Sequence[Requirement] = (),
+) -> MatchOut | None:
     """How this donation ranks for the reader's own organisation, right now.
 
     This is what the *decision* surfaces are about: an organisation browsing the
@@ -287,11 +406,21 @@ def _viewer_match(donation: Donation, recipient: Recipient | None) -> MatchOut |
     Scored from the organisation's true position, unblurred: this match is
     about the reader's own kitchen, so there is nothing here it does not
     already know, and D-33's distance display reads exactly this field.
+
+    `requirements` are that same organisation's own active needs, for the same
+    reason: a kitchen reading how a donation suits it is entitled to be told
+    that it answers something the kitchen itself posted. There is no scope
+    question on this path — the subject and the reader are one organisation.
     """
     if recipient is None or donation.status not in OPEN_TO_RECIPIENTS:
         return None
-    result = score_pair(donation, recipient, radius_km=settings.max_match_radius_km)
-    return MatchOut(**result.__dict__) if result is not None else None
+    result = score_pair(
+        donation,
+        recipient,
+        radius_km=settings.max_match_radius_km,
+        requirements=requirements,
+    )
+    return _match_out(result) if result is not None else None
 
 
 def _claim_pickup(
@@ -382,17 +511,33 @@ def create_donation(
 
     # Rank immediately so the donation carries a suggestion the moment it is
     # posted. Nothing is assigned — a recipient still has to accept.
+    #
+    # Requirements are passed unscoped here, as `precise_for` is: this ranking
+    # is the platform's own, not an answer to a reader, and nothing it computes
+    # is published except the top match's *name* on the MATCHED event. The
+    # frozen `donation.match_score` is unaffected either way — a requirement can
+    # only reorder candidates whose `overall_score` is already equal, so the
+    # number taken from `ranked[0]` is the same number whichever of them wins.
     recipients = list(db.scalars(select(Recipient)))
-    ranked = rank_recipients(donation, recipients, radius_km=settings.max_match_radius_km, limit=1)
+    ranked = rank_recipients(
+        donation,
+        recipients,
+        radius_km=settings.max_match_radius_km,
+        limit=1,
+        requirements_by_recipient=_active_requirements_by_recipient(
+            db, [r.id for r in recipients]
+        ),
+    )
     if ranked:
         donation.match_score = ranked[0].overall_score
         _record(db, donation, DonationStatus.MATCHED, user, note=f"Top match: {ranked[0].recipient_name}")
 
     db.commit()
     fresh = _get_or_404(db, donation.id)
+    viewer = _viewer_recipient(db, user)
     return donation_out(
         fresh,
-        viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)),
+        viewer_match=_viewer_match(fresh, viewer, _active_requirements_for(db, viewer)),
         precise_for=_precise_distance_scope(db, user),
     )
 
@@ -427,12 +572,19 @@ def list_donations(
             volunteer = db.scalar(select(Volunteer).where(Volunteer.user_id == user.id))
             stmt = stmt.where(Donation.volunteer_id == (volunteer.id if volunteer else -1))
 
-    # One lookup of the caller's own organisation for the whole page; the
-    # scoring itself is pure arithmetic over rows already in memory.
+    # One lookup of the caller's own organisation for the whole page, and one of
+    # its active standing needs; the scoring itself is pure arithmetic over rows
+    # already in memory. Both are resolved before the loop precisely so that
+    # neither becomes a per-donation query.
     viewer = _viewer_recipient(db, user)
+    viewer_requirements = _active_requirements_for(db, viewer)
     precise_for = _precise_distance_scope(db, user)
     return [
-        donation_out(d, viewer_match=_viewer_match(d, viewer), precise_for=precise_for)
+        donation_out(
+            d,
+            viewer_match=_viewer_match(d, viewer, viewer_requirements),
+            precise_for=precise_for,
+        )
         for d in db.scalars(stmt.limit(limit))
     ]
 
@@ -444,9 +596,10 @@ def get_donation(
     user: User = Depends(get_current_user),
 ) -> DonationOut:
     donation = _get_readable_or_404(db, donation_id, user)
+    viewer = _viewer_recipient(db, user)
     return donation_out(
         donation,
-        viewer_match=_viewer_match(donation, _viewer_recipient(db, user)),
+        viewer_match=_viewer_match(donation, viewer, _active_requirements_for(db, viewer)),
         precise_for=_precise_distance_scope(db, user),
     )
 
@@ -460,22 +613,32 @@ def get_matches(
 ) -> list[MatchOut]:
     """Ranked recipients for this donation, with the reasoning for each.
 
-    Distances are scoped separately from the ranking: every eligible kitchen is
-    still listed and still ranked, but only the reader's own is described from
-    its real position. See `_precise_distance_scope`.
+    Two things are scoped separately from the ranking, and both leave the
+    eligible set alone. Distances describe only the reader's own organisation
+    from its real position (`_precise_distance_scope`). Standing needs shape the
+    ranking and the reasons only for organisations the reader may read needs for
+    (`_requirement_disclosure_scope`) — every other kitchen is ranked on its
+    five weighted criteria exactly as it was before requirement-awareness
+    existed.
     """
     # Same read scope as the donation itself: the reasoning describes a
     # donation, so seeing it is seeing the donation.
     donation = _get_readable_or_404(db, donation_id, user)
     recipients = list(db.scalars(select(Recipient)))
+
+    disclosable = _requirement_disclosure_scope(db, user)
     ranked = rank_recipients(
         donation,
         recipients,
         radius_km=settings.max_match_radius_km,
         limit=limit,
         precise_for=_precise_distance_scope(db, user),
+        requirements_by_recipient=_active_requirements_by_recipient(
+            db,
+            [r.id for r in recipients if disclosable is None or r.id in disclosable],
+        ),
     )
-    return [MatchOut(**r.__dict__) for r in ranked]
+    return [_match_out(r) for r in ranked]
 
 
 @router.post("/{donation_id}/status", response_model=DonationOut)
@@ -602,6 +765,11 @@ def update_status(
             recipient.accepted_donations += 1
 
             # Freeze the score this decision was actually made on.
+            #
+            # No requirements are passed, and none are needed: there is one
+            # candidate, so there is no ordering to break, and a requirement can
+            # never move `overall_score` (D-52). Passing them would cost a query
+            # on the acceptance path to change nothing.
             ranked = rank_recipients(
                 donation, [recipient], radius_km=settings.max_match_radius_km, limit=1
             )
@@ -641,8 +809,9 @@ def update_status(
     _record(db, donation, target, user, note=body.note)
     db.commit()
     fresh = _get_or_404(db, donation_id)
+    viewer = _viewer_recipient(db, user)
     return donation_out(
         fresh,
-        viewer_match=_viewer_match(fresh, _viewer_recipient(db, user)),
+        viewer_match=_viewer_match(fresh, viewer, _active_requirements_for(db, viewer)),
         precise_for=_precise_distance_scope(db, user),
     )

@@ -15,10 +15,11 @@ router and the response shape do not change.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .models import Donation, Recipient
+from .models import Donation, Recipient, Requirement
 
 WEIGHTS: dict[str, float] = {
     "distance": 0.25,
@@ -84,6 +85,18 @@ FULL_HEADROOM_MEALS = 100
 #: See `DECISIONS.md` D-45.
 LOCATION_BLUR_GRID_DEG = 0.01
 
+#: `Requirement.urgency`, ranked for tie-breaking. Anything unrecognised ranks
+#: below `Low` rather than raising: the column is `String(16)` with no enum, so
+#: an unfamiliar value is data the matcher has no opinion about — the same way
+#: `is_comparable_unit` treats an unfamiliar unit.
+#:
+#: **This ranking never reaches a score.** Urgency is declared by the
+#: organisation it flatters, is never validated or expired, and the posting form
+#: defaults it to `High` — so as posted it carries very little information. It is
+#: allowed to order two candidates the five weighted criteria already call equal,
+#: and nothing more. See `DECISIONS.md` D-52.
+URGENCY_ORDER: dict[str, int] = {"high": 3, "medium": 2, "low": 1}
+
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in kilometres."""
@@ -108,6 +121,172 @@ def blurred_coords(latitude: float, longitude: float) -> tuple[float, float]:
     return (round(latitude / grid) * grid, round(longitude / grid) * grid)
 
 
+@dataclass(frozen=True)
+class RequirementFit:
+    """How one of a kitchen's standing needs relates to this donation.
+
+    Deliberately **not** a sixth score. `overall_score` below is the published
+    weighted sum over the same five criteria it has always been, and nothing
+    here enters it — a requirement moves a candidate only where those five
+    already call two candidates equal, and only through `_ranking_key`. Keeping
+    it out of the arithmetic is what keeps `Donation.match_score` free of
+    requirement-derived information: that column is frozen, platform-wide and
+    read by callers who may not read requirements at all, so a number computed
+    from one would become an unscopeable disclosure channel in exactly the way
+    distance did (D-45, D-47). See `DECISIONS.md` D-52.
+
+    `fit` is `None` when the donation's unit cannot be compared with this
+    need's. That is a third state, not a zero: the need exists and says nothing
+    about this donation, which ranks above a kitchen with no standing need at
+    all and below one whose need this donation can actually be measured against.
+    """
+
+    requirement_id: int
+    #: 0-100, or `None` when the units are not comparable.
+    fit: int | None
+    urgency: str
+    quantity_needed: int
+    unit: str
+
+
+def urgency_rank(urgency: str) -> int:
+    """`Requirement.urgency` as an orderable number; 0 for anything unknown."""
+    return URGENCY_ORDER.get(urgency.strip().casefold(), 0)
+
+
+def units_match(donation_unit: str, requirement_unit: str) -> bool:
+    """Are a donation and a requirement counted in the same thing?
+
+    The same normalisation `is_comparable_unit` applies — trimmed and
+    case-folded — but against the *requirement's* own unit rather than against
+    `CAPACITY_UNIT`. Both sides are filled from the same four-value picker
+    (Meals · Kg · Boxes · Pieces), so an exact comparison here is a real one
+    rather than a guess, and it covers all four rather than meals alone:
+    `Recipient.capacity` has no unit column and is meals by convention (D-42),
+    while a requirement carries the unit it was posted in.
+
+    **Nothing converts.** A donation in Kg against a need in Boxes is not
+    assessed, for the same reason a donation in Kg is not assessed against
+    capacity: the repository holds no mass field, no per-category yield table
+    and no conversion rule, and inventing one would put a fabricated constant
+    inside a ranking the platform asks to be checked by hand (D-05, D-42).
+    """
+    return donation_unit.strip().casefold() == requirement_unit.strip().casefold()
+
+
+def _quantity_fit(quantity: int, quantity_needed: int) -> int | None:
+    """How much of a stated need this donation covers, once units agree.
+
+    Full marks at or above the stated quantity, and **no penalty for
+    exceeding it**: a standing need is a request, not a ceiling. Overflow is
+    already priced twice, by `_quantity_score` and `_capacity_score` against
+    `Recipient.capacity`; charging for it a third time here would rebuild the
+    collinearity D-42 had to remove.
+
+    Below the need the shape is `_quantity_score`'s underfill curve, so the
+    module has one curve for "how much of what was wanted is this" rather than
+    two that could drift. Twenty meals against a need for a hundred and twenty
+    is real help and scores as partial rather than as nothing.
+    """
+    if quantity_needed <= 0:
+        return None
+    ratio = quantity / quantity_needed
+    if ratio >= 1:
+        return 100
+    return round(40 + 60 * ratio)
+
+
+def _created_ordinal(requirement: Requirement) -> float:
+    """`created_at` as a sortable float, tolerating an unflushed row.
+
+    `Requirement.created_at` is a server default, so a row that has not been
+    flushed carries `None`; such a row is treated as the newest possible, which
+    is the losing side of the "oldest standing need first" tie-break. Naive
+    values are read as UTC, the assumption `UtcDateTime` and `score_pair` make
+    everywhere else.
+    """
+    created = requirement.created_at
+    if created is None:
+        return math.inf
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created.timestamp()
+
+
+def best_requirement_fit(
+    donation: Donation, requirements: Sequence[Requirement]
+) -> RequirementFit | None:
+    """The one standing need this donation is judged against, or None.
+
+    **Active needs only.** A retired requirement is off the demand board
+    (D-29) and its content is not readable by a donor at all (D-46), so it can
+    neither shape a ranking nor appear in an explanation. The router already
+    loads active rows; this filters again rather than trusting it, the same
+    defence-in-depth position the client filters hold under D-44.
+
+    **One need, chosen by a total order.** A kitchen may post any number of
+    needs — nothing in the model limits it — so "does this donation answer what
+    they asked for" has to resolve to a single answer. Aggregating them was
+    rejected: summing `quantity_needed` across needs posted in different units
+    is precisely the mixed-unit arithmetic D-42 forbids. The order is
+
+        assessable before unassessable · higher fit · higher urgency ·
+        older need · lower id
+
+    and it is **total**, so the result cannot depend on the order the database
+    happened to return the rows in. That matters here more than usual:
+    `Recipient.requirements` declares no `order_by`, so relationship order is
+    whatever the engine gives. The id is the final key because it is the only
+    field guaranteed unique — `created_at` is second-resolution on SQLite
+    (D-44) and ties readily.
+    """
+    best_key: tuple[int, int, int, float, int] | None = None
+    best: RequirementFit | None = None
+
+    for requirement in requirements:
+        if not requirement.is_active:
+            continue
+
+        fit = (
+            _quantity_fit(donation.quantity, requirement.quantity_needed)
+            if units_match(donation.unit, requirement.unit)
+            else None
+        )
+        key = (
+            1 if fit is not None else 0,
+            fit if fit is not None else 0,
+            urgency_rank(requirement.urgency),
+            -_created_ordinal(requirement),
+            -(requirement.id if requirement.id is not None else 0),
+        )
+        if best_key is None or key > best_key:
+            best_key = key
+            best = RequirementFit(
+                requirement_id=requirement.id,
+                fit=fit,
+                urgency=requirement.urgency,
+                quantity_needed=requirement.quantity_needed,
+                unit=requirement.unit,
+            )
+
+    return best
+
+
+def requirement_rank(fit: RequirementFit | None) -> tuple[int, int, int]:
+    """A candidate's requirement standing, as an orderable triple.
+
+    Three tiers, highest first: a need this donation can be measured against,
+    a need it cannot, and no need at all. A kitchen that has posted nothing is
+    not penalised — it ranks exactly where its five weighted criteria put it,
+    and this only separates candidates those criteria already tied.
+    """
+    if fit is None:
+        return (0, 0, 0)
+    if fit.fit is None:
+        return (1, 0, urgency_rank(fit.urgency))
+    return (2, fit.fit, urgency_rank(fit.urgency))
+
+
 @dataclass
 class MatchResult:
     recipient_id: int
@@ -126,6 +305,15 @@ class MatchResult:
     deadline_score: int
     reliability_score: int
     reasons: list[str] = field(default_factory=list)
+    #: The standing need this pairing was judged against, or `None`.
+    #:
+    #: **Internal to ranking and explanation.** It is not part of
+    #: `overall_score`, and `routers/donations._match_out` enumerates the wire
+    #: fields by hand rather than splatting this dataclass, so a field added
+    #: here cannot reach a client by accident. What a reader is told about a
+    #: kitchen's demand is decided by which requirements the router passes in
+    #: (`_requirement_disclosure_scope`), not by this object.
+    requirement_fit: RequirementFit | None = None
 
 
 def _distance_score(distance_km: float, radius_km: float) -> int:
@@ -226,6 +414,7 @@ def score_pair(
     radius_km: float,
     now: datetime | None = None,
     blur_location: bool = False,
+    requirements: Sequence[Requirement] = (),
 ) -> MatchResult | None:
     """Score one donation/recipient pair, or None if the pair is ineligible.
 
@@ -237,6 +426,17 @@ def score_pair(
     the organisation being scored (`LOCATION_BLUR_GRID_DEG`, `DECISIONS.md`
     D-45); leave it off for that organisation's own view of itself, which is
     what D-33's distance display depends on.
+
+    `requirements` are this recipient's standing needs, **passed in rather than
+    queried** — this module holds no session and is unit-testable because of it
+    (D-05's swap point). Supplying none is exactly today's behaviour: no
+    requirement fit, no requirement reason, and an `overall_score` identical to
+    the one this function has always returned. That is the property the whole
+    feature rests on, and it is asserted directly in `test_matching_scores.py`.
+
+    ⚠️ **A requirement never moves `overall_score`.** It is a tie-break in
+    `rank_recipients` and a line in `reasons`. See `RequirementFit` for why the
+    score is the wrong home for it, and `DECISIONS.md` D-52.
     """
     now = now or datetime.now(timezone.utc)
 
@@ -297,6 +497,11 @@ def score_pair(
 
     reliability_score = recipient.reliability_score
 
+    # Deliberately computed *after* the weighted sum's inputs and deliberately
+    # absent from it: this decides ordering among equals and what the reasons
+    # say, never the number.
+    requirement_fit = best_requirement_fit(donation, requirements)
+
     overall = (
         distance_score * WEIGHTS["distance"]
         + quantity_score * WEIGHTS["quantity"]
@@ -340,6 +545,26 @@ def score_pair(
             f"{recipient.capacity - donation.quantity} meals of capacity still "
             f"free afterwards"
         )
+    if requirement_fit is not None and requirement_fit.fit is not None:
+        # Only ever the two figures the fit was computed from, and only when a
+        # fit was actually computed. `notes`, `beneficiary_count`,
+        # `daily_recurring` and `food_type` are never named: none of them is an
+        # input, so mentioning one would describe a kitchen's private demand
+        # without explaining anything.
+        #
+        # Urgency is left out too, even though it breaks ties. It is
+        # self-declared and defaults to `High` on the posting form, so printing
+        # it back would advertise a field worth inflating — which is the same
+        # reason it is kept out of the score.
+        #
+        # Two distinct openings, distinct from every other reason above, because
+        # `mobile/NGOAvailable.tsx` keys this list on the string itself.
+        stated = f"{requirement_fit.quantity_needed} {requirement_fit.unit.lower()}"
+        reasons.append(
+            f"Matches a standing need this kitchen posted for {stated}"
+            if requirement_fit.fit >= 100
+            else f"Covers part of a standing need this kitchen posted for {stated}"
+        )
     if deadline_score >= 70:
         reasons.append("Comfortable margin before the pickup deadline")
     elif deadline_score == 0:
@@ -358,7 +583,29 @@ def score_pair(
         deadline_score=deadline_score,
         reliability_score=reliability_score,
         reasons=reasons,
+        requirement_fit=requirement_fit,
     )
+
+
+def _ranking_key(result: MatchResult) -> tuple[int, int, int, int, int]:
+    """The order candidates are returned in, best first under `reverse=True`.
+
+    `overall_score` stays the primary key and keeps its published meaning, so a
+    reader never sees a leader carrying a lower percentage than the candidate
+    below it — the contradiction D-30 was written to remove. Everything after it
+    only separates candidates that score *identically*: the score is rounded to
+    an integer, so exact ties are common enough to be worth deciding well.
+
+    The last key is the recipient id, which makes the order **total**. Before
+    this, ties fell through to `list.sort`'s stability and therefore to whatever
+    order `select(Recipient)` returned — so two kitchens on the same score could
+    swap places between requests for no reason a reader could see.
+    """
+    tier, fit, urgency = requirement_rank(result.requirement_fit)
+    # `or 0` for the same reason `best_requirement_fit` guards the id: a
+    # persisted recipient always has one, and an unflushed row used in a unit
+    # test should sort rather than raise.
+    return (result.overall_score, tier, fit, urgency, -(result.recipient_id or 0))
 
 
 def rank_recipients(
@@ -369,6 +616,7 @@ def rank_recipients(
     limit: int | None = None,
     now: datetime | None = None,
     precise_for: set[int] | None = None,
+    requirements_by_recipient: Mapping[int, Sequence[Requirement]] | None = None,
 ) -> list[MatchResult]:
     """Every eligible recipient, best first.
 
@@ -384,7 +632,15 @@ def rank_recipients(
     platform's behalf rather than answering a reader, and their figures must
     stay exact. A route answering a reader passes the reader's scope
     (`score_pair`, `DECISIONS.md` D-45).
+
+    `requirements_by_recipient` maps a recipient id to that organisation's
+    **active** standing needs. Omitting it, or omitting an id from it, is the
+    behaviour this function has always had: that candidate is ranked on its five
+    weighted criteria alone. The router builds it in one query and decides which
+    recipients belong in it, because who may be told about a kitchen's demand is
+    a reader question and this module has no reader (D-52).
     """
+    by_recipient = requirements_by_recipient or {}
     scored = [
         result
         for recipient in recipients
@@ -395,9 +651,10 @@ def rank_recipients(
                 radius_km=radius_km,
                 now=now,
                 blur_location=precise_for is not None and recipient.id not in precise_for,
+                requirements=by_recipient.get(recipient.id, ()),
             )
         )
         is not None
     ]
-    scored.sort(key=lambda r: r.overall_score, reverse=True)
+    scored.sort(key=_ranking_key, reverse=True)
     return scored[:limit] if limit else scored

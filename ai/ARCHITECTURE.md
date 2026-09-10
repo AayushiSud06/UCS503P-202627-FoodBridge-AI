@@ -296,6 +296,18 @@ rounded value's boundaries sit at known distances, and never re-scored, because
 `Donation.match_score` is still the precise frozen decision D-30 defines — the column and
 both freezes are untouched. See D-47.
 
+**And a fourth scope decides whose *demand* shapes what a caller is told** (Task 36, D-52).
+`routers/donations._requirement_disclosure_scope()` is `_precise_distance_scope`'s shape
+applied to standing needs, and it reuses D-44's published answer rather than inventing a
+second model: `None` for an administrator, every **verified** recipient for a donor (which
+is the donor needs board, and every ranked kitchen is verified anyway), the caller's own
+organisation for an `ngo`, nothing for a courier. The router passes only in-scope
+recipients' requirements into `rank_recipients`, so a kitchen outside a reader's scope is
+ranked exactly as it was before the feature existed — withholding the *input* rather than
+the output closes the ordering channel as well as the explanation text. `viewerMatch` needs
+no scope: subject and reader are one organisation there. Retired needs reach nobody, filtered
+in the router's query **and** in `matching.best_requirement_fit`.
+
 **Admin is two-tier:** `SELF_SIGNUP_ROLES` excludes `admin` and a Pydantic validator
 enforces it, so the restriction appears in the OpenAPI contract. The first admin can
 only come from `python -m foodlink.cli create-admin`; subsequent ones from
@@ -351,15 +363,32 @@ says so — every distance is labelled straight-line, no travel estimate is disp
 anywhere, and `frontend/src/lib/geo.ts` is the single selector deciding which of the two
 server distances a screen shows (D-33). *Blocked* covers whether to replace the model.
 
-⚠️ **Requirements are not an input.** `matching.py` neither imports nor references
-`Requirement`, and neither does `routers/donations.py`. The `requirements` table is a
-notice board read only by `routers/organisations.py` and `seed.py` — demand is *visible*
-before supply, but it does not influence any ranking. Since Task 25 that board has a donor
-audience (`pages/donor/DonorNeedsBoard.tsx`), which changes who reads it and nothing about
-what it does: there is no requirement-to-donation relationship in the schema, no endpoint
-fulfils a need, and the page says so in as many words. `Requirement.daily_recurring` is
-likewise stored and displayed but never acted on: nothing re-posts a requirement and
-there is no scheduler that could (constraint 7).
+⚠️ **Requirements are an input to *ordering and explanation*, never to the score**
+(Task 36, D-52). `matching.score_pair` takes a recipient's **active** standing needs as a
+parameter — passed in by the router, never queried, so the module stays DB-free — and does
+exactly two things with them:
+
+- `matching.best_requirement_fit` picks one need by a **total** order (assessable before
+  unassessable · higher fit · higher urgency · older · lower id), comparing
+  `Donation.quantity` with `Requirement.quantity_needed` **only when the two units are
+  identical** after the same normalisation `is_comparable_unit` uses. Nothing converts.
+  `matching._ranking_key` then sorts by `overall_score` **first** and by requirement
+  standing only among candidates that score identically.
+- A line is added to the existing `reasons` list, naming only the quantity and unit the fit
+  was computed from.
+
+`overall_score`, `WEIGHTS`, the five criteria and the three gates are unchanged, so
+`Donation.match_score` still carries no requirement-derived information — which is the
+point: it is frozen, platform-wide, and read by callers who may not read requirements.
+`MatchOut` gained no field; `routers/donations._match_out` enumerates the wire shape by hand
+so `MatchResult.requirement_fit` stays internal.
+
+**Still not inputs:** `food_type` (free text against a browser-only donation vocabulary —
+no comparison exists and none was invented), `beneficiary_count`, `notes`, and
+`Requirement.daily_recurring`, which is stored and displayed but acted on by nothing —
+nothing re-posts a requirement and there is no scheduler that could (constraint 7). There is
+still **no requirement-to-donation relationship in the schema** and no endpoint fulfils a
+need; the donor needs board (`pages/donor/DonorNeedsBoard.tsx`, Task 25) still says so.
 
 Three **hard gates** return `None` rather than a low score: unverified organisation,
 missing coordinates, beyond `MAX_MATCH_RADIUS_KM` (default 8).
@@ -568,6 +597,17 @@ pool is refused the frozen score but keeps its own `viewerMatch`. Three of them 
 distinction the fix is easiest to collapse — the stored score still equals the **precise**
 `score_pair` result and differs from the blurred one, the eligible set and its order are
 identical for all three readers, and the 8 km gate still reads true coordinates.
+`test_requirement_matching.py` (48) covers requirement-aware matching (D-52) from both ends.
+The unit half pins the negative property the whole design rests on — no requirement of any
+shape moves `overall_score`, asserted against a parametrised set of them and again on the
+frozen `matchScore` through the API — plus the fit curve, unit abstention, retired rows,
+deterministic selection under shuffled input, and that ranking is now total rather than
+stable-over-database-order. The API half is the privacy boundary: a kitchen is told about
+its own demand and never a rival's, a **courier reading an unclaimed `ACCEPTED` pickup is
+told nothing at all**, a donor is told what the needs board already shows them, and no
+reader receives a requirement field on the wire. Two tests count `SELECT`s against
+`requirements` through a `before_cursor_execute` listener, pinning one query per request
+rather than one per donation or per candidate.
 `test_rate_limit.py` (22) drives the limiter with an injected clock rather than sleeping,
 and builds `TestClient`s with chosen peer addresses to prove two callers do not share a
 budget; `conftest.py` clears the counters before every test, because they live in the
