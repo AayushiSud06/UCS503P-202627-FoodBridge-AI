@@ -2,7 +2,7 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built),
 > `TASKS.md` (what is left), `DECISIONS.md` (why it is built that way).
-> Last verified against the repository: 2026-09-09, branch `master`, HEAD `6961555`.
+> Last verified against the repository: 2026-09-10, branch `master`, HEAD `f863a94`.
 > **Task 28's donation-privacy work is committed as `d611424`** — `HA-3b`/D-47:
 > `serialize.donation_out` takes the existing `_precise_distance_scope` set, so
 > `DonationOut.matchScore` and `DonationOut.distanceKm` reach an administrator and the
@@ -11,19 +11,22 @@
 > exposure moved. Three backend files, one new backend test file, four corrected tests, six
 > frontend files and one CI step. The two commits after it — `ed5d069` and `d5a6b68` — are
 > documentation only: the UML set under `docs/uml/`, no application source.
-> **Task 29's landing-page cleanup (D-48) is committed as `6961555`, now HEAD.**
+> **Task 29's landing-page cleanup (D-48) is committed as `6961555` and Task 30's
+> login-page redesign (D-49) as `f863a94`, now HEAD.**
 > Task 27 (reopening retired needs, `F-1`/D-46) is committed as `8cbb736`, Task 26's
 > match-distance privacy fix (`HA-3`/D-45) as `883bcee`, Task 25's donor needs board and
 > requirement read scope (D-44) as `e72d4c2`, the Task 22 matcher correction
 > as `a9f190b`, the Task 23 test harness as `f33aeae` and the Task 24 landing-page
-> correction as `9b11353`. ⚠️ **The working tree carries one uncommitted task — Task 30,
-> the login-page redesign** — D-49: `pages/Login.tsx` was rebuilt as a two-column card
-> (brand panel beside the form, form alone below `lg`), its role tiles became one row of
-> single-accent chips, and **every trace of the seeded demo accounts left the screen** —
-> the footnote that printed `foodlink123` and the role tiles' habit of typing a seed
-> account into the fields. The subtitle no longer sends anyone to a "dashboard". One page
-> and one new test file; no backend, schema, API, routing or auth change, and no rename.
-> 263 backend and 90 frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
+> correction as `9b11353`. ⚠️ **The working tree carries one uncommitted task — Task 31,
+> overdue donations leaving the recipient offer** — D-50: the pool an organisation is shown
+> is now `AVAILABLE`/`MATCHED` **and `pickup_deadline >= now`**
+> (`routers/donations._open_to_recipients()`, applied in `_readable_by`'s `ngo` branch), and
+> `ACCEPTED` out of that pool on an overdue donation is refused **409** for every role. The
+> row itself is untouched — the donor, the administrator, the accepting organisation, the
+> courier and the expiry sweep all still reach it. One backend file, one new backend test
+> file, five frontend files (a shared `useAvailableDonations` selector the four NGO surfaces
+> read) and one new frontend test file; no schema, migration, API-shape, matcher, lifecycle-graph
+> or auth change. 275 backend and 99 frontend tests pass. See `TASKS.md` → *Current*. The lifecycle write-authorization work is committed — D-34 as
 > `551c96d`, the D-35 ownership-takeover follow-up as `efd5fd8` — as are the I-4
 > notification-honesty pass (`6863451`), the I-5 trust/verification pass (`6c82739`), the
 > I-6 courier status-display fix (`b41c4e6`), the I-7 overdue-deadline fix (`fc91091`), the
@@ -62,14 +65,14 @@ as ML.
 | Area | State |
 |---|---|
 | Backend API | ✅ Complete and functional — 5 routers, 6 tables, full lifecycle |
-| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example. **Donors now have a read-only Needs Board** at `/donor/needs` over the existing requirement flow (Task 25, D-44) — it claims no fulfilment, no commitment and no statistic it was not given, and it stays **active-only**. The NGO requirements portal now lists its own **retired** needs in their own section and reopens one through the existing PATCH (Task 27, D-46). The **public landing page is now a product page** (Task 29, D-48) — no university, course code or prototype number, no roadmap of unbuilt phases, no dead links; the hero, both CTAs, the handover card and the How It Works / Community / matching / impact sections are unchanged. ⚠️ The name **FoodLink AI** stands everywhere — the rename is separate open work |
+| Frontend web | ✅ Complete — 4 role portals, wired to the live API; impact reporting (I-1), distance/GPS wording (I-2), requirement-matching claims (I-3), notification claims (I-4), verification wording (I-5), the NGO courier status line (I-6), the overdue pickup deadline (I-7), the match-criteria captions (I-8) and the donor profile's field bindings (I-9) and the pre-login landing page (I-1a / `HA-6`) are all done. **No screen now prints an invented platform figure**; the landing page explains how impact is counted instead of asserting a total, and its one sample match card is labelled as an example. **Donors now have a read-only Needs Board** at `/donor/needs` over the existing requirement flow (Task 25, D-44) — it claims no fulfilment, no commitment and no statistic it was not given, and it stays **active-only**. The NGO requirements portal now lists its own **retired** needs in their own section and reopens one through the existing PATCH (Task 27, D-46). **Available Donations shows only what is still collectable** (Task 31, D-50) — one `useAvailableDonations` selector behind the desktop portal, the NGO dashboard and both mobile screens, so the lists and their counts agree and an overdue donation no longer carries an Accept button. The **public landing page is now a product page** (Task 29, D-48) — no university, course code or prototype number, no roadmap of unbuilt phases, no dead links; the hero, both CTAs, the handover card and the How It Works / Community / matching / impact sections are unchanged. ⚠️ The name **FoodLink AI** stands everywhere — the rename is separate open work |
 | Frontend mobile | ✅ Screens exist at `/m/*`; ⚠️ unreachable without typing the URL |
-| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients, couriers **and standing requirements** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed), and `GET /api/requirements` is scoped by role (D-44: donor → verified recipients' needs, ngo → its own, volunteer → none, admin → all), closing the last read that was open by omission. Its `includeInactive` parameter (D-46) is a **second, independent** axis — it drops the `is_active` term for an admin or an ngo and is ignored for a donor or a courier, and never widens whose needs come back. `/matches` no longer discloses recipient geometry (issue 25, D-45); ⚠️ the named residuals `HA-3a`/`HA-3b` remain |
+| Auth / RBAC | ✅ Donation lifecycle authorization is complete — JWT, 4 authorization layers; donation **and** recipient reads scoped by role/ownership, and every lifecycle **write** on a donation that is already somebody's (`PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, and `ACCEPTED` once the donation has left the open pool) scoped by the same clause (D-34, D-35). Every edge of the donation state graph has been audited against the role and ownership tables. Read scoping now covers donations, recipients, couriers **and standing requirements** — `GET /api/volunteers` is scoped to a kitchen's own couriers (issue 23, fixed), and `GET /api/requirements` is scoped by role (D-44: donor → verified recipients' needs, ngo → its own, volunteer → none, admin → all), closing the last read that was open by omission. Its `includeInactive` parameter (D-46) is a **second, independent** axis — it drops the `is_active` term for an admin or an ngo and is ignored for a donor or a courier, and never widens whose needs come back. `/matches` no longer discloses recipient geometry (issue 25, D-45); ⚠️ the named residuals `HA-3a`/`HA-3b` remain. The `ngo` donation read scope is now **time-bounded as well as status-bounded** (Task 31, D-50): the shared pool is `AVAILABLE`/`MATCHED` **and `pickup_deadline >= now`**, and `ACCEPTED` out of that pool on an overdue donation is refused 409 independently of the list — the organisation's own records, the donor's, the courier's scope and the administrator's are unchanged |
 | Auth rate limiting | ✅ Login and registration limited per client address; ⚠️ counter is **process-local** |
 | Signing-key config | ✅ Fail-closed — no insecure default; explicit dev opt-in |
 | Courier claim | ✅ Atomic — conditional UPDATE, safe on SQLite **and** Postgres; ⚠️ other transitions still read-then-write |
-| Backend tests | ✅ 252 tests passing (~177 s): 39 integration + 25 matcher-scoring + 20 lifecycle-write-authorization + 15 requirement-lifecycle + **24 requirement-read-scope** + 13 donation-read-scope + 13 pickup-release + 11 recipient-read-scope + 11 match-score-consistency + 9 courier-claim + 8 volunteer-read-scope + **12 match-distance-privacy** + 22 rate-limit + 22 config + 8 migration |
-| Frontend tests | ✅ 90 tests passing (~2 s): 14 donor-needs-board + **10 login** + 9 landing + 9 adapters + 8 ngo-requirements + 8 time + 8 api-client + 7 requirements-slice + 7 impact + 5 geo + 5 route-guard. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 11 of 85 files under `frontend/src` — a foundation, not a sweep |
+| Backend tests | ✅ 275 tests passing (~200 s), and the breakdown now adds up — `test_donation_privacy_scope.py` had been missing from this row: 39 integration + 25 matcher-scoring + 24 requirement-read-scope + 22 rate-limit + 22 config + 20 lifecycle-write-authorization + 15 requirement-lifecycle + 13 donation-read-scope + 13 pickup-release + 12 match-distance-privacy + **12 available-donation-deadline** + 11 recipient-read-scope + 11 match-score-consistency + 11 donation-privacy-scope + 9 courier-claim + 8 volunteer-read-scope + 8 migration |
+| Frontend tests | ✅ 99 tests passing (~3 s): 14 donor-needs-board + **11 time** + 10 login + 9 landing + 9 adapters + 8 ngo-requirements + 8 api-client + 7 requirements-slice + 7 impact + **6 ngo-available-donations** + 5 geo + 5 route-guard. Vitest 3.2 + Testing Library on the project's own `vite.config.ts` (D-43). ⚠️ 12 test files against 86 non-test files under `frontend/src` — a foundation, not a sweep |
 | CI | ✅ GitHub Actions runs the backend tests, the frontend build and `alembic check`. ⚠️ **The frontend test suite is not a CI step yet** — the frontend job still runs `npm run build` only |
 | Migrations | ✅ Alembic; 1 revision; startup applies `upgrade head` |
 | Deployment | ❌ No configuration of any kind |

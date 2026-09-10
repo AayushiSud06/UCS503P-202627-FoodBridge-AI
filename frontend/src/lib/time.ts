@@ -74,6 +74,26 @@ export function deadlineStatus(deadline: string, now: Date = new Date()): Deadli
   return { minutesLeft, label, urgency: 'ok' };
 }
 
+/**
+ * Has the collection window closed?
+ *
+ * Deliberately **not** `deadlineStatus().urgency === 'expired'`: that band is
+ * computed from `minutesLeft`, which is rounded to the minute, so a deadline
+ * twenty seconds past is not yet "expired" there. This compares the instants,
+ * which is what the server does — `routers/donations._deadline_passed`, the same
+ * strictly-past comparison as the expiry sweep, so a donation *at* its deadline
+ * is still collectable on both sides.
+ *
+ * An unparseable deadline is not past. Nothing is hidden on the strength of a
+ * date the client could not read; the server decides what is available and this
+ * only declines to show what it has already ruled out.
+ */
+export function isPastDeadline(deadline: string, now: Date = new Date()): boolean {
+  const parsed = parseDeadline(deadline, now);
+  if (!parsed) return false;
+  return parsed.getTime() < now.getTime();
+}
+
 /** Sort key: soonest deadline first, unparseable last. */
 export function byUrgency(a: string, b: string, now: Date = new Date()): number {
   const left = deadlineStatus(a, now).minutesLeft;

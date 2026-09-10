@@ -1,10 +1,12 @@
 # ARCHITECTURE — FoodLink / FoodBridge-AI
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; current gaps in
-> `PROJECT_STATE.md`. Verified against the repository on **2026-09-09**, at HEAD `6961555`
-> (Task 29's landing-page cleanup, D-48) **plus the uncommitted Task 30 login-page
-> changes** in the working tree (D-49, `TASKS.md` → *Current*) — presentation and one
-> removed demo affordance, no structural change. Task 28 is committed as `d611424` — the
+> `PROJECT_STATE.md`. Verified against the repository on **2026-09-10**, at HEAD `f863a94`
+> (Task 30's login-page redesign, D-49, now committed) **plus the uncommitted Task 31
+> changes** in the working tree (D-50, `TASKS.md` → *Current*): the recipient offer pool is
+> now a deadline as well as a status, in `routers/donations._open_to_recipients()` and in
+> one new frontend selector — no schema, API-shape or lifecycle-graph change. Task 29's
+> landing-page cleanup (D-48) is `6961555`. Task 28 is committed as `d611424` — the
 > D-45 distance scope now also decides what `DonationOut` says (D-47) — and the two
 > commits after it are documentation only. Task 27 (retired requirements gain a reader and the NGO portal a
 > reopen action, D-46) is `8cbb736`. Task 26's
@@ -74,7 +76,7 @@ layer** — deliberate, see D-07.
 | `lib/geo.ts` | Coordinate capture (`navigator.geolocation`, the only two callers being donation creation) **and** `displayDistanceKm` — the one selector choosing between `distanceKm` and `viewerMatch.distanceKm`. No distance is computed in the browser and none is invented; see D-33. |
 | `lib/impact.ts` | Per-account impact figures (`donorImpact`/`ngoImpact`/`volunteerImpact`) from the donation list plus the account's own server counters. Desktop and `/m/*` both read it, so one account gets one answer. `GET /api/metrics` is platform-wide and is **not** a source here — see D-32. |
 | `context/AuthContext.tsx` | Identity: boot token→user exchange, sign in/up/out, 401 handling with a `useRef` re-entrancy guard. |
-| `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. |
+| `context/AppContext.tsx` | Domain state + mutations + toasts. **Write-then-refetch**, not optimistic. `useAvailableDonations()` is the one definition of the recipient offer pool — open status **and** `lib/time.isPastDeadline` — read by all four NGO surfaces (D-50); `useDonations()` stays the whole slice every history surface reads. |
 | `components/ProtectedRoute.tsx` | Route guard. **UX affordance, not a security control.** |
 | `pages/` (30 files) | Desktop portals: `donor/`, `ngo/`, `volunteer/`, `admin/`. `donor/DonorNeedsBoard.tsx` (`/donor/needs`) is the read-only demand board — `useRequirements()` (active only), no API call of its own. `ngo/NGORequirements.tsx` is the one screen on `useAllRequirements()`, so it can list and reopen retired needs. |
 | `mobile/` (26 files) | Phone layouts at `/m/*` with an inner `MobileRole` guard. |
@@ -169,6 +171,15 @@ is not counted as a second acceptance: that counter is the denominator of
 penalty for releasing a courier. An administrator re-accepting on behalf of a *different*
 organisation is still a rebind and still counts.
 
+⚠️ **An overdue donation cannot be accepted out of the open pool** (Task 31, D-50).
+`update_status` refuses `ACCEPTED` with **409** when the donation is still in
+`OPEN_TO_RECIPIENTS` and `_deadline_passed()` — strictly past, the comparison
+`admin.expire_overdue` sweeps on. It is the write-path half of the read scope above, for a
+caller holding an id rather than browsing, and it does not exempt an administrator: once
+the (unscheduled) sweep has stamped the row `EXPIRED`, `ALLOWED_TRANSITIONS` refuses this
+to everybody anyway. The **release** — `ACCEPTED` from `VOLUNTEER_ASSIGNED` — is exempt,
+read the same way `_needs_ownership` reads the source state.
+
 ⚠️ **Only the accepting organisation (or an administrator) can release** —
 `TRANSITION_ROLES[ACCEPTED]` is `{ngo, admin}`, so a courier cannot hand back its own
 pickup. That is existing behaviour, not a consequence of the fix, and whether it should
@@ -207,9 +218,10 @@ certification. See `DECISIONS.md` D-37.
 returns the caller's read scope as a SQLAlchemy WHERE clause (`None` for admin). The
 list, the lookup by id and `/matches` all apply the same clause, so an id the caller
 may not read returns the ordinary 404 rather than a 403 that would confirm it exists.
-Scope: donor → their own; ngo → `AVAILABLE`/`MATCHED` plus their own organisation's;
-volunteer → unclaimed `ACCEPTED` plus their own assignments; admin → everything.
-See `DECISIONS.md` D-24.
+Scope: donor → their own; ngo → the **still collectable** `AVAILABLE`/`MATCHED` pool
+(`_open_to_recipients()`: status **and** `pickup_deadline >= now`, D-50) plus their own
+organisation's, whatever its deadline; volunteer → unclaimed `ACCEPTED` plus their own
+assignments; admin → everything. See `DECISIONS.md` D-24.
 
 **Lifecycle writes on a donation that is already somebody's are scoped by the same
 clause.** `POST /api/donations/{id}/status` re-resolves the donation through

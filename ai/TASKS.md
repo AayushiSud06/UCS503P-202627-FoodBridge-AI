@@ -1,8 +1,9 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> Verified against the repository on 2026-09-09. HEAD is `6961555` — **Task 29's
-> landing-page cleanup (D-48) is committed**, and the working tree now carries the
-> **uncommitted Task 30 login-page redesign** (D-49) described under *Current*. **Task 28's
+> Verified against the repository on 2026-09-10. HEAD is `f863a94` — **Task 30's
+> login-page redesign (D-49) is committed**, and the working tree now carries the
+> **uncommitted Task 31 availability fix** (D-50) described under *Current*. Task 29's
+> landing-page cleanup (D-48) is `6961555`. **Task 28's
 > donation-privacy work (`HA-3b`, D-47) is committed as `d611424`**; the two commits between
 > them are documentation only (the UML set under `docs/uml/`). Task 27
 > (reopening retired needs, `F-1`, D-46) is committed as `8cbb736`, Task 26's
@@ -41,11 +42,52 @@
 
 ## Current
 
-**Uncommitted in the working tree: Task 30 — the login-page redesign, complete.**
-Task 29 is now committed (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`); those
-entries stay below for context until they move to *Completed*.
+**Uncommitted in the working tree: Task 31 — overdue donations leave the recipient offer,
+complete.** Task 30 is now committed (`f863a94`, now HEAD) — this section previously said
+it was uncommitted — Task 29 (`6961555`), Task 28 (`d611424`) and Task 27 (`8cbb736`);
+those entries stay below for context until they move to *Completed*.
 
-### Task 30 · the login page is a product screen, and carries no credential `[D-48 · D-49]`
+### Task 31 · an overdue donation is not an available donation `[repo · B-1 · QA-7 · R-8 · D-50]`
+
+**Backend read scope + one server-side guard + one shared frontend selector.** Availability
+was defined by status alone, so an unclaimed donation whose pickup deadline had passed sat
+in the NGO's Available Donations list with an Accept button — and the acceptance succeeded.
+The row was not wrong: `POST /api/admin/maintenance/expire` is what retires it and
+**nothing schedules that sweep** (*Backlog → E*), so between the deadline and the next
+manual sweep the donation kept its `AVAILABLE`/`MATCHED`. I-7 made the timeline *say*
+"Overdue"; this stops the donation being offered.
+
+- [x] **The pool is a deadline as well as a status.**
+      `routers/donations._open_to_recipients()` — `status IN (AVAILABLE, MATCHED) AND
+      pickup_deadline >= now` — replaces the bare status test in `_readable_by`'s `ngo`
+      branch, so the list, the lookup by id and `/matches` narrow together and an overdue
+      id answers the ordinary 404 rather than 200 (D-24).
+- [x] **The acceptance endpoint enforces it independently.** `ACCEPTED` from the open pool
+      on an overdue donation is **409**, for every role including admin — before this fix
+      the same request succeeded or failed depending on whether the sweep had run. The
+      **release** (`ACCEPTED` from `VOLUNTEER_ASSIGNED`, D-41) is exempt: refusing it would
+      strand the donation with a courier who had given it up.
+- [x] **Strictly past, one convention.** `_deadline_passed` is `pickup_deadline < now`, the
+      comparison the sweep already uses, so a donation *at* its deadline is still
+      collectable. Explicitly tested on both sides of the wire.
+- [x] **Nothing else narrowed.** No row altered, no migration, no new status, no matcher or
+      requirement change. The donor's own record, the administrator's view, the sweep, the
+      accepting organisation's history and the courier's claimable-pickup scope all still
+      reach an overdue donation — each held by a test.
+- [x] **One client definition, not four.** `useAvailableDonations()` in
+      `context/AppContext.tsx` (over new `lib/time.isPastDeadline`) is read by
+      `pages/ngo/NGOAvailableDonations`, `pages/ngo/NGODashboard`, `mobile/NGOAvailable`
+      and `mobile/NGOHome`, so the lists and their counts agree. Defence in depth for the
+      one case the server cannot reach — a deadline passing while the page sits open, since
+      the slice is refetched on a write rather than on a timer. `useDonations()` is
+      unchanged, so every history surface keeps the whole slice.
+- [x] **Validated.** 275 backend tests pass (12 new, `tests/test_available_donations_deadline.py`);
+      99 frontend tests pass (6 new in `pages/ngo/__tests__/NGOAvailableDonations.test.tsx`,
+      3 added to `lib/__tests__/time.test.ts`); `tsc --noEmit` and `npm run build` clean.
+      Two of the new backend tests were confirmed to **fail** against the previous router.
+      ⚠️ No browser/manual pass — see *Validation gaps* on the sweep entry below.
+
+### Task 30 · the login page is a product screen, and carries no credential (committed `f863a94`) `[D-48 · D-49]`
 
 **Frontend only, one page and one new test file.** `pages/Login.tsx` was rebuilt as a
 single two-column card: a deep-moss brand panel — wordmark, the landing page's
@@ -599,6 +641,11 @@ meaning**; by value it belongs beside A–F, and `DECISIONS.md` D-31 records why
       constraint 7). Until it runs, the expiry-loss metric **understates** reality. It needs
       a home first — cron holding an admin token, or in-process APScheduler, which reopens
       the single-process assumption. `[R-8]` — ~1 h once there is somewhere to run it
+      ⚠️ **Task 31 narrowed what this blocks, and did not replace it.** The recipient offer
+      pool now reads `pickup_deadline` directly (D-50), so an overdue donation is no longer
+      presented or acceptable whether or not the sweep has run. Recording the loss — the
+      `EXPIRED` status and its `status_events` row, which is what the expiry-loss metric is
+      computed from — still happens only here.
 
 ### F. Product gaps in what already exists
 

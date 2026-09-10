@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BarChart2, Package } from 'lucide-react';
-import { useDonations, useMyRecipient, useRequirements } from '../context/AppContext';
+import {
+  useAvailableDonations, useDonations, useMyRecipient, useRequirements,
+} from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
 import { deadlineStatus, URGENCY_STYLES } from '../lib/time';
 import { MHero, MStatGrid, MSection, MEmpty } from './parts';
@@ -12,7 +14,8 @@ export default function NGOHome() {
   const user = useCurrentUser();
   const myRecipient = useMyRecipient();
 
-  const available = donations.filter(d => d.status === 'AVAILABLE' || d.status === 'MATCHED');
+  // The shared open-pool selector, so this count and the Available list agree.
+  const available = useAvailableDonations();
   const mine = donations.filter(d => d.recipientId === user.entityId);
   const inbound = mine.filter(d =>
     ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status)

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Package, AlertCircle } from 'lucide-react';
-import { useApp, useDonations, useMyRecipient } from '../../context/AppContext';
+import { useApp, useAvailableDonations, useDonations, useMyRecipient } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
 import { useAction } from '../../lib/hooks';
 import type { Donation } from '../../types';
@@ -17,7 +17,10 @@ export default function NGOAvailableDonations() {
   const { run, isPending, isBusy } = useAction();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const available = donations.filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status));
+  // The open pool that is still collectable — status alone would keep a
+  // donation here after its pickup deadline had passed, offering an acceptance
+  // nobody could honour. `useAvailableDonations` is the shared definition.
+  const available = useAvailableDonations();
   const selectedDonation = donations.find(d => d.id === selectedId);
 
   // The ranking arrives with the donation, already scored by the server against

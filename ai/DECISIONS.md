@@ -1,6 +1,6 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository — D-01 to D-49. D-01 to D-31 were verified on
+> Decisions evident in the repository — D-01 to D-50. D-01 to D-31 were verified on
 > 2026-09-02, through the match-score consistency commit (`23c27f4`); D-31 is the one
 > decision the QA audit of that date settled, and the four questions it left open are in
 > `TASKS.md` -> *Blocked*. **D-32** (impact reporting, I-1) is committed as `e8a8178` and
@@ -16,8 +16,13 @@
 > `a9f190b` and **D-43** (the frontend test harness) as `f33aeae`, which is HEAD.
 > **D-44** (requirement read scope and the donor needs board) is committed as `e72d4c2`
 > and **D-45** (match distance is scoped to the organisation it describes, `HA-3`) as
-> `883bcee`, which is HEAD. **D-46** (retired requirements get a reader, and the lifecycle
-> filter is a second axis) is **uncommitted in the working tree**.
+> `883bcee`. Re-checked against the repository on 2026-09-10, HEAD `f863a94`:
+> **D-46** (retired requirements get a reader, and the lifecycle filter is a second axis)
+> is committed as `8cbb736` — the sentence here said it was uncommitted, and had been left
+> behind — **D-47** (the distance scope decides what a donation says) as `d611424`,
+> **D-48** (the pre-login page is a product page) as `6961555` and **D-49** (the sign-in
+> screen carries no credential) as `f863a94`, which is HEAD. **D-50** (availability is a
+> deadline as well as a status, Task 31) is **uncommitted in the working tree**.
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -2107,3 +2112,79 @@ the same screen.
   registration one click away under the selected role.
 - **This is not the rename.** FoodLink AI stands in the wordmark on both the brand panel
   and the mobile header.
+
+---
+
+## D-50 · Availability is a deadline as well as a status **[documented]**
+
+**Decision.** The pool a recipient organisation is offered is `AVAILABLE`/`MATCHED` **and
+`pickup_deadline >= now`**. `routers/donations._open_to_recipients()` is that clause, and
+it replaces the bare status test in `_readable_by`'s `ngo` branch, so the list, the lookup
+by id and `/matches` all narrow together. `POST /api/donations/{id}/status` refuses
+`ACCEPTED` for an overdue donation **reached from the open pool**, with 409. "Overdue"
+means **strictly** past — `_deadline_passed`, the comparison
+`routers/admin.expire_overdue` already sweeps on — so a donation at its deadline is still
+collectable. Established by Task 31.
+
+**Reasoning.**
+
+- **The status was only ever a record of the last sweep.** `POST
+  /api/admin/maintenance/expire` is what moves an unclaimed donation to `EXPIRED`, and
+  nothing schedules it (`TASKS.md` → *Backlog → E*). So between a deadline and the next
+  manual sweep the row kept the status it had, and a pool defined by status alone was a
+  pool of whatever the sweep had not reached. Reading the deadline makes availability true
+  as of the request instead of as of the last sweep — and leaves the sweep to do the job
+  only it can, which is recording the loss the expiry-loss metric is computed from.
+- **An offer nobody can collect costs the organisation that takes it.**
+  `Recipient.accepted_donations` is the denominator of `reliability_score` (D-30/D-41), so
+  accepting food that can no longer be lifted lowers a kitchen's own future ranking for
+  having answered an offer the platform should not have made.
+- **It belongs in the read scope, not in the list handler.** `_readable_by` is the one
+  place the `ngo` pool is written down; putting the deadline anywhere else would have let
+  `GET /donations/{id}` keep answering 200 for a donation the list had stopped offering,
+  and the id is the whole bypass. An overdue id now answers the ordinary 404 (D-24).
+- **The guard is about the donation, not the actor, so it does not exempt an
+  administrator.** Once the sweep has run, `ALLOWED_TRANSITIONS` refuses `ACCEPTED` from
+  `EXPIRED` to everybody; before it runs the same request used to succeed. Exempting
+  admin would have kept exactly the timing-dependent window this closes. 409 rather than
+  403 for the same reason: nothing about the caller is wrong.
+- **Strictly past, because that convention already exists.** The sweep matches
+  `pickup_deadline < now` and `matching._deadline_score` scores the boundary instant 0
+  without withdrawing the pairing. A second convention one instant away would have meant
+  a donation the sweep still considered live being hidden from the pool.
+
+**Constraints.**
+
+- **Nothing is hidden globally and no row is altered.** The donation keeps its status; the
+  donor reads their own record, the administrator reads everything and sweeps it, the
+  accepting organisation keeps every donation it took however long ago its deadline was —
+  that half of the `ngo` clause is untouched — and the courier's scope
+  (`ACCEPTED AND volunteer_id IS NULL`) was deliberately not touched at all.
+- ⚠️ **The release is not the offer.** `ACCEPTED` is reachable twice (D-35/D-41) and only
+  the arrival from the open pool is an acceptance. From `VOLUNTEER_ASSIGNED` it hands a
+  pickup back, and refusing that on the deadline would strand an overdue donation with a
+  courier who has given it up, with no transition left to free it. The guard reads the
+  source state the way `_needs_ownership` does.
+- **The client says the same thing, and is not the boundary.** `useAvailableDonations`
+  (`context/AppContext.tsx`) is the one definition the four recipient surfaces read — the
+  desktop portal and dashboard, the mobile list and home. It exists for the case the
+  server cannot reach: the slice is refetched on a write, not on a timer, so a deadline
+  can pass while the page sits open. It reads the clock when the slice changes rather than
+  continuously, which errs towards showing a donation a moment too long — and the server
+  refuses that acceptance with the reason. Same standing as `useRequirements` under D-44:
+  presentation and defence in depth, never the rule.
+- **`lib/time.isPastDeadline` is not `deadlineStatus().urgency === 'expired'`.** That band
+  is computed from `minutesLeft` **rounded to the minute**, so it calls a deadline twenty
+  seconds past "0m left". The new predicate compares instants, which is what the server
+  does; the urgency bands, their colours and the *Overdue* chip I-7 added to
+  `StatusTimeline` are unchanged and still describe donations that are legitimately past
+  their deadline in the histories that keep them.
+- **The matcher, the requirement model and the state machine are untouched.** No new
+  status, no new column, no migration, no scoring change. `Donation.pickup_deadline` and
+  `UtcDateTime` are the existing datetime path and the only one used.
+- **Held mechanically.** `tests/test_available_donations_deadline.py` (12 tests) pins both
+  halves: the pool narrows, and the donor, the administrator, the sweep, the accepting
+  organisation and the courier all still reach an overdue donation. Two of them were
+  confirmed to fail against the previous router — the donation was listed, and the
+  acceptance answered 200. `pages/ngo/__tests__/NGOAvailableDonations.test.tsx` (6) holds
+  the client half on a frozen clock, including the boundary instant.

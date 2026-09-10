@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Clock, MapPin, Package, Sparkles, X } from 'lucide-react';
-import { useDonations, useApp, useMyRecipient } from '../context/AppContext';
+import { useAvailableDonations, useDonations, useApp, useMyRecipient } from '../context/AppContext';
 import { useCurrentUser } from '../context/AuthContext';
 import { useAction } from '../lib/hooks';
 import { deadlineStatus, formatClock, URGENCY_STYLES, byUrgency } from '../lib/time';
@@ -19,19 +19,21 @@ export default function NGOAvailable() {
   const [sort, setSort] = useState<(typeof SORTS)[number]>('Best match');
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const available = donations
-    .filter(d => d.status === 'AVAILABLE' || d.status === 'MATCHED')
-    .sort((a, b) => {
-      // This kitchen's own straight-line distance, which is the only one an
-      // open donation carries — `distanceKm` is null until a recipient binds.
-      if (sort === 'Nearest') {
-        return (displayDistanceKm(a) ?? Infinity) - (displayDistanceKm(b) ?? Infinity);
-      }
-      if (sort === 'Closing soon') return byUrgency(a.pickupDeadline, b.pickupDeadline);
-      // "Best match" means best *for this kitchen*, which is the same number
-      // the sheet below breaks down — not the frozen platform-wide top match.
-      return (b.viewerMatch?.overallScore ?? 0) - (a.viewerMatch?.overallScore ?? 0);
-    });
+  // Still-collectable open donations, from the shared selector — an overdue
+  // one used to sort into this list and wear an "Overdue" chip while still
+  // offering an Accept button.
+  const collectable = useAvailableDonations();
+  const available = [...collectable].sort((a, b) => {
+    // This kitchen's own straight-line distance, which is the only one an
+    // open donation carries — `distanceKm` is null until a recipient binds.
+    if (sort === 'Nearest') {
+      return (displayDistanceKm(a) ?? Infinity) - (displayDistanceKm(b) ?? Infinity);
+    }
+    if (sort === 'Closing soon') return byUrgency(a.pickupDeadline, b.pickupDeadline);
+    // "Best match" means best *for this kitchen*, which is the same number
+    // the sheet below breaks down — not the frozen platform-wide top match.
+    return (b.viewerMatch?.overallScore ?? 0) - (a.viewerMatch?.overallScore ?? 0);
+  });
 
   const selected = donations.find(d => d.id === openId) ?? null;
   // Scored by the server against this kitchen, and delivered with the donation

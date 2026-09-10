@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Package, ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
-import { useDonations } from '../../context/AppContext';
+import { useAvailableDonations, useDonations } from '../../context/AppContext';
 import { useCurrentUser } from '../../context/AuthContext';
 import { deadlineStatus, byUrgency } from '../../lib/time';
 import { displayDistanceKm } from '../../lib/geo';
@@ -10,9 +10,10 @@ export default function NGODashboard() {
   const donations = useDonations();
   const user = useCurrentUser();
 
-  const open = donations
-    .filter(d => ['AVAILABLE', 'MATCHED'].includes(d.status))
-    .sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
+  // Same set the Available Donations page lists, so the two agree on what is
+  // on offer — and neither counts a donation whose deadline has passed.
+  const available = useAvailableDonations();
+  const open = [...available].sort((a, b) => byUrgency(a.pickupDeadline, b.pickupDeadline));
 
   const accepted = donations.filter(
     d => ['ACCEPTED', 'VOLUNTEER_ASSIGNED', 'PICKED_UP'].includes(d.status) && d.recipientId === user.entityId

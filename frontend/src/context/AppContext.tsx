@@ -26,6 +26,7 @@ import {
 import {
   EMPTY_STATS, toActivity, toDonation, toRecipient, toRequirement, toStats, toVolunteer,
 } from '../lib/adapters';
+import { isPastDeadline } from '../lib/time';
 import { errorMessage, useAuth } from './AuthContext';
 
 // ─── Toasts ───────────────────────────────────────────────────────────────────
@@ -346,6 +347,37 @@ export function useApp() {
 
 export function useDonations() {
   return useApp().state.donations;
+}
+
+/**
+ * The donations a recipient organisation can still act on.
+ *
+ * Every "Available Donations" surface — the desktop portal and its dashboard,
+ * the mobile list and its home screen — means this one set, so they read it from
+ * one place rather than each re-deriving it. Two conditions, matching
+ * `routers/donations._open_to_recipients` on the server: nobody is bound to it
+ * yet (`AVAILABLE` or `MATCHED`), and its collection window has not closed.
+ *
+ * As with `useRequirements`, this is presentation and **not** a security or
+ * correctness boundary — the server does not send an `ngo` account an overdue
+ * open donation in the first place. What it adds is the case the server cannot
+ * reach: this slice is refetched on a write, not on a timer, so a deadline can
+ * pass while the page sits open. The clock is therefore read when the slice
+ * changes rather than continuously, which errs towards showing a donation a
+ * moment too long — and accepting one the server has ruled out is refused there
+ * with the reason.
+ */
+export function useAvailableDonations() {
+  const donations = useApp().state.donations;
+  return useMemo(
+    () =>
+      donations.filter(
+        d =>
+          (d.status === 'AVAILABLE' || d.status === 'MATCHED') &&
+          !isPastDeadline(d.pickupDeadline),
+      ),
+    [donations],
+  );
 }
 
 export function useStats() {

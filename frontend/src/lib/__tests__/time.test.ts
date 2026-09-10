@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { byUrgency, deadlineStatus, toFutureIso } from '../time';
+import { byUrgency, deadlineStatus, isPastDeadline, toFutureIso } from '../time';
 
 const now = new Date('2026-09-05T12:00:00.000Z');
 
@@ -40,6 +40,35 @@ describe('deadlineStatus', () => {
     expect(status.minutesLeft).toBeNull();
     expect(status.label).toBe('by whenever');
     expect(status.urgency).toBe('ok');
+  });
+});
+
+describe('isPastDeadline', () => {
+  /**
+   * The boundary instant is the whole point of this predicate existing beside
+   * `deadlineStatus`. The server's rule is strictly-past — `pickup_deadline <
+   * now`, the comparison `routers/admin.expire_overdue` sweeps on — so a
+   * donation *at* its deadline is still collectable on both sides of the wire.
+   */
+  it('treats the deadline instant itself as not yet passed', () => {
+    expect(isPastDeadline('2026-09-05T12:00:00.000Z', now)).toBe(false);
+    expect(isPastDeadline('2026-09-05T12:00:00.001Z', now)).toBe(false);
+    expect(isPastDeadline('2026-09-05T11:59:59.999Z', now)).toBe(true);
+  });
+
+  it('does not round to the minute the way the urgency bands do', () => {
+    // 20 seconds past. `deadlineStatus` rounds `minutesLeft` to 0 and so calls
+    // this "0m left"; the instants say the window has closed.
+    const justPast = '2026-09-05T11:59:40.000Z';
+
+    expect(deadlineStatus(justPast, now).urgency).not.toBe('expired');
+    expect(isPastDeadline(justPast, now)).toBe(true);
+  });
+
+  it('keeps an unparseable deadline out of the past', () => {
+    // Nothing is hidden on the strength of a date the client could not read.
+    expect(isPastDeadline('whenever', now)).toBe(false);
+    expect(isPastDeadline('', now)).toBe(false);
   });
 });
 

@@ -112,6 +112,47 @@ def _get_or_404(db: Session, donation_id: int) -> Donation:
     return donation
 
 
+def _deadline_passed(deadline: datetime, now: datetime) -> bool:
+    """Has this donation's collection window closed?
+
+    **Strictly** past, which is the comparison the expiry sweep already makes
+    (`routers/admin.expire_overdue`: `pickup_deadline < now`). A donation *at*
+    its deadline is still collectable: `matching._deadline_score` scores that
+    instant 0 without withdrawing the pairing, and `create_donation` refuses a
+    deadline that is already there, so the boundary instant belongs to the
+    donation rather than to the past. One direction, and
+    `_open_to_recipients()` below is the same rule as a WHERE clause.
+    """
+    return deadline < now
+
+
+def _open_to_recipients(now: datetime | None = None):
+    """The donations an organisation may still act on, as a WHERE clause.
+
+    Two conditions, and both have to hold. `OPEN_TO_RECIPIENTS` says nobody is
+    bound to it yet, so every organisation may consider it. The deadline says a
+    collection is still possible at all — past it the donation is a loss to be
+    recorded, which is what `routers/admin.expire_overdue` stamps it as, and
+    presenting it as available invites a kitchen to promise a pickup it cannot
+    make and to spend its acceptance on food nobody can lift.
+
+    The deadline half is here rather than left to the sweep because the sweep is
+    **not scheduled** (`TASKS.md` → *Backlog → E*): until something runs it, an
+    unclaimed donation keeps the status it had when its window closed, so a pool
+    defined by status alone is a pool of whatever the sweep has not got to yet.
+    Reading the deadline directly makes availability true at the moment of the
+    request instead of at the moment of the last sweep.
+
+    `now` is a parameter so a caller can ask the question as of a stated
+    instant, following `matching.score_pair`; it defaults to the wall clock.
+    """
+    now = now or datetime.now(timezone.utc)
+    return and_(
+        Donation.status.in_(OPEN_TO_RECIPIENTS),
+        Donation.pickup_deadline >= now,
+    )
+
+
 def _readable_by(db: Session, user: User):
     """The donations `user` may read, as a WHERE clause — or None for all of them.
 
@@ -120,7 +161,13 @@ def _readable_by(db: Session, user: User):
 
     * donor — the donations they posted, and nothing else.
     * ngo — the open pool every organisation is invited to consider, plus the
-      donations bound to their own organisation once they accept one.
+      donations bound to their own organisation once they accept one. The pool
+      is the *still collectable* one (`_open_to_recipients`); an overdue
+      donation nobody took is nothing an organisation can act on, so it drops
+      out of the offer here. It does not drop out of anybody's history: this
+      narrows the shared pool only, and the second half of the clause keeps
+      every donation this organisation accepted readable however long ago its
+      deadline was.
     * volunteer — pickups that are waiting for a courier, plus every donation
       they are the courier for, whatever state it has reached (their history).
     * admin — unrestricted.
@@ -136,7 +183,7 @@ def _readable_by(db: Session, user: User):
         return Donation.donor_id == user.id
 
     if user.role is UserRole.ngo:
-        clause = Donation.status.in_(OPEN_TO_RECIPIENTS)
+        clause = _open_to_recipients()
         recipient = db.scalar(select(Recipient).where(Recipient.user_id == user.id))
         if recipient is not None:
             clause = or_(clause, Donation.recipient_id == recipient.id)
@@ -470,6 +517,34 @@ def update_status(
 
     # ── Side effects that must happen with the transition ────────────────────
     if target is DonationStatus.ACCEPTED:
+        # An offer nobody can still collect is not an offer. The pool an
+        # organisation browses already leaves an overdue donation out
+        # (`_open_to_recipients`), and this is that same rule on the write path
+        # — for a caller who holds an id and posts the transition directly
+        # rather than through the list.
+        #
+        # Only from the open pool, because only there is `ACCEPTED` the taking
+        # of an offer. Reached from `VOLUNTEER_ASSIGNED` it is the *release* of
+        # a pickup (D-41), and refusing that would strand an overdue donation
+        # with a courier who has already given it up. That is exactly the
+        # distinction `_needs_ownership` draws, read the same way.
+        #
+        # 409 rather than 403: nothing about the caller is wrong, the donation
+        # has moved on — and it is the answer `ALLOWED_TRANSITIONS` gives on its
+        # own once `routers/admin.expire_overdue` has stamped the row `EXPIRED`.
+        # Which is the point: without this, the same request succeeded or failed
+        # depending on whether that unscheduled sweep had run yet.
+        if donation.status in OPEN_TO_RECIPIENTS and _deadline_passed(
+            donation.pickup_deadline, datetime.now(timezone.utc)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This donation's pickup deadline has passed, so it can no "
+                    "longer be accepted"
+                ),
+            )
+
         # An NGO always accepts as itself. Only an administrator may name an
         # arbitrary organisation: accepting on another kitchen's behalf is a
         # stand-in action for support staff, not something a peer may do to a
