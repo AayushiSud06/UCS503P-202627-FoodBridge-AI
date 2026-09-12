@@ -7,6 +7,7 @@ neither side has to compromise.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -226,6 +227,18 @@ class MatchOut(Schema):
 #: what lifts it.
 MAX_IMAGE_URL_LENGTH = 262_144
 
+#: The two shapes `image_url` is allowed to take, since it is rendered straight
+#: into an `<img src>` by every donation surface: a base64 `data:` URL of some
+#: image type — what the browser produces after resizing (D-56) — or an ordinary
+#: web link. Anything else is neither an image nor something a client can
+#: display, so it is refused at the boundary rather than stored and served back.
+#: Deliberately shallow: this rejects the obviously-not-an-image, and the real
+#: check that the bytes decode happens in the browser that holds them.
+IMAGE_URL_PATTERN = re.compile(
+    r"^(?:data:image/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+|https?://\S+)$",
+    re.IGNORECASE,
+)
+
 
 class DonationCreate(Schema):
     food_name: str = Field(min_length=1, max_length=160)
@@ -240,6 +253,21 @@ class DonationCreate(Schema):
     prepared_at: datetime | None = None
     pickup_deadline: datetime
     image_url: str | None = Field(default=None, max_length=MAX_IMAGE_URL_LENGTH)
+
+    @field_validator("image_url")
+    @classmethod
+    def _reject_what_is_not_an_image(cls, value: str | None) -> str | None:
+        """A photo or a link to one, and nothing else.
+
+        The length cap above is untouched and remains the bound that matters for
+        storage; this is the companion check on *shape*, so a value that could
+        never render as an image is not stored and served back to every reader.
+        """
+        if value is None or IMAGE_URL_PATTERN.match(value):
+            return value
+        raise ValueError(
+            "imageUrl must be an image data URL or an http(s) link to an image"
+        )
 
 
 class StatusEventOut(Schema):

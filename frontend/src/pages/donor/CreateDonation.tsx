@@ -4,6 +4,7 @@ import { Upload, X, ImageIcon, Info, AlertCircle, Sparkles, MapPin, Loader2 } fr
 import { useApp } from '../../context/AppContext';
 import { errorMessage } from '../../context/AuthContext';
 import { toFutureIso, toIsoToday } from '../../lib/time';
+import { MAX_IMAGE_EDGE_PX, prepareDonationImage } from '../../lib/image';
 import { DEFAULT_COORDS, isValidCoords, requestCoords } from '../../lib/geo';
 import type { FoodCategory, FoodUnit, StorageType } from '../../types';
 
@@ -46,6 +47,7 @@ export default function CreateDonation() {
     longitude: String(DEFAULT_COORDS.longitude),
   });
   const [imagePreview, setImagePreview] = useState<string | undefined>();
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -73,12 +75,26 @@ export default function CreateDonation() {
     showToast('info', 'Demo Preset Loaded', '50 Vegetarian Meals (Pickup before 8 PM) populated.');
   };
 
-  const handleImage = (e: ChangeEvent<HTMLInputElement>) => {
+  // The photo travels in the donation row as a data URL, so it is resized and
+  // re-encoded here before it goes anywhere — a raw phone capture is several
+  // times the size the server accepts (`lib/image.ts`, D-56). The preview shows
+  // exactly what will be stored.
+  const handleImage = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
+
+    setIsPreparingImage(true);
+    try {
+      const prepared = await prepareDonationImage(file);
+      setImagePreview(prepared);
+      setErrors(prev => { const next = { ...prev }; delete next.image; return next; });
+    } catch (caught) {
+      setImagePreview(undefined);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setErrors(prev => ({ ...prev, image: errorMessage(caught) }));
+    } finally {
+      setIsPreparingImage(false);
+    }
   };
 
   const useMyLocation = async () => {
@@ -376,16 +392,29 @@ export default function CreateDonation() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors group"
+              disabled={isPreparingImage}
+              className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors group disabled:opacity-60"
             >
               <div className="w-12 h-12 bg-gray-100 group-hover:bg-emerald-100 rounded-xl flex items-center justify-center transition-colors">
-                <Upload size={22} className="text-gray-400 group-hover:text-emerald-600" />
+                {isPreparingImage ? (
+                  <Loader2 size={22} className="text-gray-400 animate-spin" />
+                ) : (
+                  <Upload size={22} className="text-gray-400 group-hover:text-emerald-600" />
+                )}
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium text-gray-700">Upload food photo</p>
-                <p className="text-xs text-gray-400 mt-0.5">PNG, JPG up to 10 MB</p>
+                <p className="text-sm font-medium text-gray-700">
+                  {isPreparingImage ? 'Preparing photo…' : 'Upload food photo'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  PNG, JPG up to 10 MB — resized to {MAX_IMAGE_EDGE_PX} px before it is stored
+                </p>
               </div>
             </button>
+          )}
+
+          {errors.image && (
+            <p className="text-xs font-medium text-red-600">{errors.image}</p>
           )}
           <input
             ref={fileInputRef}

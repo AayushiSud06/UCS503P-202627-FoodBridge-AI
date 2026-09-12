@@ -165,6 +165,32 @@ def test_an_image_url_within_the_limit_is_stored_and_returned(client, recipients
     assert response.json()["imageUrl"] is None
 
 
+def test_an_image_url_that_is_not_an_image_is_rejected(client, recipients):
+    """The shape check beside the length cap (D-56).
+
+    `image_url` is rendered straight into an `<img src>` by every donation
+    surface, so a value that could not be an image is refused at the boundary
+    rather than stored and handed back to every reader. The browser holding the
+    bytes does the real decode check.
+    """
+    token = register(client, email="d-img-junk@test.com", role="donor")
+
+    for junk in (
+        "not an image at all",
+        "javascript:alert(1)",
+        "data:text/html;base64,PHNjcmlwdD4=",
+        "file:///etc/passwd",
+        "",
+    ):
+        response = client.post(
+            "/api/donations",
+            json={**make_donation_body(), "imageUrl": junk},
+            headers=auth(token),
+        )
+        assert response.status_code == 422, f"{junk!r} was accepted"
+        assert "imageUrl" in str(response.json()["detail"])
+
+
 def test_matches_are_ranked_and_exclude_out_of_radius(client, recipients):
     token = register(client, email="d3@test.com", role="donor")
     donation_id = client.post(

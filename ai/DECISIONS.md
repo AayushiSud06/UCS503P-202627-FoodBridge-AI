@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-55. **D-01…D-54 are implemented in commits
-> up to `be831b8`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-55 is
-> uncommitted in the working tree** (Task 39). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-56. **D-01…D-55 are implemented in commits
+> up to `3d6f8f8`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-56 is
+> uncommitted in the working tree** (Task 40). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -48,7 +48,7 @@
 > | D-38 | Lifecycle status decides courier display | in force |
 > | D-39 | Passed deadline annotated, not enforced (display) | in force; enforcement for the pool added by D-50 |
 > | D-40 | An account reads contact details it may write | in force; courier lat/long still write-only |
-> | D-41 | Courier scope via donations; release is not an acceptance | in force; its image cap lacks a client resize (P1-5) |
+> | D-41 | Courier scope via donations; release is not an acceptance | in force; its image cap gained the client resize it needed (D-56) |
 > | D-42 | Only meals vs capacity; absolute headroom | in force |
 > | D-43 | Vitest on the project's Vite config | in force |
 > | D-44 | Requirements scoped by role; donors see verified orgs' | in force |
@@ -62,7 +62,8 @@
 > | D-52 | Requirements break ties and explain; never move the score | in force; verified by audit repro |
 > | D-53 | An NGO reads the open pool only once verified | in force (`c65c65f`) |
 > | D-54 | A real change to an organisation's name or pin voids its verification | in force (`be831b8`) |
-> | D-55 | Every lifecycle status write carries its own precondition | uncommitted (Task 39) |
+> | D-55 | Every lifecycle status write carries its own precondition | in force (`3d6f8f8`) |
+> | D-56 | Donation photos are resized in the browser, the only place holding the bytes | uncommitted (Task 40) |
 >
 > Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
 > against the kitchen (P1-4).
@@ -2578,3 +2579,71 @@ acceptance branch: `ACCEPTED` in both its meanings (the acceptance and the relea
 - The guard proves one transition, not a queue. It does not make a lost race *invisible*:
   the loser sees a 409, which is the honest answer and the one the frontend already renders
   from the server's own `detail`.
+
+---
+
+## D-56 · Donation photos are resized in the browser, the only place that holds the bytes **[documented]**
+
+**Decision.** `frontend/src/lib/image.ts` prepares every picked photo before it becomes an
+`imageUrl`: decode the file, clamp the **long edge to 1280 px** without ever upscaling,
+re-encode as **JPEG** down a fixed quality ladder (0.72 → 0.55 at 1280, then 960 px and
+720 px) until the resulting `data:` URL fits `MAX_IMAGE_URL_LENGTH`, and refuse with a
+readable sentence if it cannot. Both create-donation screens call it. The server keeps the
+256 KiB cap and gains a shape check, `schemas.IMAGE_URL_PATTERN`. Uncommitted (Task 40).
+
+**Why the browser.** There is no upload endpoint and no object storage: the donation row
+*is* the image store, and the backend only ever receives a string. The bytes exist nowhere
+but the browser that picked them, so it is the only boundary where resizing is possible at
+all — and the one where it also saves the upload, not just the storage. `HA-7` bounded the
+column without that step, which made a normal phone photo a 422 and left the camera-first
+mobile flow failing on its own premise (P1-5).
+
+**The numbers, and where they come from.**
+
+- **1280 px** on the long edge: the photo is rendered in a card and on a detail panel a few
+  hundred CSS pixels wide, so 1280 covers a 2× display with room to spare, and a 4:3 photo
+  at that size lands inside the existing cap at good quality. Measured in a browser: a
+  4032×3024 source went from 3,460,075 data-URL characters — over the cap by 3.2 M — to
+  1280×960 and 220,651 characters in 104 ms.
+- **JPEG**: what a camera produces anyway, and the only widely-supported lossy encoder on
+  `canvas.toDataURL`. Transparency is therefore **not preserved** — the canvas is matted
+  white first, so a transparent PNG composites predictably rather than onto black. Food
+  photographs are the subject; nothing in this flow needs alpha.
+- **A short fixed ladder, not a search.** Four deterministic attempts are easy to reason
+  about and to test, and cheap at these sizes; a binary search on quality would cost more
+  encodes to save bytes nobody is counting.
+- **No upscaling.** A small photo is re-encoded at its own size, so attaching a 320×240
+  image does not produce a larger, blurrier file.
+- **25 MB source bound**, checked before decoding, so a pathological file cannot be expanded
+  into hundreds of megabytes of bitmap on the main thread. It sits comfortably above the
+  "up to 10 MB" the upload control already promised — a promise that was previously false
+  for anything over about 190 KB and is now true.
+
+**Validation, and what is trusted.** The **decode is the validation**: `createImageBitmap`
+rejects anything it cannot parse, so a renamed text file or a corrupt JPEG fails there
+rather than on its extension or its `type`, neither of which is trusted on its own. A
+decoded image with no pixels is refused too. The server's half is deliberately shallow —
+the length cap it already had, plus a pattern admitting only an image `data:` URL or an
+http(s) link, because that field is rendered straight into an `<img src>` by every donation
+surface and a value that could never be an image should not be stored and served back. The
+real byte-level check stays where the bytes are.
+
+**Constraints.**
+
+- **No new dependency.** `createImageBitmap` and `canvas.toDataURL` are browser built-ins;
+  a decode/encode library would have been a bundle cost for work the platform already does.
+- ⚠️ **jsdom has neither**, so `prepareDonationImage` takes its decode/encode pair as a
+  parameter and the tests inject a fake one. What that stubs is exactly the platform seam:
+  the sizing arithmetic, the ladder, the cap and every refusal are the real code. The real
+  pair was exercised in a browser against the dev server instead.
+- **No schema change, no migration, no API shape change.** `imageUrl` is still an optional
+  string, and an http(s) link still works, as its test asserts.
+- ⚠️ **The photo is still inline in the donation row**, so `GET /api/donations` still
+  returns every image it lists — now at roughly a tenth the size. Object storage remains
+  the real fix (`TASKS.md` → *Backlog → F*).
+- **Decoding is off the main thread but the encode is not.** At a 1280 px target that
+  measured 104 ms for a 12-megapixel source, and the button shows a preparing state while
+  it runs, so no Worker was introduced.
+- ⚠️ `createImageBitmap` is unavailable on Safari 14 and older; such a browser now gets the
+  unreadable-image message rather than an oversized upload. Acceptable here, and a
+  fallback through an `<img>` element is the change if it ever matters.

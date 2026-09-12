@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Camera, Check, Loader, MapPin, Pencil, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { errorMessage } from '../context/AuthContext';
 import { useAction, useMatchAnalysis } from '../lib/hooks';
+import { prepareDonationImage } from '../lib/image';
 import { DEFAULT_COORDS, requestCoords, type Coords } from '../lib/geo';
 import { formatClock, toFutureIso } from '../lib/time';
 import type { Donation } from '../types';
@@ -22,7 +24,7 @@ const READINGS = [
 
 export default function CreateDonationCamera() {
   const navigate = useNavigate();
-  const { createDonation } = useApp();
+  const { createDonation, showToast } = useApp();
   const { run, isBusy } = useAction();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -57,13 +59,23 @@ export default function CreateDonationCamera() {
     };
   }, [step]);
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Resized and re-encoded before it is held, for the reason in `lib/image.ts`:
+  // a camera capture is several times the size the donation row accepts, and
+  // this flow is the one that always has a photo (D-56). The scripted read step
+  // starts straight away, so the work happens behind it rather than in front.
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result as string);
-    reader.readAsDataURL(file);
+
     setStep('read');
+    try {
+      setPhoto(await prepareDonationImage(file));
+    } catch (caught) {
+      setPhoto(undefined);
+      if (fileRef.current) fileRef.current.value = '';
+      setStep('shoot');
+      showToast('error', 'Could not use that photo', errorMessage(caught));
+    }
   };
 
   const publish = async () => {

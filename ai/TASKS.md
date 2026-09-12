@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-12, `master` at `be831b8`, plus the
-> uncommitted Task 39 (P1-3) changes.** The full health audit of that date was run against
+> **Verified against the repository on 2026-09-12, `master` at `3d6f8f8`, plus the
+> uncommitted Task 40 (P1-5) changes.** The full health audit of that date was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,9 +18,9 @@
 
 ## Current
 
-**Task 39 · P1-3 — implemented, uncommitted, awaiting review.** Every lifecycle status
-write is now a conditional UPDATE, so one transition can happen only once (D-55). See P1-3
-below.
+**Task 40 · P1-5 — implemented, uncommitted, awaiting review.** Donation photos are resized
+to 1280 px and re-encoded as JPEG in the browser before the data URL is built (D-56). See
+P1-5 below.
 
 ## P0 — urgent
 
@@ -68,7 +68,7 @@ below.
 
 ### P1-3 · Lifecycle transitions other than the claim are lost-update races — on SQLite too
 - **Category:** DATA INTEGRITY ISSUE
-- ✅ **FIXED by Task 39 (uncommitted, awaiting review), D-55.** `_record` — the one
+- ✅ **FIXED by Task 39 (`3d6f8f8`), D-55.** `_record` — the one
   function every transition's status write goes through — now advances the status with
   `UPDATE donations SET status=:to WHERE id=:id AND status=:from` and raises 409 on
   `rowcount != 1`, appending no event. It runs last, immediately before the single
@@ -99,17 +99,20 @@ below.
 
 ### P1-5 · Attaching a normal phone photo makes donation creation fail
 - **Category:** CONFIRMED BUG (UX, core flow)
-- **Why it matters:** `HA-7` capped `imageUrl` at 256 KiB (~190 KB image) but neither
-  `pages/donor/CreateDonation.tsx:76-82` nor `mobile/CreateDonationCamera.tsx:65` resizes —
-  both `readAsDataURL` the raw file. A 1–5 MB phone photo makes `POST /donations` a 422 with
-  a Pydantic length message, and the donation is not created. The camera-first mobile flow
-  fails on its own premise.
-- **Evidence:** code (`schemas.MAX_IMAGE_URL_LENGTH`, both readers). NOT VERIFIED in a
-  browser — the flow needs a signed-in donor.
-- **Smallest scope:** one shared `lib/` helper that downsizes via canvas (≈1024 px JPEG) and
-  refuses with a plain message if still over the cap; used by both screens; unit test on
-  the guard.
-- **Dependencies:** none. **Risk if postponed:** donors who add photos cannot post.
+- ✅ **FIXED by Task 40 (uncommitted, awaiting review), D-56.** `HA-7` capped `imageUrl` at
+  256 KiB but neither create screen resized, so both `readAsDataURL`-ed the raw file and a
+  1–5 MB phone photo was a 422. New `frontend/src/lib/image.ts` decodes the file (the decode
+  *is* the validation — neither extension nor MIME is trusted), clamps the long edge to
+  1280 px without upscaling, re-encodes as JPEG down a fixed quality ladder until it fits
+  the cap, and refuses with a readable sentence otherwise. Both screens use it; the
+  server keeps the cap and gained a shape check (`IMAGE_URL_PATTERN`).
+- **Evidence:** `lib/__tests__/image.test.ts` (12 tests, the platform seam injected because
+  jsdom has neither `createImageBitmap` nor `toDataURL`) plus one backend test. **Measured
+  in a real browser** against the dev server: a 4032×3024 photo went from 3,460,075 data-URL
+  characters (over the cap by 3.2 M — a guaranteed 422) to 1280×960 and 220,651 characters
+  in 104 ms; a 320×240 image kept its size.
+- ⚠️ **Still inline in the donation row.** Object storage remains unbuilt (*Backlog → F*),
+  so every donation read still carries its photo.
 
 ## P2 — normal
 
@@ -252,7 +255,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 39 · P1-3: every lifecycle status write is a conditional UPDATE (D-55) |
+| uncommitted | Task 40 · P1-5: donation photos resized and re-encoded in the browser (D-56) |
+| `3d6f8f8` | Task 39 · P1-3: every lifecycle status write is a conditional UPDATE (D-55) |
 | `be831b8` | Task 38 · P1-2: a real name/coordinate change voids verification (D-54) |
 | `c65c65f` | Task 37 · P1-1a: the open pool requires a verified organisation (D-53) |
 | `640af0c` | Task 36 · requirement-aware tie-break and reasons (D-52) |
