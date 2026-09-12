@@ -1,0 +1,2889 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://tiet-ucs503.github.io/ucs503p-202627odd-template/uml/FoodLink-Use-Case-Scenarios/">
+      
+      
+        <link rel="prev" href="../FoodLink-UML/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+  <title>UCS503: Software Engineering; Raghav
+    B. Venkataramaiyer @TIET</title>
+
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+  
+  
+  
+  
+  <style>:root{--md-annotation-icon:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%2020c-4.41%200-8-3.59-8-8s3.59-8%208-8%208%203.59%208%208-3.59%208-8%208m0-18A10%2010%200%200%200%202%2012a10%2010%200%200%200%2010%2010%2010%2010%200%200%200%2010-10A10%2010%200%200%200%2012%202m1%205h-2v4H7v2h4v4h2v-4h4v-2h-4z%22/%3E%3C/svg%3E');}</style>
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/extra.css">
+    
+      <link rel="stylesheet" href="https://unpkg.com/katex@0/dist/katex.min.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="amber" data-md-color-accent="orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#foodlink-ai-use-case-scenarios" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="UCS503 : Software Engineering : Project Template" class="md-header__button md-logo" aria-label="UCS503 : Software Engineering : Project Template" data-md-component="logo">
+      
+  <img src="../../assets/tiet-logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            UCS503 : Software Engineering : Project Template
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              FoodLink AI — Use Case Scenarios
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/tiet-ucs503/ucs503p-202627odd-template" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ucs503p-202627odd-template
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="UCS503 : Software Engineering : Project Template" class="md-nav__button md-logo" aria-label="UCS503 : Software Engineering : Project Template" data-md-component="logo">
+      
+  <img src="../../assets/tiet-logo.svg" alt="logo">
+
+    </a>
+    UCS503 : Software Engineering : Project Template
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tiet-ucs503/ucs503p-202627odd-template" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ucs503p-202627odd-template
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FoodLink AI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounts, Login and Administration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../criteria-for-project-selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Criteria for Project Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Journals
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Journals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../journals/1024030906-Aayushi/week1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1024030906 Aayushi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../journals/1024030909-Rishi/week1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1024030909 Rishi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../journals/1024030956-Yugam/week1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1024030956 Yugam
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../journals/1024030xxx-bhanurekha/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1024030xxx bhanurekha
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    1024030xxx bhanurekha
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../journals/1024030xxx-bhanurekha/w1-ticket-resolution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Week 1 : Order of Flags in Compilation Command
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../journals/1024030xxx-vidya/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1024030xxx vidya
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    1024030xxx vidya
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../journals/1024030xxx-vidya/w1-ticket-resolution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Week 1 : Order of Flags in Compilation Command
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../journals/1024031166-Himanshi/week1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1024031166 Himanshi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Uml
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Uml
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FoodLink-UML/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FoodLink AI — UML System Design Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FoodLink AI — Use Case Scenarios
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FoodLink AI — Use Case Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-about-this-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. About This Document
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. About This Document">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-status-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Status labels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-actors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Actors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Conventions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-account-and-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Account and Access
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Account and Access">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uc-01-register-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-01 — Register Account
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-03-sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-03 — Sign In
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-04-manage-account-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-04 — Manage Account &amp; Password
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-donation-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Donation Lifecycle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Donation Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uc-05-post-donation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-05 — Post Donation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-06-browse-available-donations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-06 — Browse Available Donations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-07-accept-donation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-07 — Accept Donation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-08-claim-pickup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-08 — Claim Pickup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-09-record-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-09 — Record Collection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-10-record-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-10 — Record Delivery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-11-confirm-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-11 — Confirm Completion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-12-release-pickup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-12 — Release Pickup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-13-cancel-donation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-13 — Cancel Donation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-matching-and-explainability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Matching and Explainability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Matching and Explainability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uc-16-review-match-explanation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-16 — Review Match Explanation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-standing-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Standing Demand
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Standing Demand">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uc-17-post-standing-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-17 — Post Standing Requirement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-18-revise-retire-or-reopen-need" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-18 — Revise, Retire or Reopen Need
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-19-browse-needs-board" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-19 — Browse Needs Board
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-profiles-and-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Profiles and Monitoring
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Profiles and Monitoring">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uc-20-maintain-organisation-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-20 — Maintain Organisation Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-21-manage-courier-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-21 — Manage Courier Availability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-22-view-donations-role-scoped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-22 — View Donations (role-scoped)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-23-view-platform-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-23 — View Platform Metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-administration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Administration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Administration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uc-24-verify-or-revoke-organisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-24 — Verify or Revoke Organisation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-25-run-expiry-sweep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-25 — Run Expiry Sweep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-26-manage-user-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-26 — Manage User Accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uc-27-override-lifecycle-transition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UC-27 — Override Lifecycle Transition
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-use-cases-intentionally-without-a-scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Use Cases Intentionally Without a Scenario
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-traceability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Traceability
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="foodlink-ai-use-case-scenarios">FoodLink AI — Use Case Scenarios</h1>
+<ul>
+<li><strong>Project:</strong> FoodLink AI (repository <code>UCS503P-202627-FoodBridge-AI</code>)</li>
+<li><strong>Course:</strong> UCS503P — Software Engineering</li>
+<li><strong>Companion documents:</strong> <code>FoodLink-UML.md</code> (full UML package) · <code>diagrams/01-use-case.puml</code> (Use Case Diagram)</li>
+</ul>
+<hr />
+<h2 id="1-about-this-document">1. About This Document</h2>
+<p>This document expands every actor-driven use case of the FoodLink AI Use Case
+Diagram into a structured scenario. The identifiers and names below are taken
+verbatim from the diagram, so <code>UC-07 Accept Donation</code> here is the same ellipse
+labelled <em>Accept Donation</em> there.</p>
+<p>Each scenario was written against the implementation, not against the project
+description. Flows, guards and error responses correspond to actual code paths
+in <code>code/foodlink/</code>; nothing is described that the system does not do.</p>
+<h3 id="11-status-labels">1.1 Status labels</h3>
+<p>Every scenario carries a <strong>Status</strong> field with one of two values:</p>
+<table>
+<thead>
+<tr>
+<th>Label</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Implemented — API and portal</strong></td>
+<td>Reachable by an end user through the web application today.</td>
+</tr>
+<tr>
+<td><strong>Implemented — API only</strong></td>
+<td>Present, authorised and covered by automated tests in the backend, but not yet offered by any screen in the web portal.</td>
+</tr>
+</tbody>
+</table>
+<p>Nothing in this document is planned, proposed or backlogged work. Where a
+capability has a known limitation, it is stated inside the scenario rather than
+left implicit.</p>
+<h3 id="12-actors">1.2 Actors</h3>
+<table>
+<thead>
+<tr>
+<th>Actor</th>
+<th>Basis in the implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Guest</strong></td>
+<td>Any caller without a bearer token. Only registration and login are reachable.</td>
+</tr>
+<tr>
+<td><strong>Registered User</strong></td>
+<td>Generalised actor for any authenticated, active account — the behaviour every role shares.</td>
+</tr>
+<tr>
+<td><strong>Donor</strong></td>
+<td><code>UserRole.donor</code> — posts surplus food.</td>
+</tr>
+<tr>
+<td><strong>Recipient Organisation</strong></td>
+<td><code>UserRole.ngo</code>, bound to a <code>Recipient</code> record — accepts donations, publishes needs.</td>
+</tr>
+<tr>
+<td><strong>Volunteer Courier</strong></td>
+<td><code>UserRole.volunteer</code>, bound to a <code>Volunteer</code> record — collects and delivers.</td>
+</tr>
+<tr>
+<td><strong>Platform Administrator</strong></td>
+<td><code>UserRole.admin</code> — vouches for organisations, manages accounts, may stand in on the lifecycle.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-conventions">1.3 Conventions</h3>
+<ul>
+<li><strong>Preconditions</strong> state what must already be true; they are enforced by the
+  server, not merely assumed of the user interface.</li>
+<li><strong>Alternative / Exception Flows</strong> are labelled <code>A1</code>, <code>A2</code>, … and give the HTTP
+  status the system actually returns.</li>
+<li>A recurring pattern: where a caller holds the right <em>role</em> but is not the
+  party a record belongs to, FoodLink answers <strong>404 Not Found</strong>, not 403. The
+  record is re-read through the caller's own read scope, so an outsider cannot
+  even confirm it exists.</li>
+</ul>
+<hr />
+<h2 id="2-account-and-access">2. Account and Access</h2>
+<h3 id="uc-01-register-account">UC-01 — Register Account</h3>
+<table>
+<thead>
+<tr>
+<th>UC-01</th>
+<th>Register Account</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Guest</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Obtain a FoodLink account and an access token for one of the three self-service roles.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The email address is not already registered. The request is within the per-address rate limit.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The account exists and is active, and the caller holds a signed access token. A recipient organisation created this way is <strong>unverified</strong>, so it cannot yet be matched or accept donations.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Guest chooses a role: donor, recipient organisation, or volunteer courier.</li>
+<li>Guest supplies name, email and a password of at least eight characters, and
+   optionally an organisation name and phone number.</li>
+<li>System confirms no account exists for that email address.</li>
+<li>System hashes the password with bcrypt and creates the <code>User</code> record.</li>
+<li><em>«include» Provision Role Profile:</em> for a recipient account the system
+   creates a <code>Recipient</code> organisation with <code>is_verified = false</code>; for a courier
+   account it creates a <code>Volunteer</code> record.</li>
+<li>System issues a signed access token and returns it with the new account
+   (HTTP 201).</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Email already registered.</strong> HTTP 409; no account is created.</li>
+<li><strong>A2 — Administrator role requested.</strong> Rejected by request-schema validation
+  (HTTP 422). <code>admin</code> is not an accepted value, so registration can never mint
+  an administrator.</li>
+<li><strong>A3 — Password shorter than eight characters, or malformed email.</strong> HTTP 422.</li>
+<li><strong>A4 — Rate limit exceeded.</strong> The request is refused before any account work
+  is done.</li>
+</ul>
+<blockquote>
+<p><strong>Note on scope.</strong> The API also accepts an organisation type, address,
+coordinates and capacity at registration to seed the recipient record. The web
+sign-up form does not collect them, so an organisation registered through the
+portal must complete its profile afterwards (UC-20).</p>
+</blockquote>
+<hr />
+<h3 id="uc-03-sign-in">UC-03 — Sign In</h3>
+<table>
+<thead>
+<tr>
+<th>UC-03</th>
+<th>Sign In</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Guest</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Exchange credentials for a bearer token and reach the portal for the account's role.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The account exists and is active. The request is within the per-address rate limit.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The client holds an access token whose expiry was fixed at issue; the portal has redirected to the home path for that role.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Guest submits an email address and password.</li>
+<li>System looks up the account by lower-cased email.</li>
+<li>System verifies the password against the stored bcrypt hash.</li>
+<li>System confirms the account is active.</li>
+<li>System issues an access token carrying the account id, role and expiry, and
+   returns it with the account.</li>
+<li>The portal redirects to the home path for the account's role.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Unknown email or wrong password.</strong> HTTP 401 with a single message for
+  both cases, so the response does not reveal which addresses hold accounts.</li>
+<li><strong>A2 — Account deactivated.</strong> HTTP 403, directing the user to contact an
+  administrator. The check happens at login rather than on a later request, so
+  the person sees the real reason.</li>
+<li><strong>A3 — Rate limit exceeded.</strong> The attempt is refused.</li>
+</ul>
+<hr />
+<h3 id="uc-04-manage-account-password">UC-04 — Manage Account &amp; Password</h3>
+<table>
+<thead>
+<tr>
+<th>UC-04</th>
+<th>Manage Account &amp; Password</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Registered User</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Keep one's own contact details correct and rotate one's own password.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is authenticated.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The account's name, organisation label or phone number is updated, and/or the password hash is replaced. Role, email and active status are unchanged.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>User opens the profile screen for their portal.</li>
+<li>User revises name, organisation label or phone number, and saves.</li>
+<li>System applies only the supplied fields and returns the updated account.</li>
+<li>To change the password, the user supplies the current password and a new one
+   of at least eight characters.</li>
+<li>System verifies the current password, replaces the hash, and confirms.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Current password incorrect.</strong> HTTP 401; the password is unchanged.</li>
+<li><strong>A2 — New password shorter than eight characters.</strong> HTTP 422.</li>
+<li><strong>A3 — Caller attempts to change role, email or active status.</strong> Those fields
+  are absent from the self-service schema and are silently not applied; they
+  belong to an administrator (UC-26).</li>
+</ul>
+<blockquote>
+<p><strong>Why this exists.</strong> An account created by an administrator starts on a
+password somebody else chose. Without a self-service change, the first thing
+such an account would do is share a credential it could not rotate.</p>
+</blockquote>
+<hr />
+<h2 id="3-donation-lifecycle">3. Donation Lifecycle</h2>
+<h3 id="uc-05-post-donation">UC-05 — Post Donation</h3>
+<table>
+<thead>
+<tr>
+<th>UC-05</th>
+<th>Post Donation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Donor <em>(an administrator may also post)</em></td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Publish surplus food so recipient organisations can claim it before it spoils.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is authenticated as a donor or administrator.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is in the open pool — <code>AVAILABLE</code>, or <code>MATCHED</code> if a candidate was found — and visible to every recipient organisation. <strong>No organisation is bound to it:</strong> a match is a suggestion, not a claim.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Donor supplies food name, category, quantity, unit, storage type,
+   description, pickup location with coordinates, and a pickup deadline.</li>
+<li>System confirms the deadline lies in the future.</li>
+<li>System stores the donation with status <code>AVAILABLE</code>.</li>
+<li>System appends a server-stamped status event recording <code>AVAILABLE</code>.</li>
+<li><em>«include» Rank Recipient Organisations:</em> the system scores the donation
+   against every organisation that is verified, has coordinates, and lies inside
+   the service radius.</li>
+<li>If at least one organisation is eligible, the system freezes the leading
+   candidate's score onto the donation and appends a status event recording
+   <code>MATCHED</code>, noting the organisation's name.</li>
+<li>System returns the stored donation.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Pickup deadline already past.</strong> HTTP 422; nothing is stored.</li>
+<li><strong>A2 — Payload fails validation.</strong> HTTP 422.</li>
+<li><strong>A3 — No eligible organisation.</strong> The donation stays <code>AVAILABLE</code> with no
+  frozen score. This is a normal outcome, not an error — the donation remains
+  open for any organisation to accept.</li>
+</ul>
+<hr />
+<h3 id="uc-06-browse-available-donations">UC-06 — Browse Available Donations</h3>
+<table>
+<thead>
+<tr>
+<th>UC-06</th>
+<th>Browse Available Donations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>See what is currently on offer, and how well each offer suits <em>this</em> kitchen.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is authenticated as a recipient organisation account.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>None — this is a read. No donation changes state.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation opens the available-donations screen.</li>
+<li>System applies the read scope: every donation that is <code>AVAILABLE</code> or
+   <code>MATCHED</code>, plus every donation already bound to this organisation.</li>
+<li><em>«extend» Show Compatibility Score:</em> for each donation still open to
+   acceptance, the system scores the pairing against <strong>this</strong> organisation and
+   attaches the headline percentage together with its five-criterion breakdown
+   as one object.</li>
+<li>The portal lists the donations ordered by pickup deadline.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Account has no organisation record yet.</strong> The open pool is still
+  returned, but no compatibility score is attached.</li>
+<li><strong>A2 — Donation no longer open to acceptance.</strong> No live score is attached; the
+  frozen score is shown instead, because that is the figure the accepting
+  organisation actually decided on.</li>
+</ul>
+<hr />
+<h3 id="uc-07-accept-donation">UC-07 — Accept Donation</h3>
+<table>
+<thead>
+<tr>
+<th>UC-07</th>
+<th>Accept Donation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation <em>(an administrator may accept on an organisation's behalf)</em></td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Commit the organisation to receiving a donation.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The donation is <code>AVAILABLE</code> or <code>MATCHED</code>. The caller's organisation has been <strong>verified</strong> by an administrator.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is <code>ACCEPTED</code> and bound to the organisation. It leaves the open pool and appears to couriers as an unclaimed pickup.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation selects a donation from the open pool and accepts it.</li>
+<li>System confirms the move to <code>ACCEPTED</code> is legal from the donation's current
+   state.</li>
+<li>System confirms the caller's role may set <code>ACCEPTED</code>.</li>
+<li>System resolves the accepting organisation from the caller's own account.</li>
+<li>System confirms the organisation is verified.</li>
+<li>System binds the organisation to the donation, increments its accepted
+   count, and <em>«include» Rank Recipient Organisations</em> to freeze the score this
+   decision was made on.</li>
+<li>System appends a status event recording <code>ACCEPTED</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Organisation not verified.</strong> HTTP 403. The donation stays in the pool.
+  Verification is the platform's only check that a real organisation stands
+  behind an account before food is handed to it.</li>
+<li><strong>A2 — Another organisation accepted first.</strong> The donation has left the open
+  pool, so the transition is refused with HTTP 409.</li>
+<li><strong>A3 — Caller names a different organisation.</strong> HTTP 403. An organisation may
+  only accept as itself; naming an arbitrary organisation is an administrator
+  action (UC-27).</li>
+<li><strong>A4 — Caller's account has no organisation record.</strong> HTTP 422.</li>
+</ul>
+<hr />
+<h3 id="uc-08-claim-pickup">UC-08 — Claim Pickup</h3>
+<table>
+<thead>
+<tr>
+<th>UC-08</th>
+<th>Claim Pickup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Volunteer Courier</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Take responsibility for collecting and delivering an accepted donation.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The donation is <code>ACCEPTED</code> with no courier assigned. The caller's account has a courier profile.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The courier is bound to the pickup, which moves to <code>VOLUNTEER_ASSIGNED</code>. No other courier can claim it while the binding stands.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Courier sees the pickup in the unclaimed queue.</li>
+<li>Courier claims it.</li>
+<li>System issues a single conditional update that binds the courier <strong>only if</strong>
+   the donation is still in the expected state and is either unclaimed or
+   already this courier's.</li>
+<li>Exactly one row is affected — the claim is won.</li>
+<li>System appends a status event recording <code>VOLUNTEER_ASSIGNED</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Another courier won the race.</strong> The conditional update affects no rows.
+  The system re-reads the donation and answers HTTP 409, <em>"Another courier has
+  already claimed this pickup."</em></li>
+<li><strong>A2 — Donation changed state in the meantime.</strong> HTTP 409 naming the illegal
+  move.</li>
+<li><strong>A3 — The same courier sends a duplicate request.</strong> The claim succeeds once;
+  the state guard prevents a second status event being appended.</li>
+<li><strong>A4 — Account has no courier profile.</strong> HTTP 422. This is also why an
+  administrator cannot claim a pickup, although they may drive every other
+  transition (UC-27).</li>
+</ul>
+<blockquote>
+<p><strong>Why the check and the write are one operation.</strong> Two couriers can both read
+"unclaimed" and both decide they may have it. Only one can satisfy the
+condition <em>as the database applies the write</em>, which is where the platform
+puts it.</p>
+</blockquote>
+<hr />
+<h3 id="uc-09-record-collection">UC-09 — Record Collection</h3>
+<table>
+<thead>
+<tr>
+<th>UC-09</th>
+<th>Record Collection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Volunteer Courier</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Record that the food has been collected from the donor, leaving an attributable timestamp.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The donation is <code>VOLUNTEER_ASSIGNED</code> and the caller is the courier assigned to <em>this</em> donation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is <code>PICKED_UP</code>; the collection time is now part of the status history.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Courier collects the food from the donor.</li>
+<li>Courier records the collection in the task list.</li>
+<li>System confirms the move <code>VOLUNTEER_ASSIGNED → PICKED_UP</code> is legal and that
+   the caller's role may drive it.</li>
+<li>System re-reads the donation through the caller's own read scope, confirming
+   this courier is the assignee.</li>
+<li>System appends a status event recording <code>PICKED_UP</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — A courier who is not the assignee attempts the step.</strong> HTTP 404 rather
+  than 403 — a 403 would confirm the donation exists.</li>
+<li><strong>A2 — Donation not yet claimed, or already collected.</strong> HTTP 409.</li>
+</ul>
+<hr />
+<h3 id="uc-10-record-delivery">UC-10 — Record Delivery</h3>
+<table>
+<thead>
+<tr>
+<th>UC-10</th>
+<th>Record Delivery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Volunteer Courier</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Record that the food has been handed over at the receiving organisation.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The donation is <code>PICKED_UP</code> and the caller is the courier assigned to <em>this</em> donation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is <code>DELIVERED</code>. The acceptance-to-delivery interval is now derivable from the status history and feeds the median handover metric.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Courier hands the food over at the kitchen.</li>
+<li>Courier records the delivery.</li>
+<li>System confirms the move <code>PICKED_UP → DELIVERED</code> is legal and that the
+   caller's role may drive it.</li>
+<li>System re-reads the donation through the caller's own read scope, confirming
+   this courier is the assignee.</li>
+<li>System appends a status event recording <code>DELIVERED</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — A courier who is not the assignee attempts the step.</strong> HTTP 404.</li>
+<li><strong>A2 — Delivery recorded before collection.</strong> HTTP 409; <code>DELIVERED</code> is
+  reachable only from <code>PICKED_UP</code>.</li>
+</ul>
+<hr />
+<h3 id="uc-11-confirm-completion">UC-11 — Confirm Completion</h3>
+<table>
+<thead>
+<tr>
+<th>UC-11</th>
+<th>Confirm Completion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Confirm the food was received, closing the donation successfully.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The donation is <code>DELIVERED</code> and bound to the caller's organisation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is <code>COMPLETED</code>, which is terminal. The organisation's completion count and the courier's delivery count both increase, which changes <strong>future</strong> match rankings.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation confirms receipt of the donation.</li>
+<li>System confirms the move <code>DELIVERED → COMPLETED</code> is legal and that the
+   caller's role may drive it.</li>
+<li>System re-reads the donation through the caller's read scope, confirming this
+   is the accepting organisation.</li>
+<li>System increments the organisation's completed-donation count and the
+   courier's completed-delivery count.</li>
+<li>System appends a status event recording <code>COMPLETED</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — An unrelated organisation attempts completion.</strong> HTTP 404.</li>
+<li><strong>A2 — Donation not yet delivered.</strong> HTTP 409.</li>
+</ul>
+<hr />
+<h3 id="uc-12-release-pickup">UC-12 — Release Pickup</h3>
+<table>
+<thead>
+<tr>
+<th>UC-12</th>
+<th>Release Pickup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation <em>(or an administrator standing in)</em></td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Return a pickup to the courier queue when the assigned courier cannot complete it.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The donation is <code>VOLUNTEER_ASSIGNED</code> and bound to the caller's organisation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is <code>ACCEPTED</code> again with no courier, and is claimable by any courier including the original one. The organisation's accepted count is <strong>not</strong> incremented again and the frozen match score is <strong>not</strong> re-frozen — a release is not a second acceptance.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API only</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation releases the pickup.</li>
+<li>System confirms the caller owns this donation. Ownership is required here
+   even though ordinary acceptance is open to all, because a release acts on a
+   donation that is already somebody's.</li>
+<li>System clears the courier assignment so the pickup becomes visible and
+   claimable again.</li>
+<li>System appends a status event recording <code>ACCEPTED</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — A peer organisation attempts the release.</strong> HTTP 404; the binding is
+  untouched, and in particular the peer cannot take ownership of the donation
+  this way.</li>
+<li><strong>A2 — The assigned courier tries to release themselves.</strong> Refused on role —
+  <code>ACCEPTED</code> is not a transition a courier may drive.</li>
+</ul>
+<hr />
+<h3 id="uc-13-cancel-donation">UC-13 — Cancel Donation</h3>
+<table>
+<thead>
+<tr>
+<th>UC-13</th>
+<th>Cancel Donation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Donor <em>(or an administrator)</em></td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Withdraw a donation that can no longer be given.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller posted this donation. The donation is <code>AVAILABLE</code>, <code>MATCHED</code>, <code>ACCEPTED</code>, <code>VOLUNTEER_ASSIGNED</code> or <code>PICKED_UP</code>.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation is <code>CANCELLED</code>, which is terminal. It counts towards neither the rescue rate nor the expiry-loss rate.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API only</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Donor cancels the donation.</li>
+<li>System confirms the move to <code>CANCELLED</code> is legal from the current state and
+   that the caller's role may drive it.</li>
+<li>System re-reads the donation through the donor's read scope, confirming
+   ownership.</li>
+<li>System appends a status event recording <code>CANCELLED</code>.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — A different donor attempts cancellation.</strong> HTTP 404.</li>
+<li><strong>A2 — Donation already delivered, completed, expired or cancelled.</strong> HTTP
+  409; cancellation is not reachable from those states.</li>
+<li><strong>A3 — A recipient organisation or courier attempts cancellation.</strong> HTTP 403
+  on role.</li>
+</ul>
+<hr />
+<h2 id="4-matching-and-explainability">4. Matching and Explainability</h2>
+<h3 id="uc-16-review-match-explanation">UC-16 — Review Match Explanation</h3>
+<table>
+<thead>
+<tr>
+<th>UC-16</th>
+<th>Review Match Explanation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Donor</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Understand <em>why</em> a donation was matched to a particular organisation, rather than being given a bare percentage.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is entitled to read the donation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>None — this is a read.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Donor opens the match analysis for one of their donations.</li>
+<li>System applies the same read scope the donation itself uses — seeing the
+   reasoning is seeing the donation.</li>
+<li>System ranks the eligible organisations and returns, for each, the overall
+   score together with its five component scores — distance, quantity fit,
+   capacity headroom, deadline feasibility and reliability — plus the
+   human-readable reasons behind them.</li>
+<li>The portal presents the leading match with its breakdown.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Donation not readable by the caller.</strong> HTTP 404.</li>
+<li><strong>A2 — No eligible organisation.</strong> An empty ranking is returned, not an error.</li>
+<li><strong>A3 — Reader is not the organisation being scored.</strong> The pairing is still
+  ranked, but it is scored from a deliberately coarsened position and the true
+  distance is withheld rather than approximated. A donor chooses the donation's
+  own location, so publishing exact distances would let a kitchen's withheld
+  address be recovered by measuring from several chosen points.</li>
+</ul>
+<blockquote>
+<p><strong>Why a transparent heuristic.</strong> The ranking is a published weighted sum over
+five normalised criteria, not a learned model, precisely so that a score can
+always be taken apart and checked by hand.</p>
+</blockquote>
+<hr />
+<h2 id="5-standing-demand">5. Standing Demand</h2>
+<h3 id="uc-17-post-standing-requirement">UC-17 — Post Standing Requirement</h3>
+<table>
+<thead>
+<tr>
+<th>UC-17</th>
+<th>Post Standing Requirement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Publish an ongoing need so donors can see demand before matching supply to it.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller's account is bound to a recipient organisation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The need is active on the organisation's own board, and — if the organisation is verified — on every donor's needs board.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation supplies food type, quantity needed, unit, beneficiary count,
+   urgency, whether the need recurs daily, and free-text notes.</li>
+<li>System creates the requirement against the caller's own organisation, active
+   by default.</li>
+<li>System returns the requirement, carrying the posting organisation's
+   verification state so a donor board can label the card accordingly.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — An administrator attempts to post.</strong> The role gate admits them, but an
+  administrator account is not bound to any organisation, so the system answers
+  HTTP 422.</li>
+<li><strong>A2 — Invalid quantity or empty food type.</strong> HTTP 422.</li>
+</ul>
+<blockquote>
+<p><strong>Note.</strong> A standing requirement is a demand signal for donors. It is <strong>not</strong>
+an input to the matcher, which scores donations against organisations only.</p>
+</blockquote>
+<hr />
+<h3 id="uc-18-revise-retire-or-reopen-need">UC-18 — Revise, Retire or Reopen Need</h3>
+<table>
+<thead>
+<tr>
+<th>UC-18</th>
+<th>Revise, Retire or Reopen Need</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Keep the needs board honest: correct a need, take a met need off the board, or put a retired need back.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The requirement belongs to the caller's organisation.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>A retired need leaves the donor board immediately; the row is kept either way, so demand history survives and the need can be reopened later.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation edits a need, or marks it retired or reopened.</li>
+<li>System resolves the requirement <strong>within the caller's organisation only</strong>.</li>
+<li>System applies the supplied fields. Marking it inactive retires it; marking
+   it active puts it back on the board.</li>
+<li>System returns the updated requirement.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Another organisation's requirement identifier.</strong> HTTP 404,
+  indistinguishable from an identifier that never existed.</li>
+<li><strong>A2 — An explicit null for a field.</strong> The field is left alone rather than
+  cleared: no requirement field is nullable, so null cannot mean "clear this".</li>
+<li><strong>A3 — A donor or courier attempts the edit.</strong> HTTP 403 on role.</li>
+</ul>
+<blockquote>
+<p><strong>One flag, two meanings.</strong> A need that has been met and a need that no longer
+applies are both simply off the board; the model carries a single lifecycle
+flag rather than a separate "fulfilled" state.</p>
+</blockquote>
+<hr />
+<h3 id="uc-19-browse-needs-board">UC-19 — Browse Needs Board</h3>
+<table>
+<thead>
+<tr>
+<th>UC-19</th>
+<th>Browse Needs Board</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Donor</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>See what organisations currently need, in order to decide what to cook or set aside.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is authenticated as a donor.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>None — this is a read.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Donor opens the needs board.</li>
+<li>System returns active requirements posted by <strong>verified</strong> organisations,
+   newest first.</li>
+<li>The portal renders each need with its organisation, urgency and beneficiary
+   count.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Donor asks for retired needs as well.</strong> The request is ignored for
+  donors. A retired need is not an offer and a donor has no action on one, so
+  this is a permission rather than a filter the caller may choose.</li>
+<li><strong>A2 — A courier calls the same endpoint.</strong> An empty list. Standing demand is
+  not an input to a courier's work.</li>
+<li><strong>A3 — No verified organisation has posted a need.</strong> An empty board, not an
+  error.</li>
+</ul>
+<blockquote>
+<p><strong>Why verification gates the board.</strong> Verification is the same gate the
+matcher applies, so a donor is never shown a need from an organisation that
+could not have received the donation anyway.</p>
+</blockquote>
+<hr />
+<h2 id="6-profiles-and-monitoring">6. Profiles and Monitoring</h2>
+<h3 id="uc-20-maintain-organisation-profile">UC-20 — Maintain Organisation Profile</h3>
+<table>
+<thead>
+<tr>
+<th>UC-20</th>
+<th>Maintain Organisation Profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Recipient Organisation</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Complete or correct the organisation's profile so it can be matched accurately.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is a recipient organisation account with an organisation record.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The revised capacity and location feed the ranking heuristic. Verification status is unchanged.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Organisation opens its profile.</li>
+<li>Organisation revises name, type, address, capacity, contact person or phone.</li>
+<li>System applies only the supplied fields and returns the updated record.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Caller attempts to mark itself verified.</strong> The field is absent from the
+  update schema; an organisation cannot vouch for itself (see UC-24).</li>
+<li><strong>A2 — Account has no organisation record.</strong> HTTP 422.</li>
+</ul>
+<blockquote>
+<p><strong>Known limitation.</strong> The API accepts latitude and longitude here, but the
+portal's profile form does not send them and the project carries no geocoder,
+so an organisation created entirely through the web interface has no
+coordinates — and an organisation without coordinates cannot be matched at
+all. Coordinates can currently be supplied only through the API or seed data.</p>
+</blockquote>
+<hr />
+<h3 id="uc-21-manage-courier-availability">UC-21 — Manage Courier Availability</h3>
+<table>
+<thead>
+<tr>
+<th>UC-21</th>
+<th>Manage Courier Availability</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Volunteer Courier</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Go on or off duty and keep one's base location current.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is a courier account with a courier profile.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The courier's availability and base location are updated. Delivery count and rating are unchanged.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Courier opens their profile.</li>
+<li>Courier toggles availability and/or edits their base location.</li>
+<li>System applies the supplied fields and returns the updated profile.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Caller attempts to set delivery count or rating.</strong> Those fields are
+  absent from the update schema: they are earned through completed runs, so
+  they are the server's to maintain, not the courier's.</li>
+<li><strong>A2 — Account has no courier profile.</strong> HTTP 422.</li>
+</ul>
+<blockquote>
+<p><strong>Availability is advisory.</strong> Going off duty changes what organisations see on
+the roster; it does not remove the courier's existing pickups, and open
+pickups remain claimable.</p>
+</blockquote>
+<hr />
+<h3 id="uc-22-view-donations-role-scoped">UC-22 — View Donations (role-scoped)</h3>
+<table>
+<thead>
+<tr>
+<th>UC-22</th>
+<th>View Donations (role-scoped)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Registered User</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>See the donations relevant to one's own part in the process, and nothing beyond it.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is authenticated.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>None — this is a read.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>User opens a dashboard or donation list.</li>
+<li>System applies the read scope for the caller's role:
+   - <strong>Donor</strong> — the donations they posted, and nothing else.
+   - <strong>Recipient Organisation</strong> — the open pool every organisation is invited to
+     consider, plus the donations bound to their own organisation.
+   - <strong>Volunteer Courier</strong> — pickups waiting for a courier, plus every donation
+     they are the courier for, in whatever state.
+   - <strong>Administrator</strong> — unrestricted.</li>
+<li>System optionally narrows further by status, or to the caller's own records.</li>
+<li>The portal renders the list, ordered by pickup deadline.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Caller requests a donation outside their scope by identifier.</strong> HTTP
+  404. The scope is applied inside the query, so an unauthorised identifier is
+  indistinguishable from one that does not exist.</li>
+<li><strong>A2 — A role with no scope defined.</strong> Nothing is returned. The system fails
+  closed: a role added later reads nothing until it is explicitly given a scope.</li>
+</ul>
+<hr />
+<h3 id="uc-23-view-platform-metrics">UC-23 — View Platform Metrics</h3>
+<table>
+<thead>
+<tr>
+<th>UC-23</th>
+<th>View Platform Metrics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Registered User</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>See the platform's measured impact and responsiveness.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller is authenticated.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>None — this is a read.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>User opens an impact or analytics screen.</li>
+<li>System derives the figures from the append-only status history: total and
+   completed donations, meals delivered, active and expired donations,
+   organisation and courier counts, median time-to-claim, median handover time,
+   rescue rate and expiry-loss rate.</li>
+<li>The portal renders the figures.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Not enough history to compute a median or rate.</strong> Those figures are
+  returned as absent rather than as zero, so an empty platform is not reported
+  as a failing one.</li>
+</ul>
+<blockquote>
+<p><strong>Attributability.</strong> Every figure is computed from status events stamped by
+the server at the moment of each transition. Nothing here is self-reported,
+which is what makes the evaluation metrics defensible. Note that the metrics
+are platform-wide and are not narrowed per role.</p>
+</blockquote>
+<hr />
+<h2 id="7-administration">7. Administration</h2>
+<h3 id="uc-24-verify-or-revoke-organisation">UC-24 — Verify or Revoke Organisation</h3>
+<table>
+<thead>
+<tr>
+<th>UC-24</th>
+<th>Verify or Revoke Organisation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Platform Administrator</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Vouch for a real organisation, or withdraw that endorsement.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller holds an administrator token.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The organisation's verification state is changed. Verification decides whether it is ranked, whether it may accept donations, and whether its standing needs reach donors.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Administrator reviews the organisation directory and the count awaiting
+   verification.</li>
+<li>Administrator marks an organisation verified.</li>
+<li>System records the verification and returns the organisation.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Unknown organisation identifier.</strong> HTTP 404.</li>
+<li><strong>A2 — Revocation.</strong> The same operation in reverse withdraws verification. The
+  organisation immediately drops out of the matcher and can no longer accept
+  donations; donations it has already accepted are unaffected.</li>
+<li><strong>A3 — A non-administrator calls the route.</strong> HTTP 403 at the router-level
+  gate that guards every administration path.</li>
+</ul>
+<blockquote>
+<p><strong>Why a person decides.</strong> Verification is a human judgement — somebody
+confirmed this kitchen is real and is where it claims to be — so it is an
+administrator action rather than something an organisation asserts about
+itself.</p>
+</blockquote>
+<hr />
+<h3 id="uc-25-run-expiry-sweep">UC-25 — Run Expiry Sweep</h3>
+<table>
+<thead>
+<tr>
+<th>UC-25</th>
+<th>Run Expiry Sweep</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Platform Administrator</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Move donations nobody claimed before their deadline into a terminal state, so losses are recorded rather than left looking available.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller holds an administrator token.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>Overdue unclaimed donations are <code>EXPIRED</code> and counted in the expiry-loss rate.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Administrator triggers the sweep.</li>
+<li>System selects every donation still <code>AVAILABLE</code> or <code>MATCHED</code> whose pickup
+   deadline has passed.</li>
+<li>For each, the system appends a status event recording <code>EXPIRED</code>, noting that
+   the deadline passed with no recipient.</li>
+<li>System reports how many donations expired.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Nothing is overdue.</strong> The sweep reports zero. Not an error.</li>
+<li><strong>A2 — A donation has already been accepted.</strong> It is left untouched; only
+  unclaimed donations expire.</li>
+</ul>
+<blockquote>
+<p><strong>No scheduler exists.</strong> The sweep runs only when a person triggers it. Its
+status events carry <strong>no actor</strong>, because no person performed the transition.</p>
+</blockquote>
+<hr />
+<h3 id="uc-26-manage-user-accounts">UC-26 — Manage User Accounts</h3>
+<table>
+<thead>
+<tr>
+<th>UC-26</th>
+<th>Manage User Accounts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Platform Administrator</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Create accounts of any role, and suspend, restore, rename or re-role existing ones.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller holds an administrator token.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The account exists or is changed as requested. At least one active administrator always remains.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API only</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Administrator supplies name, email, password and role for a new account —
+   including, uniquely on this path, the administrator role itself.</li>
+<li>System confirms no account exists for that email and creates the account.</li>
+<li>System mirrors the side effects of self-registration, so the account is not a
+   second-class one missing its profile: a courier account gains a courier
+   profile, and an organisation account gains an organisation record that is
+   <strong>already verified</strong>, because an administrator creating it <em>is</em> the vouching.</li>
+<li>To change an existing account, the administrator suspends, restores, renames
+   or re-roles it, and the system applies the change.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — Email already registered.</strong> HTTP 409.</li>
+<li><strong>A2 — Administrator suspends or demotes their own account.</strong> HTTP 409, refused.</li>
+<li><strong>A3 — The change would remove the last active administrator.</strong> HTTP 409; the
+  administrator must appoint another one first.</li>
+<li><strong>A4 — The very first administrator.</strong> Cannot come from this use case, because
+  calling it already requires being one. It is created from the command line
+  instead.</li>
+</ul>
+<blockquote>
+<p><strong>Portal status.</strong> These operations are implemented, authorised and reachable
+through the API, but no screen in the web portal currently drives them.</p>
+</blockquote>
+<hr />
+<h3 id="uc-27-override-lifecycle-transition">UC-27 — Override Lifecycle Transition</h3>
+<table>
+<thead>
+<tr>
+<th>UC-27</th>
+<th>Override Lifecycle Transition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Primary actor</strong></td>
+<td>Platform Administrator</td>
+</tr>
+<tr>
+<td><strong>Goal</strong></td>
+<td>Act on any donation as a stand-in, so support staff can unblock a handover that the parties themselves cannot complete.</td>
+</tr>
+<tr>
+<td><strong>Preconditions</strong></td>
+<td>The caller holds an administrator token.</td>
+</tr>
+<tr>
+<td><strong>Postconditions</strong></td>
+<td>The donation reaches the requested state and the status event records the administrator as the actor.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Implemented — API and portal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Main Success Scenario</strong></p>
+<ol>
+<li>Administrator opens a donation, which they may read regardless of who it
+   belongs to.</li>
+<li>Administrator drives a lifecycle transition on it — accepting on an
+   organisation's behalf (<em>«extend» UC-07</em>), releasing a pickup (<em>«extend»
+   UC-12</em>), recording collection or delivery, confirming completion, cancelling,
+   or marking a donation expired.</li>
+<li>System accepts the transition: the administrator role is admitted for every
+   target state, and the ownership rule that constrains other roles does not
+   narrow an administrator's unrestricted read scope.</li>
+<li>System appends a status event attributing the change to the administrator.</li>
+</ol>
+<p><strong>Alternative / Exception Flows</strong></p>
+<ul>
+<li><strong>A1 — The transition is illegal from the donation's current state.</strong> HTTP
+  409. An administrator may bypass <em>who</em> drives a transition, never <em>which</em>
+  transitions are legal.</li>
+<li><strong>A2 — Administrator tries to claim a pickup.</strong> HTTP 422. Claiming binds the
+  caller's own courier profile, and an administrator has none (see UC-08).</li>
+<li><strong>A3 — Administrator tries to post or edit a standing requirement.</strong> HTTP 422:
+  an administrator is not bound to any organisation (see UC-17).</li>
+</ul>
+<blockquote>
+<p><strong>Broad but not total.</strong> The override covers the donation lifecycle. It does
+not make an administrator a member of every role — two paths still refuse
+them, for structural reasons rather than policy ones.</p>
+</blockquote>
+<hr />
+<h2 id="8-use-cases-intentionally-without-a-scenario">8. Use Cases Intentionally Without a Scenario</h2>
+<p>Three use cases appear in the Use Case Diagram but are deliberately not given
+standalone scenarios, because no actor initiates them. Each is a behaviour of a
+use case that <em>is</em> initiated by an actor, and is documented as a numbered step
+inside it.</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Name</th>
+<th>Why it has no scenario</th>
+<th>Documented as a step in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UC-02</td>
+<td>Provision Role Profile</td>
+<td><code>«include»</code> fragment — it always runs as part of registration and can never be invoked on its own.</td>
+<td>UC-01, step 5</td>
+</tr>
+<tr>
+<td>UC-14</td>
+<td>Rank Recipient Organisations</td>
+<td><code>«include»</code> fragment — it always runs when a donation is posted and again when one is first accepted.</td>
+<td>UC-05 step 5; UC-07 step 6</td>
+</tr>
+<tr>
+<td>UC-15</td>
+<td>Show Compatibility Score</td>
+<td><code>«extend»</code> fragment — conditional behaviour attached to browsing, never initiated by itself.</td>
+<td>UC-06, step 3</td>
+</tr>
+</tbody>
+</table>
+<p>This is why the twenty-seven use cases in the diagram yield twenty-four
+scenarios here. No use case has been dropped, renamed or invented: every
+identifier and name above matches the diagram exactly.</p>
+<hr />
+<h2 id="9-traceability">9. Traceability</h2>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Use cases</th>
+<th>Primary actor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2 — Account and Access</td>
+<td>UC-01, UC-03, UC-04</td>
+<td>Guest, Registered User</td>
+</tr>
+<tr>
+<td>3 — Donation Lifecycle</td>
+<td>UC-05, UC-06, UC-07, UC-08, UC-09, UC-10, UC-11, UC-12, UC-13</td>
+<td>Donor, Recipient Organisation, Volunteer Courier</td>
+</tr>
+<tr>
+<td>4 — Matching and Explainability</td>
+<td>UC-16</td>
+<td>Donor</td>
+</tr>
+<tr>
+<td>5 — Standing Demand</td>
+<td>UC-17, UC-18, UC-19</td>
+<td>Recipient Organisation, Donor</td>
+</tr>
+<tr>
+<td>6 — Profiles and Monitoring</td>
+<td>UC-20, UC-21, UC-22, UC-23</td>
+<td>Recipient Organisation, Volunteer Courier, Registered User</td>
+</tr>
+<tr>
+<td>7 — Administration</td>
+<td>UC-24, UC-25, UC-26, UC-27</td>
+<td>Platform Administrator</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Verified against:</strong> <code>code/foodlink/models.py</code> (states and transitions),
+<code>routers/auth.py</code>, <code>routers/donations.py</code>, <code>routers/organisations.py</code>,
+<code>routers/admin.py</code>, <code>routers/metrics.py</code>, <code>matching.py</code>, <code>schemas.py</code>, and the
+lifecycle tests under <code>code/tests/</code>. Portal availability was confirmed against
+<code>frontend/src/App.tsx</code>, <code>lib/api.ts</code> and the relevant pages.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 12, 2026 17:28:26 UTC">September 12, 2026</span>
+  </span>
+
+    
+    
+    
+      
+  
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Contributors">
+      
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m0 10c4.42 0 8 1.79 8 4v2H4v-2c0-2.21 3.58-4 8-4"/></svg>
+      
+    </span>
+    <nav>
+      
+        <a href="mailto:rishigarg4825@gmail.com">Rishi Garg</a>
+    </nav>
+  </span>
+
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../FoodLink-UML/" class="md-footer__link md-footer__link--prev" aria-label="Previous: FoodLink AI — UML System Design Documentation">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                FoodLink AI — UML System Design Documentation
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 <a href='https://bvraghav.com/'>Raghav B. Venkataramaiyer</a> &lt;<code style='color:inherit; background:transparent'>bv.raghav</code>&gt;
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/tiet-ucs503/ucs503p-202627odd-template" target="_blank" rel="noopener" title="Git Repo for UCS503P Project Template" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.footer", "header.autohide", "content.tabs.link", "navigation.tracking", "navigation.top", "toc.integrate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+      
+        <script src="../../javascript/arithmatex.js"></script>
+      
+    
+  </body>
+</html>

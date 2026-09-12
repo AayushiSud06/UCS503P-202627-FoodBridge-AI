@@ -1,0 +1,229 @@
+@startuml FoodLink-ClassDiagram
+' ─────────────────────────────────────────────────────────────────────────────
+'  FoodLink AI — Domain Class Diagram
+'
+'  Six persistent entities and two enumerations, taken verbatim from
+'  `code/foodlink/models.py`; plus the matching service and its result object
+'  from `code/foodlink/matching.py`. Multiplicities follow the nullability of
+'  the actual foreign-key columns.
+'
+'  Framework, schema (Pydantic DTO), router and helper classes are deliberately
+'  omitted — see docs/uml/FoodLink-UML.md § 5.3.
+' ─────────────────────────────────────────────────────────────────────────────
+
+title FoodLink AI — Domain Class Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #6E6257
+skinparam class {
+  BackgroundColor #FDF7EE
+  BorderColor #B07D34
+  FontColor #3A322A
+  HeaderBackgroundColor #F5EBDA
+}
+skinparam enum {
+  BackgroundColor #F2F5FA
+  BorderColor #5A7CA8
+}
+skinparam note {
+  BackgroundColor #F5F7F5
+  BorderColor #9FB3A5
+}
+hide circle
+
+' ── Enumerations ─────────────────────────────────────────────────────────────
+enum UserRole <<enumeration>> {
+  donor
+  ngo
+  volunteer
+  admin
+}
+
+enum DonationStatus <<enumeration>> {
+  AVAILABLE
+  MATCHED
+  ACCEPTED
+  VOLUNTEER_ASSIGNED
+  PICKED_UP
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+' ── Entities ─────────────────────────────────────────────────────────────────
+class User <<entity>> {
+  + id : int <<PK>>
+  + name : str
+  + email : str <<unique>>
+  - password_hash : str
+  + role : UserRole
+  + organization : str [0..1]
+  + phone : str [0..1]
+  + is_active : bool = true
+  + created_at : datetime
+  __ derived __
+  + /initials : str
+  + /recipient_id : int [0..1]
+  + /volunteer_id : int [0..1]
+}
+
+class Recipient <<entity>> {
+  + id : int <<PK>>
+  + user_id : int [0..1] <<FK>>
+  + name : str
+  + type : str = "Community Kitchen"
+  + location : str
+  + latitude : float [0..1]
+  + longitude : float [0..1]
+  + capacity : int = 100
+  + contact_person : str [0..1]
+  + phone : str [0..1]
+  + is_verified : bool = false
+  + accepted_donations : int = 0
+  + completed_donations : int = 0
+  __ derived __
+  + /reliability_score : int
+}
+
+class Volunteer <<entity>> {
+  + id : int <<PK>>
+  + user_id : int <<FK, unique>>
+  + location : str
+  + latitude : float [0..1]
+  + longitude : float [0..1]
+  + is_available : bool = true
+  + completed_deliveries : int = 0
+  + rating : float = 5.0
+}
+
+class Donation <<entity>> {
+  + id : int <<PK>>
+  + donor_id : int <<FK → User>>
+  + recipient_id : int [0..1] <<FK>>
+  + volunteer_id : int [0..1] <<FK>>
+  --
+  + food_name : str
+  + category : str
+  + quantity : int
+  + unit : str = "Meals"
+  + storage_type : str = "Room Temperature"
+  + description : str
+  + image_url : str [0..1]
+  --
+  + location : str
+  + latitude : float
+  + longitude : float
+  + prepared_at : datetime [0..1]
+  + pickup_deadline : datetime
+  --
+  + status : DonationStatus = AVAILABLE
+  + match_score : int [0..1]
+  + created_at : datetime
+  __ operations __
+  + timestamp_of(status) : datetime [0..1]
+}
+
+class StatusEvent <<entity>> {
+  + id : int <<PK>>
+  + donation_id : int <<FK>>
+  + actor_id : int [0..1] <<FK → User>>
+  + from_status : DonationStatus [0..1]
+  + to_status : DonationStatus
+  + note : str [0..1]
+  + occurred_at : datetime <<server-stamped>>
+}
+
+class Requirement <<entity>> {
+  + id : int <<PK>>
+  + recipient_id : int <<FK>>
+  + food_type : str
+  + quantity_needed : int
+  + unit : str = "Meals"
+  + beneficiary_count : int = 0
+  + urgency : str = "Medium"
+  + daily_recurring : bool = false
+  + notes : str
+  + is_active : bool = true
+  + created_at : datetime
+}
+
+' ── Matching service ─────────────────────────────────────────────────────────
+class Matching <<service>> {
+  + WEIGHTS : distance .25 · quantity .25 ·\n  capacity .20 · deadline .15 · reliability .15
+  + score_pair(donation, recipient, radius_km) : MatchResult [0..1]
+  + rank_recipients(donation, recipients, radius_km, limit) : MatchResult [*]
+  + haversine_km(lat1, lon1, lat2, lon2) : float
+  + blurred_coords(latitude, longitude) : (float, float)
+}
+
+class MatchResult <<value object>> {
+  + recipient_id : int
+  + recipient_name : str
+  + overall_score : int
+  + distance_km : float [0..1]
+  + distance_score : int
+  + quantity_score : int
+  + capacity_score : int
+  + deadline_score : int
+  + reliability_score : int
+  + reasons : str [*]
+}
+
+' ── Relationships ────────────────────────────────────────────────────────────
+User    "0..1" -- "0..1" Recipient  : acts for >
+User    "1"    -- "0..1" Volunteer  : acts as >
+User    "1"    -- "0..*" Donation   : posts >
+Recipient "0..1" -- "0..*" Donation : accepts >
+Volunteer "0..1" -- "0..*" Donation : carries >
+
+Donation  "1" *-- "0..*" StatusEvent  : records >
+Recipient "1" *-- "0..*" Requirement  : publishes >
+
+User "0..1" -- "0..*" StatusEvent : performed by >
+
+User     ..> UserRole
+Donation ..> DonationStatus
+StatusEvent ..> DonationStatus
+
+Matching ..> Donation   : <<use>>
+Matching ..> Recipient  : <<use>>
+Matching ..> MatchResult : <<create>>
+
+' ── Modelling notes ──────────────────────────────────────────────────────────
+note top of User
+  **No domain inheritance.** A role is an
+  enumerated attribute on one `users` table,
+  not a class hierarchy. `Recipient` and
+  `Volunteer` are *profile* records associated
+  with an account, not subclasses of it.
+end note
+
+note right of Requirement
+  `Requirement` has **no** association with
+  `Donation` and is not read by `Matching`.
+  The needs board makes demand visible to
+  donors; it does not drive the matcher.
+end note
+
+note bottom of MatchResult
+  Transient — computed per request and never
+  persisted. Only the integer `overall_score`
+  survives, frozen into `Donation.match_score`
+  when the donation is posted and again when
+  it is first accepted.
+end note
+
+note bottom of Matching
+  `Recipient./reliability_score` feeds the
+  ranking, and `accepted_donations` /
+  `completed_donations` are maintained by the
+  donation lifecycle — so completing a
+  donation changes future match scores.
+end note
+
+@enduml
