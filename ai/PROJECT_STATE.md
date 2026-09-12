@@ -2,8 +2,8 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built), `TASKS.md`
 > (what is left, prioritised), `DECISIONS.md` (why it is built that way).
-> **Last verified: 2026-09-10, `master` at `c65c65f` plus the uncommitted Task 38
-> (P1-2) changes.** The full health audit of that date ran against `640af0c`. This file
+> **Last verified: 2026-09-12, `master` at `be831b8` plus the uncommitted Task 39
+> (P1-3) changes.** The full health audit of that date ran against `640af0c`. This file
 > describes the present; how the project got here is in git history and `DECISIONS.md`.
 
 ## What this project is
@@ -33,11 +33,12 @@ separate, undecided work.
      D-53): the open pool now requires a verified organisation. ⚠️ The `volunteer` half
      (unclaimed pickups) is open, pending DQ-1.
   2. ✅ `Recipient.is_verified` used to survive the organisation editing its own name and
-     coordinates. Fixed by Task 38 (uncommitted, D-54): a real change clears it until an
+     coordinates. Fixed by Task 38 (`be831b8`, D-54): a real change clears it until an
      administrator verifies again.
-  3. Every lifecycle transition except the courier claim is read-then-write, and **races
-     on SQLite too** — two kitchens accepting together both get `200`. The docs' claim that
-     SQLite makes this inert was wrong.
+  3. ✅ Every lifecycle transition except the courier claim used to be read-then-write, and
+     raced on SQLite too — two kitchens accepting together both got `200`. Fixed by Task 39
+     (uncommitted, D-55): every status write is now a conditional UPDATE, so the loser gets
+     a 409 and its side effects roll back.
   4. A **donor's cancellation counts against the kitchen's reliability** — three
      accept→cancel cycles take a kitchen from the 85 prior to 0.
   5. **Phone photos break donation creation**: the 256 KiB `image_url` cap has no
@@ -53,9 +54,9 @@ separate, undecided work.
 | Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle still open (P2-1) |
 | Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48). ⚠️ residual copy: mobile header hard-codes seeded org names, donor create page still has a "Future Intelligence" note (P2-4) |
 | Frontend mobile | ✅ `/m/*` screens exist; ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20) |
-| Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP (process-local). No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53); a real name/coordinate edit clears verification (D-54, uncommitted) |
-| Concurrency | ✅ courier claim atomic (D-28). ⚠️ all other transitions racy (P1-3) |
-| Backend tests | ✅ **345 passed** (~4 min, bcrypt-bound), 21 files |
+| Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP (process-local). No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53); a real name/coordinate edit clears verification (D-54) |
+| Concurrency | ✅ every lifecycle status write is a conditional UPDATE — the courier claim (D-28) and, since Task 39, every other transition (D-55, uncommitted). ⚠️ the expiry sweep writes `EXPIRED` unguarded (P3) |
+| Backend tests | ✅ **352 passed** (~4 min, bcrypt-bound), 22 files |
 | Frontend tests | ✅ **122 passed** over 15 files (~3 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
 | CI | ✅ backend `pytest` + `alembic upgrade head && alembic check`; frontend `npm test` + `npm run build` |
 | Migrations | ✅ Alembic, one revision `ae4636b1e6d4`; `alembic check` clean; applied in the app lifespan |
@@ -69,7 +70,8 @@ separate, undecided work.
 
 | Commit | Work | Decision |
 |---|---|---|
-| uncommitted | Task 38 — P1-2: a real name/coordinate change voids an organisation's verification | D-54 |
+| uncommitted | Task 39 — P1-3: every lifecycle status write is a conditional UPDATE | D-55 |
+| `be831b8` | Task 38 — P1-2: a real name/coordinate change voids an organisation's verification | D-54 |
 | `c65c65f` | Task 37 — P1-1a: unverified NGOs excluded from the open donation pool | D-53 |
 | `640af0c` | Task 36 — requirement-aware ranking: tie-break + reason line, score untouched | D-52 |
 | `ca8bef6`, `df74466` | Task 35 — admin Analytics "Future Intelligence" section and component removed | D-48 |
@@ -102,9 +104,8 @@ recipient read scope (`16497ea`), auth rate limiting (`91544e3`), atomic courier
 
 ## Immediate next step
 
-Review Task 38 (P1-2). Then P1-3 (conditional transition writes) and P1-5 (image resize),
-which need no product input; P1-1b and P1-4 each need one decision (DQ-1, DQ-3) recorded in
-`TASKS.md` → *Decisions needed* first.
+Review Task 39 (P1-3). Then P1-5 (image resize), which needs no product input; P1-1b and
+P1-4 each need one decision (DQ-1, DQ-3) recorded in `TASKS.md` → *Decisions needed* first.
 
 ## Conventions worth preserving
 

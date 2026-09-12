@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-10, `master` at `c65c65f`, plus the
-> uncommitted Task 38 (P1-2) changes.** The full health audit of that date was run against
+> **Verified against the repository on 2026-09-12, `master` at `be831b8`, plus the
+> uncommitted Task 39 (P1-3) changes.** The full health audit of that date was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,8 +18,9 @@
 
 ## Current
 
-**Task 38 · P1-2 — implemented, uncommitted, awaiting review.** A real change to an
-organisation's name or coordinates clears its verification (D-54). See P1-2 below.
+**Task 39 · P1-3 — implemented, uncommitted, awaiting review.** Every lifecycle status
+write is now a conditional UPDATE, so one transition can happen only once (D-55). See P1-3
+below.
 
 ## P0 — urgent
 
@@ -50,7 +51,7 @@ organisation's name or coordinates clears its verification (D-54). See P1-2 belo
 
 ### P1-2 · Verification survives the organisation editing what was verified
 - **Category:** SECURITY ISSUE (trust model)
-- ✅ **FIXED by Task 38 (uncommitted, awaiting review), D-54.** `update_my_recipient`
+- ✅ **FIXED by Task 38 (`be831b8`), D-54.** `update_my_recipient`
   clears `is_verified` in the same commit when a submitted `name`, `latitude` or
   `longitude` differs from the stored value (`organisations.VERIFIED_IDENTITY_FIELDS`).
   Values are compared, so resubmitting them is a no-op; `type`, `location` (address text),
@@ -67,22 +68,20 @@ organisation's name or coordinates clears its verification (D-54). See P1-2 belo
 
 ### P1-3 · Lifecycle transitions other than the claim are lost-update races — on SQLite too
 - **Category:** DATA INTEGRITY ISSUE
-- **Why it matters:** `update_status` reads the row, checks `ALLOWED_TRANSITIONS` in Python
-  and writes unconditionally. Only `_claim_pickup` carries its condition in the `UPDATE`
-  (D-28). ⚠️ D-28 and `ARCHITECTURE.md` said SQLite serialises the rest "so this is inert" —
-  **wrong**: pysqlite holds no lock across a plain `SELECT`, which is exactly why the
-  pre-D-28 claim race reproduced on SQLite.
-- **Subsystem:** `routers/donations.update_status` / `_record`
-- **Evidence:** repro on a file-backed DB built by the real migrations: kitchen B's
-  acceptance commits between kitchen A's read and write (same interleaving technique as
-  `test_courier_claim.py`) → A gets `200` and the donation, B's `accepted_donations` stays
-  incremented, two `ACCEPTED` events are recorded. Cancel-vs-accept and similar pairs share
-  the shape.
-- **Smallest scope:** make the status write conditional — `UPDATE … WHERE id=:id AND
-  status=:from`, `rowcount != 1` → 409 — before any side effect, reusing the
-  `_claim_pickup` pattern; file-backed tests for `ACCEPTED` and one owned transition.
-- **Dependencies:** none. **Risk if postponed:** corrupted reliability counters (15% of the
-  score), duplicate ledger events, a kitchen told it owns food it does not.
+- ✅ **FIXED by Task 39 (uncommitted, awaiting review), D-55.** `_record` — the one
+  function every transition's status write goes through — now advances the status with
+  `UPDATE donations SET status=:to WHERE id=:id AND status=:from` and raises 409 on
+  `rowcount != 1`, appending no event. It runs last, immediately before the single
+  `commit()`, so a refusal rolls back the acceptance side effects (the
+  `accepted_donations` increment, the frozen `match_score`, the cleared courier) with it.
+  No business rule moved: the transition table, the role gate, ownership, the D-50 deadline
+  refusal and the verification gate all still answer first, in the same order.
+- **Evidence:** new `test_lifecycle_concurrency.py` (7 tests; 4 fail against the pre-fix
+  router, where the losing kitchen was answered `200`). Two real transactions on a
+  file-backed database, interleaved by hand as in `test_courier_claim.py`: one owner, one
+  `ACCEPTED` event, one counted acceptance, and the loser told the state it now finds.
+  Cancel-against-accept is covered too, and the database-level test is parametrised over
+  `ACCEPTED` and `COMPLETED` to show the guard is not acceptance-only.
 
 ### P1-4 · A donor's cancellation is booked as the kitchen's failure
 - **Category:** DATA INTEGRITY ISSUE
@@ -177,7 +176,12 @@ kitchens; the Available pages already say why). D-54 follow-ups: a change to `lo
 (address text) keeps verification — whether it should void it is a product question; the
 NGO profile gives no warning before a rename voids verification, and its success toast
 ("Capacity and location now feed the match ranking") is wrong when it has; the name
-comparison is exact, so a whitespace-only difference counts as a rename.
+comparison is exact, so a whitespace-only difference counts as a rename. D-55 follow-up:
+`routers/admin.expire_overdue` writes `status = EXPIRED` row by row **without** the
+conditional guard, so an acceptance that commits between its `SELECT` and its write could
+be overwritten — a narrow window (it selects only donations already past their deadline,
+which D-50 refuses to accept) on a manual admin action, but the one status write left
+unguarded.
 
 **Product features (optional)** — controlled food category on `Requirement` so D-52 can
 compare food, not only size (`R-35`, `R-32`); donor needs board on `/m/*`; needs board
@@ -248,7 +252,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 38 · P1-2: a real name/coordinate change voids verification (D-54) |
+| uncommitted | Task 39 · P1-3: every lifecycle status write is a conditional UPDATE (D-55) |
+| `be831b8` | Task 38 · P1-2: a real name/coordinate change voids verification (D-54) |
 | `c65c65f` | Task 37 · P1-1a: the open pool requires a verified organisation (D-53) |
 | `640af0c` | Task 36 · requirement-aware tie-break and reasons (D-52) |
 | `ca8bef6`, `df74466`, `cb65f38`, `db000d9` | Tasks 35–33 · the three post-login roadmap surfaces removed (D-48) |

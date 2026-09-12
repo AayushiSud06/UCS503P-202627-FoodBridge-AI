@@ -475,18 +475,67 @@ def _claim_pickup(
     return result.rowcount == 1
 
 
-def _record(db: Session, donation: Donation, to: DonationStatus, actor: User, note: str | None = None) -> None:
-    """Append a status event. This is what every timing metric is read from."""
+def _record(
+    db: Session, donation: Donation, to: DonationStatus, actor: User, note: str | None = None
+) -> None:
+    """Advance the status and append the event, or 409 if the row has moved on.
+
+    The status write carries its own precondition, in the shape `_claim_pickup`
+    has used for the courier claim since D-28: `UPDATE donations SET status = :to
+    WHERE id = :id AND status = :from`. A `rowcount` of 0 means another
+    transaction has already moved this donation out of the state this request was
+    authorised against, so the transition is refused instead of being applied on
+    top of theirs.
+
+    The check has to *be* the write. Every caller arrives here having read the row
+    and tested `ALLOWED_TRANSITIONS` in Python, so the value that authorises the
+    write was fetched before it: two kitchens can both read `AVAILABLE` and both
+    conclude they may accept. Letting the database evaluate the condition as it
+    applies the update is the only moment at which the answer is still true — see
+    `DECISIONS.md` D-55, and D-28 for the same argument at the claim.
+
+    Every side effect the caller has already performed — the `accepted_donations`
+    increment, the frozen `match_score`, the cleared courier, the completion
+    counters — is an ORM change or a statement in *this* transaction, and this
+    function is the last thing to run before the single `commit()`. So refusing
+    here discards them with the rollback rather than leaving half a transition
+    behind.
+
+    This is what every timing metric is read from, so the event is appended only
+    on the side of the guard where the transition actually happened.
+    """
+    from_status = donation.status
+    moved = db.execute(
+        update(Donation)
+        .where(Donation.id == donation.id, Donation.status == from_status)
+        .values(status=to)
+        .execution_options(synchronize_session=False)
+    )
+    if moved.rowcount != 1:
+        # Answer with what a request arriving a moment later would have been
+        # told, read from the row as it now stands rather than from the copy this
+        # request started with — the courtesy `_claim_pickup` already extends to
+        # a courier who loses a claim (D-18, D-28).
+        db.expire(donation)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot move a donation from {donation.status.value} to {to.value}",
+        )
+
     db.add(
         StatusEvent(
             donation_id=donation.id,
-            from_status=donation.status,
+            from_status=from_status,
             to_status=to,
             actor_id=actor.id,
             note=note,
         )
     )
-    donation.status = to
+    # The row already holds the new status; this session's copy does not, and
+    # re-assigning it would have the ORM write the value a second time,
+    # unguarded. Expired instead, exactly as the caller of `_claim_pickup` does
+    # with `volunteer_id`.
+    db.expire(donation, ["status"])
 
 
 @router.post("", response_model=DonationOut, status_code=status.HTTP_201_CREATED)

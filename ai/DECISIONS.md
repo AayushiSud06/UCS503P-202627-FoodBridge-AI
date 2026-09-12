@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-54. **D-01…D-53 are implemented in commits
-> up to `c65c65f`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-54 is
-> uncommitted in the working tree** (Task 38). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-55. **D-01…D-54 are implemented in commits
+> up to `be831b8`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-55 is
+> uncommitted in the working tree** (Task 39). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -35,7 +35,7 @@
 > | D-25 | CI validates, never deploys, holds no secret | in force; frontend tests run since `d611424` |
 > | D-26 | Recipient reads scoped; denial is an empty list | in force |
 > | D-27 | Per-process sliding-window auth rate limit | in force; donation creation unlimited (P2-1) |
-> | D-28 | Courier claim is a conditional UPDATE | ⚠️ "other transitions inert on SQLite" was wrong (P1-3) |
+> | D-28 | Courier claim is a conditional UPDATE | in force; generalised to every transition by D-55 |
 > | D-29 | Requirement lifecycle is `is_active` + one PATCH | in force |
 > | D-30 | Frozen `matchScore` vs live `viewerMatch` | in force |
 > | D-31 | Interface claims must be honourable; labelled roadmaps allowed | in force |
@@ -61,7 +61,8 @@
 > | D-51 | Courier history ends at `DELIVERED` | in force |
 > | D-52 | Requirements break ties and explain; never move the score | in force; verified by audit repro |
 > | D-53 | An NGO reads the open pool only once verified | in force (`c65c65f`) |
-> | D-54 | A real change to an organisation's name or pin voids its verification | uncommitted (Task 38) |
+> | D-54 | A real change to an organisation's name or pin voids its verification | in force (`be831b8`) |
+> | D-55 | Every lifecycle status write carries its own precondition | uncommitted (Task 39) |
 >
 > Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
 > against the kitchen (P1-4).
@@ -807,14 +808,13 @@ on SQLite and PostgreSQL.
   (`synchronize_session=False`, so no extra SELECT is issued), which is why the caller
   expires `volunteer_id`/`volunteer` rather than assigning them — assigning would make
   the ORM re-write the value it just wrote, unguarded.
-- ⚠️ **Only the claim is protected this way.** Every other transition still reads
-  `donation.status`, checks it in Python and writes. **Correction (audit 2026-09-10):**
-  this constraint used to say SQLite serialises those, making the race inert — it does
-  not. pysqlite holds no lock across a plain `SELECT` (the reason the pre-fix claim race
-  reproduced on SQLite), and the same interleaving against `ACCEPTED` on a migrated
-  file-backed database gave both kitchens a `200`, two `ACCEPTED` events and an inflated
-  counter for the loser. Generalising the conditional write to `update_status` is
-  `TASKS.md` P1-3.
+- ✅ **This argument now covers every transition, not only the claim (D-55).** It used to
+  read that SQLite serialised the others, making their race inert — it does not. pysqlite
+  holds no lock across a plain `SELECT` (the reason the pre-fix claim race reproduced on
+  SQLite), and the same interleaving against `ACCEPTED` gave both kitchens a `200`, two
+  `ACCEPTED` events and an inflated counter for the loser (audit 2026-09-10). Task 39 moved
+  the conditional write into `_record`, so the claim guard here is now one of two: this one
+  binds the courier, that one advances the status.
 
 ---
 
@@ -2509,3 +2509,72 @@ policy was approved by the Project Manager as the answer to DQ-2. Uncommitted (T
   ranking" (`TASKS.md` P3).
 - Donations the organisation already accepted keep their binding. What losing verification
   should do to in-flight donations is the existing open question in `TASKS.md`.
+
+---
+
+## D-55 · Every lifecycle status write carries its own precondition **[documented]**
+
+**Decision.** `routers/donations._record` — the one function every lifecycle transition's
+status write passes through — advances the status with a conditional statement,
+`UPDATE donations SET status = :to WHERE id = :id AND status = :from`, and reads
+`rowcount != 1` as having lost the transition: it raises **409** and appends no
+`StatusEvent`. D-28's claim guard is unchanged and still runs first for
+`VOLUNTEER_ASSIGNED`. Uncommitted (Task 39).
+
+**The invariant.** A donation makes each transition **at most once**, and every side effect
+of that transition lands only on the side of the guard where it actually happened: one
+`recipient_id`, one `accepted_donations` increment, one frozen `match_score`, one ledger
+row. Before this, two kitchens could both read the open pool, both be answered `200`, and
+leave two `ACCEPTED` events with the losing kitchen's counter still incremented — that
+counter being the denominator of `Recipient.reliability_score`, 15% of the ranking weight.
+Reproduced in the audit of 2026-09-10 and again by
+`test_lifecycle_concurrency.py`, whose losing request is answered `200` by the pre-fix code.
+
+**Which transitions.** All of them, because the guard is in `_record` and not in the
+acceptance branch: `ACCEPTED` in both its meanings (the acceptance and the release, D-41),
+`VOLUNTEER_ASSIGNED`, `PICKED_UP`, `DELIVERED`, `COMPLETED`, `CANCELLED`, `EXPIRED`, and the
+`MATCHED` stamp `create_donation` applies to the row it has just inserted.
+
+**Reasoning.**
+
+- **The check had to become the write**, exactly as at the claim (D-28). Every caller
+  arrives having read the row and tested `ALLOWED_TRANSITIONS` in Python, so the value that
+  authorises the write was fetched before it. Having the database evaluate the condition as
+  it applies the update is the only moment at which the answer is still true.
+- **One guard rather than one per branch.** Putting it in `_record` means a transition added
+  later cannot be added unguarded, and it moved no business rule: `ALLOWED_TRANSITIONS`,
+  `TRANSITION_ROLES`, `OWNED_TRANSITIONS`, the D-50 deadline refusal, the verification gate
+  and the read scopes all still answer first, in the same order, with the same codes.
+- **The side effects needed no separate protection.** They are ORM changes or statements in
+  the *same* transaction, and `_record` is the last thing to run before the single
+  `commit()` (D-11's write-then-refetch shape), so a refusal discards them with the
+  rollback. That is why a losing kitchen ends on `accepted_donations = 0` rather than
+  needing compensation.
+- **The loser is told what a later request would have been told.** On `rowcount` 0 the row
+  is expired and re-read, so the 409 quotes the state the donation is actually in — the
+  sequential answer, not a message invented for a race the person cannot see (D-18).
+- **Nothing new was introduced.** Same statement shape, same dialect independence and the
+  same `synchronize_session=False` handling as D-28; no `SELECT … FOR UPDATE` (SQLAlchemy
+  compiles it away on SQLite, so the lock would not exist on the engine the project tests
+  against), no schema change, no migration, no isolation-level change, no new dependency.
+
+**Constraints.**
+
+- ⚠️ **Depends on READ COMMITTED**, as D-28 does. On PostgreSQL a competing identical UPDATE
+  blocks on the winner's row lock and then matches nothing; under REPEATABLE READ or
+  SERIALIZABLE it would raise a serialization failure, which without a retry or handler
+  would reach the caller as a 500.
+- On SQLite a loser whose competitor has not yet committed waits on the write lock and can
+  surface `SQLITE_BUSY` ("database is locked") instead of a 409. Unchanged by this work, and
+  the same for the claim.
+- ⚠️ **The expiry sweep is outside the guard.** `routers/admin.expire_overdue` writes
+  `status = EXPIRED` row by row without it, so an acceptance committing between its `SELECT`
+  and its write could be overwritten. The window is narrow — it selects only donations
+  already past their deadline, which D-50 refuses to accept — and it is a manual admin
+  action, so it is recorded as a follow-up (`TASKS.md` P3) rather than changed here.
+- Two *different* legal transitions from one state are decided the same way: whichever
+  commits first wins, and the other is refused with the state it then finds. The
+  cancel-against-accept test pins that.
+- The guard proves one transition, not a queue. It does not make a lost race *invisible*:
+  the loser sees a 409, which is the honest answer and the one the frontend already renders
+  from the server's own `detail`.

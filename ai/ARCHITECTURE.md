@@ -2,7 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
-> date; updated for Task 37 (`c65c65f`, D-53) and the uncommitted Task 38 (D-54). ⚠️ marks a known weakness with its `TASKS.md` id.
+> date; updated for Tasks 37 and 38 (`c65c65f`, `be831b8`; D-53, D-54) and the uncommitted
+> Task 39 (D-55). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -115,9 +116,12 @@ plus `CANCELLED` / `EXPIRED`. Rules are data:
 | `COMPLETED` | ngo, admin | owned; increments kitchen and courier counters |
 | `CANCELLED` | donor, admin | owned; legal up to `PICKED_UP` |
 
-⚠️ **Only the claim is a conditional write.** Every other transition is read-check-write and
-races on SQLite as well as Postgres (P1-3). The expiry sweep (`POST /admin/maintenance/expire`)
-is manual and touches only `AVAILABLE`/`MATCHED`.
+**Every status write is a conditional write.** `_record` advances the status with
+`UPDATE ... WHERE id = :id AND status = :from` and refuses with 409 on `rowcount != 1`, so a
+transition happens once and the loser of a race keeps none of its side effects (D-55); the
+claim additionally binds the courier the same way (D-28). ⚠️ The expiry sweep
+(`POST /admin/maintenance/expire`) is manual, touches only `AVAILABLE`/`MATCHED`, and writes
+`EXPIRED` **outside** that guard (`TASKS.md` P3).
 
 ## Authorization
 
@@ -220,16 +224,17 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
    `requirements.txt`).
 2. Migrations run in the lifespan — safe only while there is one process (D-23).
 3. The API is stateless (JWT) except the process-local rate-limit counters (D-27).
-4. Invariants live in application code. ⚠️ The only write that carries its own precondition
-   is the courier claim; every other transition can lose an update under concurrency,
-   **SQLite included** (P1-3).
+4. Invariants live in application code, not in schema constraints — but the lifecycle's
+   own writes carry their preconditions: every status transition (D-55) and the courier
+   claim (D-28) are conditional UPDATEs, so a lost update is refused rather than applied.
+   ⚠️ The expiry sweep is the exception (`TASKS.md` P3).
 5. Frontend route guards are not security (D-14).
 6. Mobile is a separate URL space `/m/*`, not a viewport branch (D-20).
 7. No background execution — the expiry sweep needs an external caller.
 
 ## Testing
 
-**Backend — `pytest code/tests`: 345 tests, ~4 min** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 352 tests, ~4 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
@@ -238,12 +243,12 @@ signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifes
 |---|---|
 | Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
 | Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py` |
-| Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_courier_claim.py` (file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
+| Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_courier_claim.py` and `test_lifecycle_concurrency.py` (both file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
 | Matching & privacy | `test_matching_scores.py` (unit), `test_match_score_consistency.py`, `test_match_distance_privacy.py`, `test_donation_privacy_scope.py`, `test_requirement_matching.py` |
 
-Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, claim
-concurrency. Missing: concurrency on any other transition, cancellation accounting,
-`UtcDateTime`, input size bounds.
+Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, transition
+and claim concurrency. Missing: cancellation accounting, the expiry sweep under
+concurrency, `UtcDateTime`, input size bounds.
 
 **Frontend — `npm test`: 122 tests over 15 files, ~3 s.** Vitest on the project's own
 `vite.config.ts`; node environment by default, jsdom per file where rendering. Covers the
