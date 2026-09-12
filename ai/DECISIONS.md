@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-53. **D-01…D-52 are implemented in commits
-> up to `640af0c`** (re-verified by the health audit of 2026-09-10); **D-53 is uncommitted
-> in the working tree** (Task 37). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-54. **D-01…D-53 are implemented in commits
+> up to `c65c65f`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-54 is
+> uncommitted in the working tree** (Task 38). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -44,7 +44,7 @@
 > | D-34 | Owned transitions re-read through the read scope | in force |
 > | D-35 | `ACCEPTED` owned once the donation left the pool | in force |
 > | D-36 | Dead toggles removed, not disabled | in force |
-> | D-37 | One verification boolean, one meaning | ⚠️ survives self-edits of name/coordinates (P1-2) |
+> | D-37 | One verification boolean, one meaning | in force; cleared by a real name/coordinate edit (D-54) |
 > | D-38 | Lifecycle status decides courier display | in force |
 > | D-39 | Passed deadline annotated, not enforced (display) | in force; enforcement for the pool added by D-50 |
 > | D-40 | An account reads contact details it may write | in force; courier lat/long still write-only |
@@ -60,7 +60,8 @@
 > | D-50 | Availability is a deadline as well as a status | in force |
 > | D-51 | Courier history ends at `DELIVERED` | in force |
 > | D-52 | Requirements break ties and explain; never move the score | in force; verified by audit repro |
-> | D-53 | An NGO reads the open pool only once verified | uncommitted (Task 37) |
+> | D-53 | An NGO reads the open pool only once verified | in force (`c65c65f`) |
+> | D-54 | A real change to an organisation's name or pin voids its verification | uncommitted (Task 38) |
 >
 > Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
 > against the kitchen (P1-4).
@@ -1375,6 +1376,9 @@ claim honest.
 flow itself — registration default, the admin toggle, the two hard gates — is unchanged and
 was verified working in both states.
 
+✅ **Since D-54** the flag is also cleared when the organisation itself changes what was
+vouched for — its name or its coordinates — so it keeps describing a vouched-for profile.
+
 ---
 
 ## D-38 · Lifecycle status decides the state shown; a courier's name is only assignment **[documented]**
@@ -2415,7 +2419,8 @@ and reader are one organisation there.
 **Decision.** `routers/donations._readable_by`'s `ngo` branch: no organisation row →
 `false()`; an unverified organisation → its own donations only
 (`Donation.recipient_id == own`); a verified one → the open pool (`_open_to_recipients`,
-D-50) **or** its own. `Recipient.is_verified` is read on every request. Uncommitted (Task 37).
+D-50) **or** its own. `Recipient.is_verified` is read on every request. Committed as
+`c65c65f` (Task 37).
 
 **Reasoning.**
 
@@ -2444,11 +2449,63 @@ D-50) **or** its own. `Recipient.is_verified` is read on every request. Uncommit
 - `ACCEPTED` from the open pool is not read-scoped, so an unverified kitchen posting it by
   id still gets the pre-existing 403 "awaiting verification"; that and the transition 409s
   are a pre-existing existence/status oracle (`TASKS.md` P3).
-- Verification still survives self-edits (P1-2), so a verified organisation that relocates
-  keeps pool access until that is fixed.
+- A verified organisation that renames or relocates itself loses verification, and the pool
+  with it, until an administrator verifies again (D-54).
 - UI copy that told unverified kitchens they could "browse" was corrected on four screens
   (desktop/mobile Available, mobile NGO profile, admin Organisations); the Available empty
   states say the pool opens on verification.
 - `test_match_score_consistency.py::test_an_unverified_kitchen_gets_no_score_rather_than_a_low_one`
   read the pool as an unverified kitchen — it encoded the defect and was corrected, not
   relaxed.
+
+---
+
+## D-54 · A real change to an organisation's name or pin voids its verification **[documented]**
+
+**Decision.** `PATCH /recipients/me` (`routers/organisations.update_my_recipient`) clears
+`Recipient.is_verified` in the same commit whenever a submitted `name`, `latitude` or
+`longitude` differs from the stored value (`organisations.VERIFIED_IDENTITY_FIELDS`). The
+policy was approved by the Project Manager as the answer to DQ-2. Uncommitted (Task 38).
+
+**The rule, exactly.**
+
+- **Voids verification:** any actual change to `name`, `latitude` or `longitude` — each
+  alone is enough, including a first pin where there was none and clearing a pin.
+- **Never voids it:** `type`, `location` (address text), `capacity`, `contact_person`,
+  `phone`.
+- **No-op updates keep it:** values are compared, not the request. The desktop profile form
+  resends the unchanged name on every save, and that save keeps the verification. The
+  comparison is exact, so a whitespace-only difference in the name counts as a rename.
+- **Unverified stays unverified**, and its edit applies as before.
+- **Re-verification** is the existing `POST /admin/recipients/{id}/verify`. The edited
+  profile then becomes the vouched-for one, and the rule applies to it afresh.
+
+**Reasoning.**
+
+- **D-37's meaning, kept true over time.** Verification says an administrator vouched that
+  the organisation *is real and is where it claims to be*. The name is who it claims to be
+  (and what donors and couriers see as `recipientName`); the coordinates are where — and
+  they are what ranking, the 8 km gate and the D-53 read scope act on. Before this, a
+  vetted kitchen could rename itself and move ~250 km and keep ranking, the open pool and
+  custody (reproduced in the 2026-09-10 audit).
+- **Cleared in the same commit as the change**, so no request ever sees the new name or pin
+  on a verified row: `score_pair`, the `ACCEPTED` gate and `_readable_by` all read the
+  organisation as unverified from the next request.
+- **Nothing new.** No column, migration, endpoint or second verification state; the admin
+  flow is unchanged. Only the one self-service write path gains the rule — nothing else
+  updates a recipient's name or coordinates.
+
+**Constraints.**
+
+- An admin-created NGO starts verified and unpinned (`POST /admin/users`), so it **loses
+  verification on its first pin** and needs verifying again. DQ-2 was answered with no
+  exemption.
+- The address text is deliberately outside the rule. No system behaviour reads it (the
+  matcher reads coordinates), and whether changing it should void verification is open
+  (`TASKS.md` P3).
+- The desktop form has no coordinate inputs, so in the UI only a rename triggers this. It
+  shows no warning before saving; after saving it refreshes, and the badge shows "Awaiting
+  verification". Its success toast still says capacity and location "feed the match
+  ranking" (`TASKS.md` P3).
+- Donations the organisation already accepted keep their binding. What losing verification
+  should do to in-flight donations is the existing open question in `TASKS.md`.

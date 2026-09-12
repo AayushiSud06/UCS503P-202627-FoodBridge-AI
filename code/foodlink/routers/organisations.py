@@ -80,6 +80,13 @@ def my_recipient(
     return RecipientOut.model_validate(_own_recipient(db, user))
 
 
+#: What an administrator's verification vouches for: that this organisation is
+#: real and is where it claims to be (D-37) — its name and its pin. A real change
+#: to any of them voids the verification, so `is_verified` always describes the
+#: profile that was actually vouched for (D-54).
+VERIFIED_IDENTITY_FIELDS = ("name", "latitude", "longitude")
+
+
 @router.patch("/recipients/me", response_model=RecipientOut)
 def update_my_recipient(
     body: RecipientUpdate,
@@ -92,9 +99,23 @@ def update_my_recipient(
     supplies the address and coordinates that make it matchable at all.
     `is_verified` is not settable here on purpose — an organisation does not
     get to vouch for itself.
+
+    It can be *lost* here, though. Changing `VERIFIED_IDENTITY_FIELDS` changes
+    the thing an administrator vouched for, so the verification is cleared in
+    the same commit as the change, and ranking, acceptance and the open pool
+    all read the organisation as unverified from the next request until an
+    administrator verifies it again. Only a real change counts: resubmitting
+    the current values — which the profile form does with the name on every
+    save — leaves the verification alone, as does every other field.
     """
     recipient = _own_recipient(db, user)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    if recipient.is_verified and any(
+        field in changes and changes[field] != getattr(recipient, field)
+        for field in VERIFIED_IDENTITY_FIELDS
+    ):
+        recipient.is_verified = False
+    for field, value in changes.items():
         setattr(recipient, field, value)
     db.commit()
     db.refresh(recipient)

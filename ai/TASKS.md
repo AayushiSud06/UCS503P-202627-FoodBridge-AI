@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-10, `master` at `fdcb5a5`, plus the
-> uncommitted Task 37 (P1-1a) changes.** The full health audit of that date was run against
+> **Verified against the repository on 2026-09-10, `master` at `c65c65f`, plus the
+> uncommitted Task 38 (P1-2) changes.** The full health audit of that date was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,8 +18,8 @@
 
 ## Current
 
-**Task 37 · P1-1a — implemented, uncommitted, awaiting review.** An `ngo` account reads the
-open donation pool only once its organisation is verified (D-53). See P1-1 below.
+**Task 38 · P1-2 — implemented, uncommitted, awaiting review.** A real change to an
+organisation's name or coordinates clears its verification (D-54). See P1-2 below.
 
 ## P0 — urgent
 
@@ -33,7 +33,7 @@ open donation pool only once its organisation is verified (D-53). See P1-1 below
   `latitude`/`longitude`, free-text `location`, `donorName`, `donorOrganization`, the photo
   and event notes — for donors who may be individuals at home. The D-26 → D-41 lesson
   ("holding a self-signup role is not permission to read people") applied to donors.
-- ✅ **(a) `ngo` half — FIXED by Task 37 (uncommitted, awaiting review), D-53.**
+- ✅ **(a) `ngo` half — FIXED by Task 37 (`c65c65f`), D-53.**
   `_readable_by`'s `ngo` branch now returns the open pool only when the caller's
   `Recipient.is_verified` is true; an unverified organisation reads only its own donations,
   and an `ngo` account with no organisation row reads nothing. Excluded from the scope, not
@@ -50,19 +50,20 @@ open donation pool only once its organisation is verified (D-53). See P1-1 below
 
 ### P1-2 · Verification survives the organisation editing what was verified
 - **Category:** SECURITY ISSUE (trust model)
-- **Why it matters:** D-37 defines `is_verified` as "an administrator vouched this
-  organisation is real and is where it claims to be". `PATCH /recipients/me` lets the
-  organisation change `name`, `type`, `location`, `latitude`, `longitude`, `contact_person`
-  and `phone` without touching the flag, so a vetted account can relocate or rename and
-  keep ranking and accepting.
-- **Subsystem:** `routers/organisations.update_my_recipient`
-- **Evidence:** repro — a verified kitchen moved its pin ~250 km and renamed itself; still
-  verified, ranked first for a donation at the new location.
-- **Smallest scope:** clear `is_verified` when an identity/location field changes; tests;
-  a warning line on `NGOProfile`. ⚠️ `POST /admin/users` creates a **verified** NGO with no
-  coordinates, which must then pin itself — DQ-2 decides whether a first pin from `null` is
-  exempt.
-- **Dependencies:** DQ-2. **Risk if postponed:** the only trust control is one-shot.
+- ✅ **FIXED by Task 38 (uncommitted, awaiting review), D-54.** `update_my_recipient`
+  clears `is_verified` in the same commit when a submitted `name`, `latitude` or
+  `longitude` differs from the stored value (`organisations.VERIFIED_IDENTITY_FIELDS`).
+  Values are compared, so resubmitting them is a no-op; `type`, `location` (address text),
+  `capacity`, `contact_person` and `phone` never void it; an unverified organisation stays
+  unverified; an administrator re-verifies through the existing endpoint. DQ-2 answered: no
+  exemption for a first pin, so an admin-created (verified, unpinned) NGO must be verified
+  again after pinning itself.
+- **Evidence:** new `test_recipient_reverification.py` (10 tests; 7 fail against the pre-fix
+  router, the other 3 are preservation guards), including the audit's repro — a moved and renamed kitchen is no longer ranked,
+  loses the open pool (D-53) and cannot accept.
+- **No frontend change:** the desktop form has no coordinate inputs, resends the name
+  unchanged on every save, and already refreshes after saving, so the badge shows "Awaiting
+  verification" once a rename voids it. Wording follow-ups in P3.
 
 ### P1-3 · Lifecycle transitions other than the claim are lost-update races — on SQLite too
 - **Category:** DATA INTEGRITY ISSUE
@@ -172,7 +173,11 @@ transition-table check on an **unscoped** read before any scope check, so any au
 caller can learn any donation id's existence and current status from the 409/403 wording
 (pre-existing; status only, no location). The NGO dashboard / mobile home "Nothing
 available" empty states do not mention verification (D-53 made them empty for unverified
-kitchens; the Available pages already say why).
+kitchens; the Available pages already say why). D-54 follow-ups: a change to `location`
+(address text) keeps verification — whether it should void it is a product question; the
+NGO profile gives no warning before a rename voids verification, and its success toast
+("Capacity and location now feed the match ranking") is wrong when it has; the name
+comparison is exact, so a whitespace-only difference counts as a rename.
 
 **Product features (optional)** — controlled food category on `Requirement` so D-52 can
 compare food, not only size (`R-35`, `R-32`); donor needs board on `/m/*`; needs board
@@ -193,8 +198,8 @@ donations (`R-35`); PostGIS (§16.3).
 - **DQ-1 · Who may see a donor's exact pickup location, and when?** Couriers have no vetting
   concept; options include a coarse pin until a courier claims, or courier verification.
   Blocks P1-1(b).
-- **DQ-2 · Which recipient edits void verification?** Name/address/coordinates at least;
-  whether an admin-created org's first pin is exempt. Blocks P1-2.
+- ~~**DQ-2 · Which recipient edits void verification?**~~ ✅ **Answered (Task 38, D-54):**
+  name, latitude, longitude; no first-pin exemption. Address text was left out — see P3.
 - **DQ-3 · What counts against reliability, and may a donor cancel after pickup?** Blocks P1-4.
 - **Older, still open:** road vs straight-line distance (`QA-1`, `R-30`); a real exportable
   impact report (`QA-4`); should an `ACCEPTED` donation past its deadline expire (the sweep
@@ -243,7 +248,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 37 · P1-1a: the open pool requires a verified organisation (D-53) |
+| uncommitted | Task 38 · P1-2: a real name/coordinate change voids verification (D-54) |
+| `c65c65f` | Task 37 · P1-1a: the open pool requires a verified organisation (D-53) |
 | `640af0c` | Task 36 · requirement-aware tie-break and reasons (D-52) |
 | `ca8bef6`, `df74466`, `cb65f38`, `db000d9` | Tasks 35–33 · the three post-login roadmap surfaces removed (D-48) |
 | `a58a914` | Task 32 · courier history ends at `DELIVERED` (D-51) |

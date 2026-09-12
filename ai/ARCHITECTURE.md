@@ -2,7 +2,7 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
-> date; updated for the uncommitted Task 37 read-scope change (D-53). ⚠️ marks a known weakness with its `TASKS.md` id.
+> date; updated for Task 37 (`c65c65f`, D-53) and the uncommitted Task 38 (D-54). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -84,7 +84,8 @@ users ──1:1?── recipients ──1:N── requirements
 ```
 
 - `users` — single table for all roles. `recipients`/`volunteers` are satellites created at
-  registration (an admin-created NGO starts **verified** with no coordinates).
+  registration (an admin-created NGO starts **verified** with no coordinates, and loses the
+  verification when it first pins itself, D-54).
 - `donations` — coordinates and an absolute `pickup_deadline`; `match_score` frozen (D-30).
 - `status_events` — every metric derives from it (D-01).
 - `requirements` — standing needs; `is_active` is the whole lifecycle (D-29).
@@ -127,7 +128,9 @@ verification. Admin is not self-signup (D-04); the admin router is gated once.
 **Four layers:** role (`require_roles`) → ownership (a WHERE clause) → lifecycle legality →
 trust (`Recipient.is_verified`, admin-set, read by ranking, acceptance and the `ngo` open-pool
 read scope, D-37, D-53).
-⚠️ Verification is not revoked when the organisation edits its name or coordinates (P1-2).
+A real change to the organisation's `name`, `latitude` or `longitude` through
+`PATCH /recipients/me` clears it in the same commit (`organisations.VERIFIED_IDENTITY_FIELDS`,
+D-54); an administrator re-verifies through the existing endpoint.
 
 **Read scopes** — each is a helper returning a WHERE clause (`None` = unrestricted):
 
@@ -226,21 +229,21 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
 
 ## Testing
 
-**Backend — `pytest code/tests`: 335 tests, ~4 min** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 345 tests, ~4 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
 
 | Area | Files |
 |---|---|
-| Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_migrations.py` |
+| Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
 | Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py` |
 | Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_courier_claim.py` (file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
 | Matching & privacy | `test_matching_scores.py` (unit), `test_match_score_consistency.py`, `test_match_distance_privacy.py`, `test_donation_privacy_scope.py`, `test_requirement_matching.py` |
 
 Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, claim
 concurrency. Missing: concurrency on any other transition, cancellation accounting,
-verification-on-edit, unverified-account read scope, `UtcDateTime`, input size bounds.
+`UtcDateTime`, input size bounds.
 
 **Frontend — `npm test`: 122 tests over 15 files, ~3 s.** Vitest on the project's own
 `vite.config.ts`; node environment by default, jsdom per file where rendering. Covers the
