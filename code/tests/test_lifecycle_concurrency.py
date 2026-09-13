@@ -28,7 +28,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from conftest import auth, register, register_ngo
+from conftest import admin_token, auth, register, register_ngo
 from foodlink.database import Base, get_db
 from foodlink.main import app
 from foodlink.models import Donation, DonationStatus, Recipient, StatusEvent, User, UserRole
@@ -383,5 +383,179 @@ def test_a_cancellation_that_lands_first_refuses_the_acceptance(
         assert donation.recipient_id is None
         assert events_reaching(session, donation_id, DonationStatus.ACCEPTED) == []
         assert session.get(Recipient, first_id).accepted_donations == 0
+    finally:
+        session.close()
+
+
+# ─── A cancellation uncounts an acceptance at most once ──────────────────────
+#
+# A donor's or an administrator's cancellation takes the acceptance back out of
+# the kitchen's `accepted_donations` (D-58). That adjustment runs only after
+# `_record` has moved the status, in the same transaction, so a cancellation
+# that loses its race must leave the counter exactly where the winner left it.
+
+def cancel(client, token: str, donation_id: int):
+    return client.post(
+        f"/api/donations/{donation_id}/status",
+        json={"status": "CANCELLED"},
+        headers=auth(token),
+    )
+
+
+@pytest.fixture
+def claimed_donation(race_client, file_db):
+    """A donation one kitchen accepted and one courier claimed, on the file database."""
+    session = file_db()
+    try:
+        donor = register(race_client, email="cancel-race-donor@test.com", role="donor")
+        kitchen, recipient_id = register_ngo(
+            race_client, session, email="cancel-race-ngo@test.com", org="Helping Hands"
+        )
+        courier = register(race_client, email="cancel-race-courier@test.com", role="volunteer")
+    finally:
+        session.close()
+
+    donation_id = race_client.post(
+        "/api/donations", json=donation_body(), headers=auth(donor)
+    ).json()["id"]
+    assert accept(race_client, kitchen, donation_id).status_code == 200
+    assert race_client.post(
+        f"/api/donations/{donation_id}/status",
+        json={"status": "VOLUNTEER_ASSIGNED"},
+        headers=auth(courier),
+    ).status_code == 200
+    return donation_id, donor, recipient_id, courier
+
+
+def test_a_second_cancellation_racing_the_first_uncounts_nothing(
+    race_client, file_db, claimed_donation, monkeypatch
+):
+    """A double-submitted cancel: one transition, one event, one decrement.
+
+    The request under test read the donation while it could still be cancelled
+    and passed every gate on that read; the first cancellation then commits. Its
+    `_record` is refused, so its decrement never runs — the counter ends at 0,
+    not -1 or a second acceptance lost from a real one.
+    """
+    donation_id, donor_token, recipient_id, _ = claimed_donation
+
+    def the_first_cancellation_commits(donation_id_):
+        session = file_db()
+        try:  # exactly what the handler does for a donor's cancellation, committed
+            donation = session.get(Donation, donation_id_)
+            actor = session.scalar(
+                select(User).where(User.email == "cancel-race-donor@test.com")
+            )
+            donations_router._record(session, donation, DonationStatus.CANCELLED, actor)
+            donations_router._withdraw_acceptance(session, recipient_id)
+            session.commit()
+        finally:
+            session.close()
+
+    interleaved = interleave_after_the_request_reads(monkeypatch, the_first_cancellation_commits)
+
+    response = cancel(race_client, donor_token, donation_id)
+
+    assert interleaved
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot move a donation from CANCELLED to CANCELLED"
+
+    session = file_db()
+    try:
+        assert session.get(Donation, donation_id).status is DonationStatus.CANCELLED
+        assert len(events_reaching(session, donation_id, DonationStatus.CANCELLED)) == 1
+        assert session.get(Recipient, recipient_id).accepted_donations == 0
+    finally:
+        session.close()
+
+
+def test_a_donor_cancellation_that_loses_to_the_pickup_is_refused_and_uncounts_nothing(
+    race_client, file_db, claimed_donation, monkeypatch
+):
+    """The collection boundary holds under a race, not only in sequence.
+
+    The donor's request read `VOLUNTEER_ASSIGNED`, which a donor may cancel from;
+    the courier then collects. The guard refuses the cancellation with the same
+    words a donor gets asking after the pickup, and the kitchen keeps the
+    acceptance of a donation that is now on its way to it.
+    """
+    donation_id, donor_token, recipient_id, _ = claimed_donation
+
+    def the_courier_collects_it(donation_id_):
+        session = file_db()
+        try:
+            donation = session.get(Donation, donation_id_)
+            actor = session.scalar(
+                select(User).where(User.email == "cancel-race-courier@test.com")
+            )
+            donations_router._record(session, donation, DonationStatus.PICKED_UP, actor)
+            session.commit()
+        finally:
+            session.close()
+
+    interleaved = interleave_after_the_request_reads(monkeypatch, the_courier_collects_it)
+
+    response = cancel(race_client, donor_token, donation_id)
+
+    assert interleaved
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot move a donation from PICKED_UP to CANCELLED"
+
+    session = file_db()
+    try:
+        assert session.get(Donation, donation_id).status is DonationStatus.PICKED_UP
+        assert events_reaching(session, donation_id, DonationStatus.CANCELLED) == []
+        assert session.get(Recipient, recipient_id).accepted_donations == 1
+    finally:
+        session.close()
+
+
+def test_an_administrator_cancellation_that_loses_to_the_delivery_uncounts_nothing(
+    race_client, file_db, claimed_donation, monkeypatch
+):
+    """An administrator may cancel from `PICKED_UP`, but not a donation delivered since.
+
+    The request read `PICKED_UP`; the courier then delivers. `DELIVERED` is not
+    cancellable by anyone, and the donation can still be completed, so its
+    acceptance must stay counted — uncounting it here would let a later
+    completion stand on no acceptance at all.
+    """
+    donation_id, _, recipient_id, courier_token = claimed_donation
+    assert race_client.post(
+        f"/api/donations/{donation_id}/status",
+        json={"status": "PICKED_UP"},
+        headers=auth(courier_token),
+    ).status_code == 200
+    session = file_db()
+    try:
+        root = admin_token(race_client, session)
+    finally:
+        session.close()
+
+    def the_courier_delivers_it(donation_id_):
+        session = file_db()
+        try:
+            donation = session.get(Donation, donation_id_)
+            actor = session.scalar(
+                select(User).where(User.email == "cancel-race-courier@test.com")
+            )
+            donations_router._record(session, donation, DonationStatus.DELIVERED, actor)
+            session.commit()
+        finally:
+            session.close()
+
+    interleaved = interleave_after_the_request_reads(monkeypatch, the_courier_delivers_it)
+
+    response = cancel(race_client, root, donation_id)
+
+    assert interleaved
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot move a donation from DELIVERED to CANCELLED"
+
+    session = file_db()
+    try:
+        assert session.get(Donation, donation_id).status is DonationStatus.DELIVERED
+        assert events_reaching(session, donation_id, DonationStatus.CANCELLED) == []
+        assert session.get(Recipient, recipient_id).accepted_donations == 1
     finally:
         session.close()

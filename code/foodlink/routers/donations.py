@@ -60,6 +60,20 @@ OWNED_TRANSITIONS: set[DonationStatus] = {
     DonationStatus.CANCELLED,
 }
 
+#: The states from which the donor who posted a donation may still cancel it:
+#: every state before a courier has physically collected the food. From
+#: `PICKED_UP` on, the food is in a courier's hands and on its way to a kitchen,
+#: so withdrawing it is no longer the donor's call — `ALLOWED_TRANSITIONS` still
+#: lets an administrator cancel from `PICKED_UP`, and this narrows only the donor
+#: (DQ-3, D-58). A state added later is not cancellable by a donor until it is
+#: listed here.
+DONOR_CANCELLABLE: set[DonationStatus] = {
+    DonationStatus.AVAILABLE,
+    DonationStatus.MATCHED,
+    DonationStatus.ACCEPTED,
+    DonationStatus.VOLUNTEER_ASSIGNED,
+}
+
 
 def _needs_ownership(donation: Donation, target: DonationStatus) -> bool:
     """Must the caller be *this* donation's party, not merely hold the role?
@@ -529,10 +543,10 @@ def _record(
 
     Every side effect the caller has already performed — the `accepted_donations`
     increment, the frozen `match_score`, the cleared courier, the completion
-    counters — is an ORM change or a statement in *this* transaction, and this
-    function is the last thing to run before the single `commit()`. So refusing
-    here discards them with the rollback rather than leaving half a transition
-    behind.
+    counters — is an ORM change or a statement in *this* transaction, and nothing
+    runs between this function and the single `commit()` except
+    `_withdraw_acceptance`, which waits for it to succeed. So refusing here
+    discards them with the rollback rather than leaving half a transition behind.
 
     This is what every timing metric is read from, so the event is appended only
     on the side of the guard where the transition actually happened.
@@ -569,6 +583,44 @@ def _record(
     # unguarded. Expired instead, exactly as the caller of `_claim_pickup` does
     # with `volunteer_id`.
     db.expire(donation, ["status"])
+
+
+def _withdraw_acceptance(db: Session, recipient_id: int) -> None:
+    """Take a cancelled acceptance back out of the kitchen's record.
+
+    `accepted_donations` is the denominator of `Recipient.reliability_score`, and
+    a cancellation — a donor's or an administrator's — is not the kitchen failing
+    to see a donation through. Left counted, three accept → cancel cycles took a
+    kitchen from the 85 prior to 0 (`TASKS.md` P1-4).
+
+    The caller only reaches here for a donation bound to `recipient_id` that has
+    just moved to `CANCELLED` from `ACCEPTED`, `VOLUNTEER_ASSIGNED` or (an
+    administrator only) `PICKED_UP`. Nothing is cancellable from `DELIVERED` or
+    `COMPLETED` (`ALLOWED_TRANSITIONS`), so this never undoes a fulfilled
+    donation, and in none of those three states has the kitchen had a fulfilment
+    step to fail — between accepting and confirming receipt, the claim and the
+    pickup are the courier's.
+
+    Each such donation carries exactly one counted acceptance on that
+    organisation: `recipient_id` is set only by the acceptance side effect, which
+    counts it unless the donation was already bound there (the release, D-41),
+    and nothing leads a bound donation back into the open pool to be accepted
+    again. So one decrement is exact. `accepted_donations > 0` is a floor for rows
+    that predate the counter's invariant — seeded or hand-edited — not a branch
+    the lifecycle reaches.
+
+    Called only after `_record` has moved the status, so a cancellation that
+    loses its race never issues this at all, and in the same transaction, so a
+    failed commit takes both back. One statement rather than a Python `-= 1`, so
+    this write never overwrites a concurrent change to the counter with a stale
+    value. (The acceptance's own `+= 1` is still read-then-write — `TASKS.md` P3.)
+    """
+    db.execute(
+        update(Recipient)
+        .where(Recipient.id == recipient_id, Recipient.accepted_donations > 0)
+        .values(accepted_donations=Recipient.accepted_donations - 1)
+        .execution_options(synchronize_session=False)
+    )
 
 
 @router.post("", response_model=DonationOut, status_code=status.HTTP_201_CREATED)
@@ -777,6 +829,10 @@ def update_status(
     if _needs_ownership(donation, target):
         donation = _get_readable_or_404(db, donation_id, user)
 
+    # The organisation whose acceptance a cancellation withdraws, if any.
+    # Applied only once `_record` has moved the status, below.
+    withdrawn_from: int | None = None
+
     # ── Side effects that must happen with the transition ────────────────────
     if target is DonationStatus.ACCEPTED:
         # An offer nobody can still collect is not an offer. The pool an
@@ -905,7 +961,28 @@ def update_status(
         if donation.volunteer is not None:
             donation.volunteer.completed_deliveries += 1
 
+    elif target is DonationStatus.CANCELLED:
+        # A donor may withdraw a donation until a courier has collected it, and
+        # not after (`DONOR_CANCELLABLE`). Checked after ownership, so a donor
+        # this donation does not belong to is still answered 404 whatever state
+        # it is in. The words and status are the transition table's own, because
+        # they are exactly what `_record` answers a donor whose cancellation loses
+        # a race to the courier's pickup — so the sequential refusal and the
+        # concurrent one agree (D-55).
+        if user.role is UserRole.donor and donation.status not in DONOR_CANCELLABLE:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot move a donation from {donation.status.value} to {target.value}",
+            )
+        # Neutral to the kitchen's reliability whoever cancels (DQ-3, D-58): only
+        # a donor or an administrator reaches here (`TRANSITION_ROLES`), and
+        # neither outcome is the kitchen's. The acceptance this cancellation
+        # undoes stops counting; `completed_donations` is never touched.
+        withdrawn_from = donation.recipient_id
+
     _record(db, donation, target, user, note=body.note)
+    if withdrawn_from is not None:
+        _withdraw_acceptance(db, withdrawn_from)
     db.commit()
     fresh = _get_or_404(db, donation_id)
     viewer = _viewer_recipient(db, user)

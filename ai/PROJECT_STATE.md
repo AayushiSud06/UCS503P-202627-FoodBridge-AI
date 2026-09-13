@@ -2,8 +2,8 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built), `TASKS.md`
 > (what is left, prioritised), `DECISIONS.md` (why it is built that way).
-> **Last verified: 2026-09-12, `master` at `692266b` plus the uncommitted Task 41
-> (P1-1b) changes.** The full health audit of that date ran against `640af0c`. This file
+> **Last verified: 2026-09-13, `master` at `d34190c` plus the uncommitted Task 42
+> (P1-4) changes.** The full health audit of 2026-09-10 ran against `640af0c`. This file
 > describes the present; how the project got here is in git history and `DECISIONS.md`.
 
 ## What this project is
@@ -31,7 +31,7 @@ separate, undecided work.
   1. ✅ Self-registered, **unverified** accounts read every open donation's exact donor pin,
      address text and donor name. The `ngo` half is fixed by Task 37 (`c65c65f`, D-53): the
      open pool now requires a verified organisation. The `volunteer` half is fixed by
-     Task 41 (uncommitted, D-57): a courier still browses every unclaimed
+     Task 41 (`d34190c`, D-57): a courier still browses every unclaimed
      pickup but reads a coarse ~1 km `pickupArea` instead of the pin, address and donor
      until their claim binds the run to them.
   2. ✅ `Recipient.is_verified` used to survive the organisation editing its own name and
@@ -41,28 +41,31 @@ separate, undecided work.
      raced on SQLite too — two kitchens accepting together both got `200`. Fixed by Task 39
      (`3d6f8f8`, D-55): every status write is now a conditional UPDATE, so the loser gets a
      409 and its side effects roll back.
-  4. A **donor's cancellation counts against the kitchen's reliability** — three
-     accept→cancel cycles take a kitchen from the 85 prior to 0.
+  4. ✅ A donor's cancellation used to count against the kitchen's reliability. Three
+     accept→cancel cycles took a kitchen from the 85 prior to 0, and a donor could cancel
+     food already `PICKED_UP`. Fixed by Task 42 (uncommitted, D-58). A cancellation now
+     takes the acceptance back out, in the same transaction and after the conditional status
+     write, whether a donor cancels before `PICKED_UP` or an admin cancels (from `PICKED_UP`
+     too). A donor gets 409 from `PICKED_UP`.
   5. ✅ Phone photos used to break donation creation: the 256 KiB `image_url` cap had no
      client-side resize, so a typical photo was a 422. Fixed by Task 40 (`692266b`,
      D-56): both create screens resize to 1280 px and re-encode as JPEG before the data
      URL is built — measured in a browser, 3.46 M characters down to 220 k.
-- **Only P1-4 remains**, and it is waiting on a product answer (DQ-3), not on effort. It is
-  the only one that may need a schema change.
+- **No P1 remains** once Task 42 is reviewed. None of the five needed a schema change.
 
 ## Current status
 
 | Area | State |
 |---|---|
-| Backend API | ✅ 5 routers, 6 tables, full 9-state lifecycle, role/ownership/lifecycle/trust gates. ⚠️ P1-4 above |
+| Backend API | ✅ 5 routers, 6 tables, full 9-state lifecycle, role/ownership/lifecycle/trust gates. A donor cancels only before `PICKED_UP`; donor and admin cancellations are neutral to reliability (D-58). ⚠️ an admin `ACCEPTED → EXPIRED` still leaves the acceptance counted (P3) |
 | Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle still open (P2-1) |
 | Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48). ⚠️ residual copy: mobile header hard-codes seeded org names, donor create page still has a "Future Intelligence" note (P2-4) |
 | Frontend mobile | ✅ `/m/*` screens exist; ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20) |
 | Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP (process-local). No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53); a real name/coordinate edit clears verification (D-54) |
 | Concurrency | ✅ every lifecycle status write is a conditional UPDATE — the courier claim (D-28) and every other transition (D-55). ⚠️ the expiry sweep writes `EXPIRED` unguarded (P3) |
 | Donation photos | ✅ resized to 1280 px and re-encoded as JPEG in the browser before the data URL is built (D-56); the server keeps the 256 KiB cap and now also checks the shape. ⚠️ still stored inline in the row — object storage is unbuilt |
-| Donor privacy | ✅ a courier browses every unclaimed pickup but reads a coarse `pickupArea` rather than the pin, address or donor until they claim it (D-57, uncommitted); `matchScore`/`distanceKm` already reader-scoped (D-47). ⚠️ `description`, `imageUrl` and event notes are not scoped (P2-2) |
-| Backend tests | ✅ **371 passed** (~5 min, bcrypt-bound), 23 files |
+| Donor privacy | ✅ a courier browses every unclaimed pickup but reads a coarse `pickupArea` rather than the pin, address or donor until they claim it (D-57); `matchScore`/`distanceKm` already reader-scoped (D-47). ⚠️ `description`, `imageUrl` and event notes are not scoped (P2-2) |
+| Backend tests | ✅ **394 passed** (~5–6 min, bcrypt-bound), 24 files |
 | Frontend tests | ✅ **140 passed** over 16 files (~4 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
 | CI | ✅ backend `pytest` + `alembic upgrade head && alembic check`; frontend `npm test` + `npm run build` |
 | Migrations | ✅ Alembic, one revision `ae4636b1e6d4`; `alembic check` clean; applied in the app lifespan |
@@ -76,7 +79,8 @@ separate, undecided work.
 
 | Commit | Work | Decision |
 |---|---|---|
-| uncommitted | Task 41 — P1-1b: a courier reads a coarse pickup area until they claim | D-57 |
+| uncommitted | Task 42 — P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup | D-58 |
+| `d34190c` | Task 41 — P1-1b: a courier reads a coarse pickup area until they claim | D-57 |
 | `692266b` | Task 40 — P1-5: donation photos resized and re-encoded before upload | D-56 |
 | `3d6f8f8` | Task 39 — P1-3: every lifecycle status write is a conditional UPDATE | D-55 |
 | `be831b8` | Task 38 — P1-2: a real name/coordinate change voids an organisation's verification | D-54 |
@@ -112,9 +116,8 @@ recipient read scope (`16497ea`), auth rate limiting (`91544e3`), atomic courier
 
 ## Immediate next step
 
-Review Task 41 (P1-1b). **That leaves one P1**: P1-4, donor cancellations counting against
-a kitchen's reliability, which is blocked on DQ-3 (what counts against reliability, and may
-a donor cancel after pickup). Answer that in `TASKS.md` → *Decisions needed*, or start P2.
+Review Task 42 (P1-4). **That clears every P1 from the 2026-09-10 audit**, so the next work
+is P2 in `TASKS.md`.
 
 ## Conventions worth preserving
 

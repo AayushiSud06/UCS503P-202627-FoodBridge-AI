@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-12, `master` at `692266b`, plus the
-> uncommitted Task 41 (P1-1b) changes.** The full health audit of that date was run against
+> **Verified against the repository on 2026-09-13, `master` at `d34190c`, plus the
+> uncommitted Task 42 (P1-4) changes.** The full health audit of 2026-09-10 was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,11 +18,12 @@
 
 ## Current
 
-**Task 41 · P1-1b — implemented, uncommitted, awaiting review.** A courier reads a coarse
-`pickupArea` instead of the donor's pin, address and name until their claim binds the run to
-them (D-57, answering DQ-1). See P1-1 below.
+**Task 42 · P1-4 — implemented (with the admin-neutrality revision), uncommitted, awaiting
+review.** A cancellation takes the kitchen's acceptance back out of its reliability record,
+whether a donor cancels before `PICKED_UP` or an administrator cancels. A donor can no longer
+cancel once the food is collected (D-58, answering DQ-3). See P1-4 below.
 
-**That clears every P1 except P1-4**, which is still waiting on DQ-3.
+**That clears every P1.** Next: P2.
 
 ## P0 — urgent
 
@@ -46,7 +47,7 @@ them (D-57, answering DQ-1). See P1-1 below.
   `test_match_score_consistency.py` that asserted the pool read was corrected. All five
   fail against the pre-fix router. UI copy promising unverified kitchens could "browse"
   corrected on four screens.
-- ✅ **(b) `volunteer` half — FIXED by Task 41 (uncommitted, awaiting review), D-57.**
+- ✅ **(b) `volunteer` half — FIXED by Task 41 (`d34190c`), D-57.**
   DQ-1 answered: a courier keeps the whole unclaimed pool readable, but a pickup they have
   not claimed carries `latitude`, `longitude`, `location`, `donorName`, `donorOrganization`
   and `donorId` as **null**, plus a new `pickupArea` — the donor's pin on the 0.01° grid
@@ -98,17 +99,33 @@ them (D-57, answering DQ-1). See P1-1 below.
 
 ### P1-4 · A donor's cancellation is booked as the kitchen's failure
 - **Category:** DATA INTEGRITY ISSUE
-- **Why it matters:** `accepted_donations` rises at acceptance and `completed_donations` only
-  at `COMPLETED`; `CANCELLED` adjusts neither, and `reliability_score = 100 × completed /
-  accepted` once accepted ≥ 3. Any donor can therefore drive a kitchen's reliability down —
-  the same class as `HA-2`. A donor may also cancel after the courier has `PICKED_UP` the food.
-- **Subsystem:** `update_status` side effects; `models.Recipient.reliability_score`
-- **Evidence:** repro — three accept → donor-cancel cycles: reliability 85 → **0**; a donor
-  cancel from `PICKED_UP` → `200`.
-- **Smallest scope:** after DQ-3, exclude donor-initiated cancellations from the denominator
-  (decrement on donor `CANCELLED` of a bound donation, or derive the counts from events);
-  regression tests.
-- **Dependencies:** DQ-3. **Risk if postponed:** ranking manipulable by any donor account.
+- ✅ **FIXED by Task 42 (uncommitted, awaiting review), D-58.** DQ-3 answered. A donor
+  may cancel only from `DONOR_CANCELLABLE` (`AVAILABLE`, `MATCHED`, `ACCEPTED`,
+  `VOLUNTEER_ASSIGNED`). From `PICKED_UP` the answer is 409 with the transition table's
+  wording, checked after ownership. For a bound donation, any cancellation (a donor's, or an
+  administrator's from `ACCEPTED`, `VOLUNTEER_ASSIGNED` or `PICKED_UP`) runs
+  `_withdraw_acceptance` after `_record` in the same transaction: a conditional SQL decrement
+  of `accepted_donations`, floored at 0. `completed_donations` is untouched. An administrator
+  may still cancel from `PICKED_UP`. `ALLOWED_TRANSITIONS`, the reliability formula and the
+  85 / three-acceptance prior are unchanged.
+- **Evidence:** new `test_cancellation_reliability.py` (20 tests) and 3 race tests in
+  `test_lifecycle_concurrency.py`; 10 of the 23 fail against the pre-fix router, and the 4
+  admin-neutrality tests fail against Task 42's first revision. Covered:
+  - Donor: the audit repro (three accept → donor-cancel cycles now leave 0/0 and 85, not 0);
+    cancel while `ACCEPTED` and while `VOLUNTEER_ASSIGNED`; a release followed by a cancel;
+    409 from `PICKED_UP` and `DELIVERED` with counters and state unchanged; a stranger donor
+    still gets 404.
+  - Admin: cancellation from `ACCEPTED`, `VOLUNTEER_ASSIGNED` and `PICKED_UP` restores 5/4
+    (80) to 4/4 (100); three accept → admin-cancel cycles leave 0/0 and 85; no decrement
+    without an acceptance.
+  - Also: the counter never goes below 0 (donor and admin); completion counters unchanged;
+    kitchen and courier still 403.
+  - Races: a double-submitted cancel decrements once; a donor cancel that loses to the
+    pickup, and an admin cancel that loses to the delivery, are refused and decrement
+    nothing.
+- ⚠️ **Not addressed:** an admin `ACCEPTED → EXPIRED` still leaves the acceptance counted
+  (P3). No cancellation reason is recorded, so an admin cancellation caused by the kitchen is
+  neutral too. No backfill of acceptances cancelled before the fix.
 
 ### P1-5 · Attaching a normal phone photo makes donation creation fail
 - **Category:** CONFIRMED BUG (UX, core flow)
@@ -155,9 +172,8 @@ them (D-57, answering DQ-1). See P1-1 below.
 - **P2-5 · `/ngo/available/:id` opens nothing.** CONFIRMED BUG. The route
   (`App.tsx:83`) renders `NGOAvailableDonations`, which never reads the param, so the
   dashboard's deep link lands on an unselected list. `[QA-8]` **S**
-- **P2-6 · Test gaps that match real risk.** TEST GAP. Backend: land each P1 with its
-  regression test (concurrency beyond the claim, cancellation accounting, verification on
-  edit, unverified read scope); a `UtcDateTime` round-trip (D-09). Frontend: nothing covers
+- **P2-6 · Test gaps that match real risk.** TEST GAP. Backend: a `UtcDateTime` round-trip
+  (D-09); every P1 has now landed with its regression tests. Frontend: nothing covers
   `AppContext`'s load/write-then-refetch, `useAction`, the create-donation form (would have
   caught P1-5) or per-role status buttons. **M**
 
@@ -197,7 +213,15 @@ comparison is exact, so a whitespace-only difference counts as a rename. D-55 fo
 conditional guard, so an acceptance that commits between its `SELECT` and its write could
 be overwritten — a narrow window (it selects only donations already past their deadline,
 which D-50 refuses to accept) on a manual admin action, but the one status write left
-unguarded.
+unguarded. D-58 follow-ups, all pre-existing:
+- An admin release (`VOLUNTEER_ASSIGNED → ACCEPTED`) that names a *different* `recipientId`
+  rebinds the donation and counts a second acceptance, leaving the first kitchen's
+  acceptance counted.
+- The acceptance's `recipient.accepted_donations += 1` (and the completion `+= 1`s) are
+  read-then-write, so two concurrent writes to one kitchen's counter can lose one.
+- An admin `ACCEPTED → EXPIRED` leaves the acceptance counted, although it is equally a
+  platform outcome. Whether it should be uncounted like a cancellation was left out of Task
+  42's scope.
 
 **Product features (optional)** — controlled food category on `Requirement` so D-52 can
 compare food, not only size (`R-35`, `R-32`); donor needs board on `/m/*`; needs board
@@ -220,7 +244,11 @@ donations (`R-35`); PostGIS (§16.3).
   no courier verification.
 - ~~**DQ-2 · Which recipient edits void verification?**~~ ✅ **Answered (Task 38, D-54):**
   name, latitude, longitude; no first-pin exemption. Address text was left out — see P3.
-- **DQ-3 · What counts against reliability, and may a donor cancel after pickup?** Blocks P1-4.
+- ~~**DQ-3 · What counts against reliability, and may a donor cancel after pickup?**~~ ✅
+  **Answered (Task 42, D-58):** only the kitchen's own fulfilment counts. A donor's
+  cancellation before `PICKED_UP` and an administrator's cancellation (including from
+  `PICKED_UP`) are both neutral: the acceptance stops counting. No donor cancellation from
+  `PICKED_UP`.
 - **Older, still open:** road vs straight-line distance (`QA-1`, `R-30`); a real exportable
   impact report (`QA-4`); should an `ACCEPTED` donation past its deadline expire (the sweep
   covers `AVAILABLE`/`MATCHED` only); what revoking verification does to donations already
@@ -268,7 +296,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 41 · P1-1b: a courier reads a coarse pickup area until they claim (D-57) |
+| uncommitted | Task 42 · P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup (D-58) |
+| `d34190c` | Task 41 · P1-1b: a courier reads a coarse pickup area until they claim (D-57) |
 | `692266b` | Task 40 · P1-5: donation photos resized and re-encoded in the browser (D-56) |
 | `3d6f8f8` | Task 39 · P1-3: every lifecycle status write is a conditional UPDATE (D-55) |
 | `be831b8` | Task 38 · P1-2: a real name/coordinate change voids verification (D-54) |

@@ -2,8 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
-> date; updated for Tasks 37–40 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`; D-53–D-56) and
-> the uncommitted Task 41 (D-57). ⚠️ marks a known weakness with its `TASKS.md` id.
+> date; updated for Tasks 37–41 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`, `d34190c`;
+> D-53–D-57) and the uncommitted Task 42 (D-58). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -93,7 +93,9 @@ users ──1:1?── recipients ──1:N── requirements
 - `requirements` — standing needs; `is_active` is the whole lifecycle (D-29).
 - Counters `Recipient.accepted_donations`/`completed_donations` and
   `Volunteer.completed_deliveries` are maintained by `update_status`, not derived.
-  ⚠️ donor cancellations are counted against the kitchen (P1-4).
+  Acceptance counts once per binding (a release does not, D-41); any cancellation of a bound
+  donation uncounts it (`_withdraw_acceptance`, D-58). ⚠️ an admin `ACCEPTED → EXPIRED`
+  leaves it counted; the `+= 1` increments are read-then-write (P3).
 - Invariants (state machine, coordinate ranges, counters) live in application code only.
   SQLite FKs are unenforced.
 
@@ -115,7 +117,7 @@ plus `CANCELLED` / `EXPIRED`. Rules are data:
 | `VOLUNTEER_ASSIGNED` | volunteer (admin listed, always 422) | atomic conditional `UPDATE` (D-28) |
 | `PICKED_UP` / `DELIVERED` | volunteer, admin | owned |
 | `COMPLETED` | ngo, admin | owned; increments kitchen and courier counters |
-| `CANCELLED` | donor, admin | owned; legal up to `PICKED_UP` |
+| `CANCELLED` | donor, admin | owned; admin up to `PICKED_UP`, donor only before it (`DONOR_CANCELLABLE` → 409, after ownership). Either role's cancel of a bound donation uncounts the acceptance after `_record`, same transaction (D-58) |
 
 **Every status write is a conditional write.** `_record` advances the status with
 `UPDATE ... WHERE id = :id AND status = :from` and refuses with 409 on `rowcount != 1`, so a
@@ -241,7 +243,7 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
 
 ## Testing
 
-**Backend — `pytest code/tests`: 371 tests, ~5 min** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 394 tests, ~5–6 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
@@ -250,11 +252,11 @@ signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifes
 |---|---|
 | Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
 | Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py`, `test_courier_pickup_disclosure.py` |
-| Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_courier_claim.py` and `test_lifecycle_concurrency.py` (both file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
+| Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_cancellation_reliability.py`, `test_courier_claim.py` and `test_lifecycle_concurrency.py` (both file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
 | Matching & privacy | `test_matching_scores.py` (unit), `test_match_score_consistency.py`, `test_match_distance_privacy.py`, `test_donation_privacy_scope.py`, `test_requirement_matching.py` |
 
 Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, transition
-and claim concurrency. Missing: cancellation accounting, the expiry sweep under
+and claim concurrency, cancellation accounting (D-58). Missing: the expiry sweep under
 concurrency, `UtcDateTime`, input size bounds.
 
 **Frontend — `npm test`: 140 tests over 16 files, ~4 s.** Vitest on the project's own

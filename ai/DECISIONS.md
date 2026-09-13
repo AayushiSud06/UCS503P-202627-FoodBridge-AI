@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-57. **D-01…D-56 are implemented in commits
-> up to `692266b`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-57 is
-> implemented in the working tree, uncommitted** (Task 41). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-58. **D-01…D-57 are implemented in commits
+> up to `d34190c`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-58 is
+> implemented in the working tree, uncommitted** (Task 42). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -64,10 +64,12 @@
 > | D-54 | A real change to an organisation's name or pin voids its verification | in force (`be831b8`) |
 > | D-55 | Every lifecycle status write carries its own precondition | in force (`3d6f8f8`) |
 > | D-56 | Donation photos are resized in the browser, the only place holding the bytes | in force (`692266b`) |
-> | D-57 | A courier reads a coarse pickup area until the claim binds the run to them | in force (Task 41, uncommitted) |
+> | D-57 | A courier reads a coarse pickup area until the claim binds the run to them | in force (`d34190c`) |
+> | D-58 | A cancellation is neutral to reliability; collection ends the donor's right to cancel | in force (Task 42, uncommitted) |
 >
-> Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
-> against the kitchen (P1-4).
+> Reliability accounting (D-15, D-41, D-58): a release is not an acceptance, and a
+> cancellation — the donor's before `PICKED_UP`, or an administrator's — takes its acceptance
+> back out. ⚠️ An admin `ACCEPTED → EXPIRED` still leaves it counted (`TASKS.md` P3).
 >
 > **Evidence key** — how the reasoning was established:
 > **[documented]** stated in code comments/docstrings · **[inferred]** not stated, but
@@ -2523,7 +2525,7 @@ status write passes through — advances the status with a conditional statement
 `UPDATE donations SET status = :to WHERE id = :id AND status = :from`, and reads
 `rowcount != 1` as having lost the transition: it raises **409** and appends no
 `StatusEvent`. D-28's claim guard is unchanged and still runs first for
-`VOLUNTEER_ASSIGNED`. Uncommitted (Task 39).
+`VOLUNTEER_ASSIGNED`. Committed as `3d6f8f8` (Task 39).
 
 **The invariant.** A donation makes each transition **at most once**, and every side effect
 of that transition lands only on the side of the guard where it actually happened: one
@@ -2665,7 +2667,7 @@ donation outside that scope — which for a courier means every pickup they have
 `latitude`, `longitude`, `location`, `donorName`, `donorOrganization` and `donorId` are
 **null**, and a new `pickupArea` carries the donor's pin snapped to `LOCATION_BLUR_GRID_DEG`
 and rendered as text. The read scope itself is untouched: the unclaimed pool stays readable.
-This is the answer to DQ-1, approved by the Project Manager. Task 41, uncommitted.
+This is the answer to DQ-1, approved by the Project Manager. Committed as `d34190c` (Task 41).
 
 **Reasoning.**
 
@@ -2730,3 +2732,82 @@ This is the answer to DQ-1, approved by the Project Manager. Task 41, uncommitte
   claim attempt cannot be used as a read (D-28, D-55 unchanged).
 - Two extra `Volunteer` lookups per courier request — one in `_readable_by`, one here.
   Measurable only if the pool grows; the scope is resolved once per page, not per donation.
+
+---
+
+## D-58 · A cancellation is neutral to the kitchen's reliability, and collection ends the donor's right to cancel **[documented]**
+
+**Decision.** DQ-3, answered by the Project Manager. Recipient reliability measures
+recipient-controlled fulfilment, not outcomes the donor or the platform caused. Three rules,
+all in `routers/donations.update_status`; Task 42, uncommitted.
+
+- **A donor may cancel only before collection.** `donations.DONOR_CANCELLABLE` —
+  `AVAILABLE`, `MATCHED`, `ACCEPTED`, `VOLUNTEER_ASSIGNED` — is checked after ownership. From
+  `PICKED_UP` a donor gets **409** `Cannot move a donation from PICKED_UP to CANCELLED`.
+  `DELIVERED` and `COMPLETED` were already refused by `ALLOWED_TRANSITIONS`.
+- **A cancellation takes the acceptance back, whoever makes it.** For a donation bound to a
+  kitchen, `_withdraw_acceptance` runs `UPDATE recipients SET accepted_donations =
+  accepted_donations - 1 WHERE id = :id AND accepted_donations > 0` after `_record` has moved
+  the status, before the single commit. `completed_donations` is untouched. Only a donor or an
+  administrator can cancel (`TRANSITION_ROLES`), so this covers both, and a donation no
+  kitchen accepted has nothing to take back.
+- **An administrator may still cancel from `PICKED_UP`**, and that cancellation is neutral
+  too.
+
+`reliability_score` itself is unchanged: 85 below three acceptances, else
+`100 × completed / accepted`.
+
+**Reasoning.**
+
+- **Correct the counter, don't derive it.** `accepted_donations` is the contract
+  `matching.score_pair` reads. Recounting from `status_events` would be a redesign of
+  reliability. A decrement is exact: `recipient_id` is set only by the acceptance side
+  effect, which counts once per binding (a release does not, D-41), and a bound donation
+  never returns to the open pool. So a bound donation in `ACCEPTED`, `VOLUNTEER_ASSIGNED` or
+  `PICKED_UP` carries exactly one counted acceptance on its kitchen. The `> 0` floor is there
+  for seeded or hand-edited rows, which the lifecycle never produces.
+- **The donor rule is not in `ALLOWED_TRANSITIONS`.** That table is role-agnostic, so dropping
+  `PICKED_UP → CANCELLED` from it would also take the move away from the administrator. For
+  collected food that can never be delivered, it is the only honest exit: the alternative is
+  driving the donation to `COMPLETED` and booking a completion that did not happen. A set
+  beside `TRANSITION_ROLES` and `OWNED_TRANSITIONS` keeps the rule as data (D-02). It is an
+  allowlist, so a state added later is not donor-cancellable until listed.
+- **409 with the table's words, checked after ownership.** The state forbids the move, not
+  the role, so a 403 would wrongly say that donors cannot cancel at all. If a donor's cancel
+  loses a race to the pickup, `_record` answers with this same string, so the sequential and
+  concurrent refusals agree (D-55). Running after ownership means a donor who does not own
+  the donation still gets the 404 a read would give (D-24, D-34). No new status oracle is
+  added.
+- **After `_record`, in its transaction.** The decrement is issued only once the transition is
+  known to have happened: a losing cancellation never runs it (including an admin cancel that
+  loses to the delivery), and a failed commit discards both writes. It is one SQL statement rather than a Python `-= 1`, so it never writes a
+  stale value over the counter.
+- **An administrator's cancellation is uncounted too, including from `PICKED_UP`.** It is
+  the platform's decision, and leaving the acceptance counted would book a certain
+  non-completion on the kitchen for it. Changing no counter is *not* neutral, because the
+  acceptance stays in the denominator. Uncounting at `PICKED_UP` erases no fulfilled attempt:
+  - Nothing is cancellable from `DELIVERED` or `COMPLETED`, so a cancelled donation was
+    never fulfilled, and `completed_donations` is not touched.
+  - The kitchen has no step of its own between accepting and confirming receipt (the claim
+    and the pickup are the courier's), so a cancellation at any of these states is never
+    the kitchen failing.
+
+  The kitchen's own failure is still counted: a donation it accepted that is never
+  completed and not cancelled, such as one delivered and never confirmed.
+
+**Constraints.**
+
+- ⚠️ **No attribution.** A cancellation an administrator makes *because of* the kitchen (it
+  was closed when the courier arrived, say) is neutral as well. Charging it would need a
+  recorded reason, and there is no such field. An admin `ACCEPTED → EXPIRED` still leaves
+  the acceptance counted; that is a follow-up (`TASKS.md` P3), not part of this decision.
+- **No backfill.** Acceptances that donors cancelled before this change stay counted. Nothing
+  is deployed, so only local and seeded databases are affected; there is no migration.
+- The ledger is not rewritten: the `ACCEPTED` event stays, and `/api/metrics` (which reads
+  events) is unaffected.
+- Pre-existing, admin-only: a release naming a *different* `recipientId` rebinds the donation
+  and counts it for the new kitchen, leaving the first kitchen's acceptance counted. The
+  acceptance's own `+= 1` is still read-then-write, so it can lose a concurrent change to the
+  same kitchen's counter. Both are in `TASKS.md` P3.
+- No frontend change. No screen offers any role a cancel control; the endpoint is reached
+  only through the API.
