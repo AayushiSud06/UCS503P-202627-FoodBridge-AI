@@ -28,7 +28,8 @@ export default function MobileShell({ config }: { config: RoleConfig }) {
       <header className="m-head items-center">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 truncate">
-            {config.kicker}
+            {/* `||`, not `??`: a cleared organisation arrives as an empty string. */}
+            {config.kicker ?? (user.organization || user.name)}
           </p>
           <h1 className="mt-0.5 text-xl font-display font-semibold text-gray-900 truncate">
             {active.label.charAt(0) + active.label.slice(1).toLowerCase()}

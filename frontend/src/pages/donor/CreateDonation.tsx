@@ -1,6 +1,6 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, ImageIcon, Info, AlertCircle, Sparkles, MapPin, Loader2 } from 'lucide-react';
+import { Upload, X, Info, AlertCircle, MapPin, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { errorMessage } from '../../context/AuthContext';
 import { toFutureIso, toIsoToday } from '../../lib/time';
@@ -55,24 +55,6 @@ export default function CreateDonation() {
   const handleChange = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
-  };
-
-  const handleQuickFillDemo = () => {
-    setForm({
-      foodName: '50 Vegetarian Meals',
-      category: 'Vegetarian',
-      quantity: '50',
-      unit: 'Meals',
-      preparedAt: '12:30',
-      pickupDeadline: '20:00',
-      location: 'College Central Mess, Thapar University',
-      description: 'Freshly prepared wholesome vegetarian meals with dal makhani, paneer bhurji, 4 rotis, and jeera rice. Packed in insulated food-grade trays.',
-      storageType: 'Room Temperature',
-      latitude: String(DEFAULT_COORDS.latitude),
-      longitude: String(DEFAULT_COORDS.longitude),
-    });
-    setErrors({});
-    showToast('info', 'Demo Preset Loaded', '50 Vegetarian Meals (Pickup before 8 PM) populated.');
   };
 
   // The photo travels in the donation row as a data URL, so it is resized and
@@ -176,21 +158,11 @@ export default function CreateDonation() {
   return (
     <div className="max-w-2xl space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Create Food Donation</h1>
-          <p className="text-gray-500 mt-1">
-            List surplus food to immediately trigger intelligent AI matching with community kitchens.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleQuickFillDemo}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold transition-colors"
-        >
-          <Sparkles size={14} className="text-purple-600" />
-          Quick Demo Preset (50 Meals)
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Create Food Donation</h1>
+        <p className="text-gray-500 mt-1">
+          List surplus food for verified community organisations to accept.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -304,7 +276,7 @@ export default function CreateDonation() {
               value={form.location}
               onChange={e => handleChange('location', e.target.value)}
               className={`input-field ${errors.location ? 'border-red-300 ring-1 ring-red-200' : ''}`}
-              placeholder="College Central Mess, Thapar University"
+              placeholder="Building, street and area"
             />
             {errors.location && (
               <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
@@ -424,17 +396,6 @@ export default function CreateDonation() {
             className="hidden"
             id="food-image"
           />
-
-          {/* AI Feature Callout */}
-          <div className="flex items-start gap-2.5 p-3 bg-purple-50 border border-purple-100 rounded-lg">
-            <ImageIcon size={16} className="text-purple-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-purple-700">Future Intelligence Feature</p>
-              <p className="text-xs text-purple-600 mt-0.5">
-                AI computer vision will automatically recognize dish categories, estimate portion volumes, and score freshness from images.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Submit */}

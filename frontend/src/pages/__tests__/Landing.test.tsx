@@ -22,6 +22,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Landing from '../Landing';
+// The document this page is served in: its meta description is what a search
+// result or a link preview shows before the page itself is ever rendered.
+import indexHtml from '../../../index.html?raw';
 
 /** Academic identification, removed from the public page in Task 29. */
 const ACADEMIC = [
@@ -142,6 +145,17 @@ describe('Landing', () => {
 
     expect(footer).not.toBeNull();
     expect(footer?.textContent ?? '').not.toMatch(/AI[\s-]?assisted/i);
+  });
+
+  it('claims no AI capability in the document meta description either', () => {
+    const doc = new DOMParser().parseFromString(indexHtml, 'text/html');
+    const description = doc.querySelector('meta[name="description"]')?.getAttribute('content');
+
+    expect(description).toBeTruthy();
+    // The product name may stay; a capability claim may not (I-10, P2-4).
+    expect(description).not.toMatch(/AI[\s-]?(assisted|powered|driven)/i);
+    expect(description).not.toMatch(/machine learning|\bML\b/i);
+    expect(description).toContain('connecting surplus food with verified community organizations');
   });
 
   it('keeps the hero, its CTAs and the sections the navbar anchors to', () => {

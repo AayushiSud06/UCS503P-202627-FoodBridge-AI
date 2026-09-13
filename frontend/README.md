@@ -2,7 +2,7 @@
 
 > **Turning Surplus Food Into Community Impact**
 
-An AI-assisted community food redistribution platform connecting surplus food from college campuses with organizations that need it.
+A community food redistribution platform connecting surplus food from college campuses with organizations that need it.
 
 ---
 

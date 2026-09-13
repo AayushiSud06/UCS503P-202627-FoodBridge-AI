@@ -3,7 +3,8 @@
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
 > date; updated for Tasks 37–43 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`, `d34190c`,
-> `354874c`, `b583213`, `7764e06`; D-53–D-60) and the uncommitted Task 45 (D-61). ⚠️ marks a known weakness with its `TASKS.md` id.
+> `354874c`, `b583213`, `7764e06`, `c043051`; D-53–D-61), and for the uncommitted Task 46 (P2-4,
+> copy only). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -70,7 +71,7 @@ transition must come from anything but a request.
 | `context/AppContext.tsx` | Loads everything once per sign-in (`listDonations(limit=500)` + role-gated slices) and **re-loads after every write** (D-11). Selectors: `useAvailableDonations` (D-50), `useRequirements` (active) / `useAllRequirements`. |
 | `components/ProtectedRoute.tsx` | Route guard — UX, not security (D-14). |
 | `pages/` (30 files) | Desktop portals `donor/`, `ngo/`, `volunteer/`, `admin/`, plus `Landing`, `Login`. |
-| `mobile/` (26 files) | `/m/*` phone layouts with an inner role guard. ⚠️ only reachable by URL; header kicker hard-codes seeded org names (P2-4). |
+| `mobile/` (26 files) | `/m/*` phone layouts with an inner role guard. The shell's header names the signed-in account unless the portal's `RoleConfig` carries a role label (courier, admin). ⚠️ only reachable by URL; `CreateDonationCamera` submits a fixed seeded pickup address (P2-4 residue). |
 
 **Unused API surface:** the client never calls `GET /donations/{id}`, `GET /recipients/me`
 or any `/admin/users` route — there is no admin UI for suspending or re-roling accounts.
@@ -268,13 +269,14 @@ Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, t
 and claim concurrency, cancellation accounting (D-58), donation and requirement input bounds
 (D-60), PATCH null handling on every route (D-61). Missing: the expiry sweep under concurrency, `UtcDateTime`, profile input bounds.
 
-**Frontend — `npm test`: 140 tests over 16 files, ~4 s.** Vitest on the project's own
+**Frontend — `npm test`: 156 tests over 18 files, ~4 s.** Vitest on the project's own
 `vite.config.ts`; node environment by default, jsdom per file where rendering. Covers the
 `lib/` arithmetic (adapters, time, geo, impact, api), `ProtectedRoute`, the requirements
-slice, and content/absence tests for Landing, Login, DonorNeedsBoard, NGORequirements,
-NGOAvailableDonations, VolunteerHistory, AdminDashboard, AdminAnalytics. `src/test/fixtures.ts`
-holds typed wire builders. Missing: `AppContext` load/refetch, `useAction`, donation
-creation, lifecycle action buttons, any mobile screen.
+slice, and content/absence tests for Landing (including `index.html`'s meta description),
+Login, CreateDonation, DonorNeedsBoard, NGORequirements, NGOAvailableDonations,
+VolunteerHistory, AdminDashboard, AdminAnalytics and the mobile shell header.
+`src/test/fixtures.ts` holds typed wire builders. Missing: `AppContext` load/refetch,
+`useAction`, donation submission, lifecycle action buttons, any mobile screen body.
 
 ## CI — `.github/workflows/ci.yml`
 

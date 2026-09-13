@@ -20,8 +20,12 @@ export interface Tab {
 
 export interface RoleConfig {
   role: UserRole;
-  /** Small caps line above the screen title. */
-  kicker: string;
+  /**
+   * Small caps line above the screen title. Left out, the header names the
+   * signed-in account instead — a portal many accounts share has no fixed
+   * identity of its own to print.
+   */
+  kicker?: string;
   base: string;
   tabs: Tab[];
 }
@@ -61,13 +65,11 @@ export const ADMIN_TABS: Tab[] = [
 export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   donor: {
     role: 'donor',
-    kicker: 'College Central Mess',
     base: '/m/donor',
     tabs: DONOR_TABS,
   },
   ngo: {
     role: 'ngo',
-    kicker: 'Helping Hands Kitchen',
     base: '/m/ngo',
     tabs: NGO_TABS,
   },

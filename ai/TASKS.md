@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-13, `master` at `7764e06`, plus the
-> uncommitted Task 45 (P2-3) changes.** The full health audit of 2026-09-10 was run against
+> **Verified against the repository on 2026-09-13, `master` at `c043051`, plus the
+> uncommitted Task 46 (P2-4) changes.** The full health audit of 2026-09-10 was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,12 +18,14 @@
 
 ## Current
 
-**Task 45 · P2-3 (null half) — implemented, uncommitted, awaiting review.** An explicit
-`null` in any PATCH clears a nullable column and leaves a NOT NULL column alone, instead of
-a 500 (D-61). See P2-3 below. Next: the P2-2 profile half, P2-3's exception-handler half,
-then P2-4…P2-6.
+**Task 46 · P2-4 — implemented, uncommitted, awaiting review.** The audit's residual
+misleading copy is gone: the mobile header's seeded organisation names, the donor create
+page's "Future Intelligence" note, "AI matching" subtitle and Thapar demo preset, and
+"AI-assisted" in `index.html` and `frontend/README.md`. See P2-4 below. Next: the P2-2
+profile half, P2-3's exception-handler half, then P2-5, P2-6 and P2-4's mobile residue.
 
-Every P1 is fixed; P2-1 and P2-2's donation half are committed (`b583213`, `7764e06`).
+Every P1 is fixed; P2-1, P2-2's donation half and P2-3's null half are committed
+(`b583213`, `7764e06`, `c043051`).
 
 ## P0 — urgent
 
@@ -210,7 +212,7 @@ Every P1 is fixed; P2-1 and P2-2's donation half are committed (`b583213`, `7764
   (repro), which `api.ts` renders as "Cannot reach the FoodLink server". Scope: skip explicit
   nulls as `update_requirement` does; add one exception handler returning a sentence and a
   correlation id. `[B-7 · R-18]` **S–M**
-  ✅ **Null half FIXED by Task 45 (uncommitted, awaiting review), D-61.** Reproduced on four
+  ✅ **Null half FIXED by Task 45 (`c043051`), D-61.** Reproduced on four
   routes, not two: null on any NOT NULL column of `/recipients/me` (`name`, `type`,
   `location`, `capacity`), `/volunteers/me` (`isAvailable`, `location`), `/auth/me` (`name`)
   and `/admin/users/{id}` (`isActive`, `role`, `name`) was a 500. All five PATCH handlers now
@@ -236,6 +238,28 @@ Every P1 is fixed; P2-1 and P2-2's donation half are committed (`b583213`, `7764
   naming "Thapar University" (lines 58-74, button line ~172); `index.html` meta and
   `frontend/README.md` still say "AI-assisted" (I-10). Scope: copy only, plus absence tests
   in the Landing-test style. **S**
+  ✅ **FIXED by Task 46 (uncommitted, awaiting review).** Copy and one demo control only; no
+  API, routing, validation or submission change.
+  - Mobile: `RoleConfig.kicker` is optional. The donor and NGO portals have none, so
+    `MobileShell` prints the signed-in account's `organization`, or its `name` when that is
+    empty. Courier ("Courier") and admin ("FoodLink Platform") keep their role labels.
+  - `CreateDonation.tsx`: removed the "Future Intelligence Feature" computer-vision callout,
+    the *Quick Demo Preset* button and its handler, and the "intelligent AI matching"
+    subtitle (not in the audit, same claim on the same page). The subtitle now reads "List
+    surplus food for verified community organisations to accept." The location placeholder
+    "College Central Mess, Thapar University" is now "Building, street and area".
+  - `index.html` meta description and `frontend/README.md` line 5: "AI-assisted" removed.
+    The product name "FoodLink AI" is unchanged.
+- **Evidence:** new `mobile/__tests__/MobileShell.test.tsx` (10) and
+  `pages/donor/__tests__/CreateDonation.test.tsx` (5), plus one `Landing.test.tsx` test that
+  reads `index.html?raw`. 12 of the 16 fail against the pre-fix source; the other 4 guard what
+  must survive (role labels, the form's fields). README checked by search only.
+- ⚠️ **Still open (mobile residue, found during Task 46, not in the audit):**
+  `mobile/CreateDonationCamera.tsx` scripts a "vision read" (a timer and fixed `READINGS`),
+  and submits every donation with the description "Read from photo: …" and the location
+  "College Central Mess, Thapar University". Fixing it changes what is submitted, so it was
+  kept out of a copy-only task. `mobile/DonorProfile.tsx:30` prints `aayushi@thapar.edu` for
+  every donor. Low: `Login.tsx` registration placeholders use seeded organisation names.
 - **P2-5 · `/ngo/available/:id` opens nothing.** CONFIRMED BUG. The route
   (`App.tsx:83`) renders `NGOAvailableDonations`, which never reads the param, so the
   dashboard's deep link lands on an unselected list. `[QA-8]` **S**
@@ -346,9 +370,9 @@ donations (`R-35`); PostGIS (§16.3).
 | Courier claim race | FIXED | `_claim_pickup` |
 | Other transitions' races | STILL PRESENT, **worse than documented** | P1-3 |
 | QA I-1…I-9 interface claims | FIXED | D-32…D-40 |
-| I-10 `index.html` "AI-assisted", I-11 donor "Future Intelligence" note | STILL PRESENT | P2-4 |
-| Hard-coded seeded identities (I-1) | PARTIALLY FIXED | desktop fixed; mobile kicker → P2-4 |
-| Explicit-null PATCH → 500 | FIXED (Task 45, uncommitted) | D-61; `test_patch_null_semantics.py` |
+| I-10 `index.html` "AI-assisted", I-11 donor "Future Intelligence" note | FIXED (Task 46, uncommitted) | `Landing.test.tsx`, `CreateDonation.test.tsx` |
+| Hard-coded seeded identities (I-1) | PARTIALLY FIXED | desktop and mobile kicker fixed (Task 46, uncommitted); mobile camera flow and donor profile → P2-4 residue |
+| Explicit-null PATCH → 500 | FIXED (Task 45, `c043051`) | D-61; `test_patch_null_semantics.py` |
 | `/ngo/available/:id` deep link | STILL PRESENT | P2-5 |
 | `MATCHED` activity line uses current score | STILL PRESENT, narrowed | P3 |
 | Retired requirement had no reader (`F-1`) | FIXED (D-46) | `includeInactive` |
@@ -367,7 +391,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 45 · P2-3 (null half): an explicit PATCH `null` clears a nullable column and leaves a NOT NULL one alone, instead of a 500 (D-61) |
+| uncommitted | Task 46 · P2-4: seeded organisation names, the "Future Intelligence" note, the Thapar demo preset and "AI-assisted"/"AI matching" copy removed (D-31) |
+| `c043051` | Task 45 · P2-3 (null half): an explicit PATCH `null` clears a nullable column and leaves a NOT NULL one alone, instead of a 500 (D-61) |
 | `7764e06` | Task 44 · P2-2 (donation/requirement half): text bounded at the schema, `beneficiaryCount` ≥ 0 (D-60) |
 | `b583213` | Task 43 · P2-1: donation creation rate-limited per donor account (10/h) and per IP (30/h); admins exempt (D-59) |
 | `354874c` | Task 42 · P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup (D-58) |

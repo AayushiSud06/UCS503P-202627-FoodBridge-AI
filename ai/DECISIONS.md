@@ -1,8 +1,7 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-61. **D-01…D-60 are implemented in commits
-> up to `7764e06`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-61 is
-> implemented in the working tree, uncommitted** (Task 45). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-61. **D-01…D-61 are implemented in commits
+> up to `c043051`** (D-01…D-52 re-verified by the health audit of 2026-09-10). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -55,7 +54,7 @@
 > | D-45 | Match distance belongs to the org it describes (blur) | in force; `HA-3a` residual rate-limited, not closed (D-59) |
 > | D-46 | `includeInactive` is a second axis; donors excluded | in force |
 > | D-47 | Same scope governs `DonationOut` location-derived fields | in force; extended to the donor's own pin by D-57 |
-> | D-48 | Pre-login and post-login pages carry no roadmap/course artefacts | in force; donor create page residue (P2-4) |
+> | D-48 | Pre-login and post-login pages carry no roadmap/course artefacts | in force; donor create page residue removed (Task 46, uncommitted) |
 > | D-49 | Sign-in screen carries no credential | in force |
 > | D-50 | Availability is a deadline as well as a status | in force |
 > | D-51 | Courier history ends at `DELIVERED` | in force |
@@ -68,7 +67,7 @@
 > | D-58 | A cancellation is neutral to reliability; collection ends the donor's right to cancel | in force (`354874c`) |
 > | D-59 | Donation creation is limited per donor account and per network; admins exempt | in force (`b583213`) |
 > | D-60 | Submitted donation and requirement text is bounded at the schema: columns at their size, `Text` at 2,000 | in force (`7764e06`) |
-> | D-61 | In a PATCH, `null` clears a nullable column and leaves a NOT NULL column alone | in force (Task 45, uncommitted) |
+> | D-61 | In a PATCH, `null` clears a nullable column and leaves a NOT NULL column alone | in force (`c043051`) |
 >
 > Reliability accounting (D-15, D-41, D-58): a release is not an acceptance, and a
 > cancellation — the donor's before `PICKED_UP`, or an administrator's — takes its acceptance
@@ -2120,9 +2119,9 @@ and **links that do not go anywhere**. Established by the product review behind 
 - **This is not the rename.** The product is still called FoodLink AI in the navbar, hero,
   footer, `index.html` title and meta description. Renaming is separate open work and this
   decision deliberately does not start it.
-- ⚠️ **`index.html`'s meta description still reads "An AI-assisted platform"**, which is
-  the same claim removed from the visible footer, one layer out where nobody was looking.
-  Out of Task 29's scope; recorded in `TASKS.md` -> *Backlog -> I*.
+- ✅ **`index.html`'s meta description used to read "An AI-assisted platform"**, the same
+  claim removed from the visible footer, one layer out. Out of Task 29's scope; removed by
+  Task 46 (P2-4, uncommitted), and `Landing.test.tsx` now reads the description too.
 - **Held mechanically.** `pages/__tests__/Landing.test.tsx` asserts the absence of the
   academic identifiers, the roadmap phases and any `href="#"` anywhere on the page,
   alongside D-31's existing absence assertions — so a reintroduced label or dead link
@@ -2953,7 +2952,7 @@ Manager. Every text field a donor or a kitchen submits that is stored in the row
 
 ## D-61 · In a PATCH, `null` clears a column that can hold null and leaves one that cannot alone **[documented]**
 
-**Decision.** P2-3's null half (Task 45, uncommitted). All five PATCH handlers read their body
+**Decision.** P2-3's null half (Task 45, `c043051`). All five PATCH handlers read their body
 through `schemas.patch_changes(body, row)`: `/auth/me`, `/admin/users/{id}`, `/recipients/me`,
 `/volunteers/me` and `/requirements/{id}`. A field left out is not a change. A value is
 applied. An explicit `null` is applied only when the mapped column is nullable; otherwise it is
