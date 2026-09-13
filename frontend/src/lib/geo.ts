@@ -96,6 +96,44 @@ export function formatTotalDistanceKm(km: number | null, fallback = 'Not availab
   return km === null ? fallback : `${km.toFixed(1)} km`;
 }
 
+/**
+ * Where a reader may be told this pickup is — the address, or the coarse cell.
+ *
+ * The server sends exactly one of the two (D-57): a courier who has not claimed
+ * the run gets `pickupArea` and no `location`, and everyone else — the donor,
+ * the kitchen, an administrator, the assigned courier — gets `location` and no
+ * `pickupArea`. So this is a choice between two answers to the same question,
+ * never a blend, and screens read it instead of `donation.location` so a
+ * withheld address cannot render as a blank line.
+ */
+export function displayPickupLocation(
+  donation: Donation,
+  fallback = 'Location unavailable',
+): string {
+  return donation.location || donation.pickupArea || fallback;
+}
+
+/** True while this donation's exact address and donor are still withheld. */
+export function isPickupCoarse(donation: Donation): boolean {
+  return !donation.location && Boolean(donation.pickupArea);
+}
+
+/**
+ * Who the food is coming from, for a reader who may not be told yet.
+ *
+ * Same shape as `displayPickupLocation` and for the same reason: a courier
+ * browsing the unclaimed pool reads no donor name or organisation at all, and
+ * the honest label says the claim is what reveals it rather than leaving the
+ * line empty or inventing a donor.
+ */
+export function displayDonorLabel(donation: Donation, withheld = 'Shown once claimed'): string {
+  return donation.donorOrganization || donation.donorName || withheld;
+}
+
+/** One wording for what a coarse pickup area is, so no two screens differ. */
+export const PICKUP_AREA_HINT =
+  'Approximate area only — the exact pickup address is shown once you claim this pickup';
+
 /** One wording for what the number means, so no two screens explain it differently. */
 export const DISTANCE_HINT =
   'Straight-line distance between the two pinned locations — not a road or driving distance';

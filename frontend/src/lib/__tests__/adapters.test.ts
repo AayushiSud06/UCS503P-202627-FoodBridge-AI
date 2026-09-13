@@ -48,6 +48,38 @@ describe('toDonation', () => {
     expect(donation.completedAt).toBeUndefined();
   });
 
+  it('carries a withheld donor and pin across as empty, never as a stand-in', () => {
+    // What a courier reads about a pickup they have not claimed (D-57). The
+    // domain type keeps these fields required, so the adapter has to choose a
+    // value — and the only honest one is nothing, because the server said
+    // nothing. A placeholder here would be indistinguishable from a real
+    // donor called "Unknown" on every screen downstream.
+    const donation = toDonation(
+      apiDonation({
+        donorId: null,
+        donorName: null,
+        donorOrganization: null,
+        location: null,
+        latitude: null,
+        longitude: null,
+        pickupArea: 'Approx. 30.35N, 76.36E',
+      }),
+    );
+
+    expect(donation.donorId).toBe('');
+    expect(donation.donorName).toBe('');
+    expect(donation.donorOrganization).toBe('');
+    expect(donation.location).toBe('');
+    expect(donation.pickupArea).toBe('Approx. 30.35N, 76.36E');
+  });
+
+  it('leaves pickupArea undefined when the exact address was disclosed', () => {
+    const donation = toDonation(apiDonation({ location: 'Patiala', pickupArea: null }));
+
+    expect(donation.location).toBe('Patiala');
+    expect(donation.pickupArea).toBeUndefined();
+  });
+
   it('turns absent optional wire values into undefined, not the string "null"', () => {
     const donation = toDonation(
       apiDonation({ recipientId: null, volunteerId: null, matchScore: null, distanceKm: null }),

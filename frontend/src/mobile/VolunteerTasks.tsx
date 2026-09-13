@@ -6,7 +6,10 @@ import { useAction } from '../lib/hooks';
 import { deadlineStatus, formatClock, URGENCY_STYLES } from '../lib/time';
 import type { Donation, DonationStatus } from '../types';
 import StatusBadge from '../components/StatusBadge';
-import { DISTANCE_HINT, formatDistanceKm } from '../lib/geo';
+import {
+  DISTANCE_HINT, PICKUP_AREA_HINT, displayDonorLabel, displayPickupLocation,
+  formatDistanceKm, isPickupCoarse,
+} from '../lib/geo';
 import { MEmpty, MSection } from './parts';
 
 /** The one action available at each point in a courier's run. */
@@ -86,7 +89,7 @@ export default function VolunteerTasks() {
                     {d.quantity} {d.unit} · {d.foodName}
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500 truncate">
-                    {d.donorOrganization} → {d.recipientName ?? 'kitchen'}
+                    {displayDonorLabel(d)} → {d.recipientName ?? 'kitchen'}
                   </p>
                 </div>
                 {mine && (
@@ -135,7 +138,12 @@ export default function VolunteerTasks() {
             <div className="flex-1 overflow-y-auto">
               <div className="px-5 py-4 space-y-3.5 bg-white border-b border-gray-200">
                 {([
-                  ['A', 'Collect', selected.location, selected.donorOrganization],
+                  [
+                    'A',
+                    'Collect',
+                    displayPickupLocation(selected),
+                    isPickupCoarse(selected) ? PICKUP_AREA_HINT : displayDonorLabel(selected),
+                  ],
                   ['B', 'Deliver', selected.recipientName ?? 'To be assigned', 'Recipient kitchen'],
                 ] as const).map(([pin, label, line1, line2], i) => (
                   <div key={pin} className="flex gap-3">

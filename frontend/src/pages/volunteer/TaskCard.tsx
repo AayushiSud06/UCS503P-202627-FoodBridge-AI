@@ -1,7 +1,10 @@
 import { MapPin, Clock, Package, Building2, Navigation, CheckCircle } from 'lucide-react';
 import StatusBadge from '../../components/StatusBadge';
 import MapPreview from '../../components/MapPreview';
-import { DISTANCE_HINT, displayDistanceKm, formatDistanceKm } from '../../lib/geo';
+import {
+  DISTANCE_HINT, PICKUP_AREA_HINT, displayDistanceKm, displayDonorLabel,
+  displayPickupLocation, formatDistanceKm, isPickupCoarse,
+} from '../../lib/geo';
 import { useApp } from '../../context/AppContext';
 import { useAction } from '../../lib/hooks';
 import { formatClock } from '../../lib/time';
@@ -17,6 +20,9 @@ export default function TaskCard({ donation }: TaskCardProps) {
   const { run, isBusy } = useAction();
   const [expanded, setExpanded] = useState(false);
   const loading = isBusy;
+  // Unclaimed: the server has sent a coarse area instead of the donor's pin
+  // and name, so this card must not present either as though it had them.
+  const coarse = isPickupCoarse(donation);
 
   // The courier claiming a pickup is identified by their token, so the server
   // resolves which volunteer profile this is — and refuses if another courier
@@ -115,7 +121,11 @@ export default function TaskCard({ donation }: TaskCardProps) {
               <Building2 size={16} className="text-emerald-600" />
             </div>
             <p className="text-xs font-medium text-gray-500">DONOR</p>
-            <p className="text-xs font-bold text-gray-800 truncate">{donation.donorOrganization}</p>
+            <p
+              className={`text-xs font-bold truncate ${coarse ? 'text-gray-400 font-medium' : 'text-gray-800'}`}
+            >
+              {displayDonorLabel(donation)}
+            </p>
           </div>
           <div className="text-center">
             <p
@@ -140,14 +150,19 @@ export default function TaskCard({ donation }: TaskCardProps) {
       {/* Details row */}
       <div className="px-5 pb-4 flex flex-wrap gap-4 text-xs text-gray-500">
         <span className="flex items-center gap-1"><Clock size={12} /> Pickup by {formatClock(donation.pickupDeadline)}</span>
-        <span className="flex items-center gap-1"><MapPin size={12} /> {donation.location}</span>
+        <span
+          className="flex items-center gap-1"
+          title={coarse ? PICKUP_AREA_HINT : undefined}
+        >
+          <MapPin size={12} /> {displayPickupLocation(donation)}
+        </span>
       </div>
 
       {/* Expanded schematic */}
       {expanded && (
         <div className="px-5 pb-4">
           <MapPreview
-            pickupLocation={donation.location}
+            pickupLocation={displayPickupLocation(donation)}
             dropoffLocation={donation.recipientName ?? 'Recipient'}
             distanceKm={displayDistanceKm(donation) ?? undefined}
             volunteerLocation="You"
@@ -158,7 +173,10 @@ export default function TaskCard({ donation }: TaskCardProps) {
       {/* Action */}
       <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-xs text-gray-400">
-          {donation.status === 'ACCEPTED' && 'Accept this task to start the pickup.'}
+          {donation.status === 'ACCEPTED' &&
+            (coarse
+              ? 'Accept this task to start the pickup — the exact address and donor are shown once you claim it.'
+              : 'Accept this task to start the pickup.')}
           {donation.status === 'VOLUNTEER_ASSIGNED' && 'Proceed to pickup location.'}
           {donation.status === 'PICKED_UP' && 'On the way to ' + (donation.recipientName ?? 'recipient') + '.'}
         </p>

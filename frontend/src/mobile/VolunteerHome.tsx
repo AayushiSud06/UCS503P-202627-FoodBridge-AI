@@ -6,7 +6,9 @@ import { useCurrentUser } from '../context/AuthContext';
 import { MHero, MStatGrid, MSection, MEmpty } from './parts';
 import StatusBadge from '../components/StatusBadge';
 import { volunteerImpact } from '../lib/impact';
-import { DISTANCE_HINT, formatDistanceKm, formatTotalDistanceKm } from '../lib/geo';
+import {
+  DISTANCE_HINT, displayDonorLabel, formatDistanceKm, formatTotalDistanceKm,
+} from '../lib/geo';
 
 const ACTIVE = ['VOLUNTEER_ASSIGNED', 'PICKED_UP'];
 
@@ -125,7 +127,7 @@ export default function VolunteerHome() {
               {d.quantity} {d.unit} · {d.foodName}
             </p>
             <p className="mt-0.5 text-xs text-gray-500 truncate">
-              {d.donorOrganization} → {d.recipientName ?? 'kitchen'} ·{' '}
+              {displayDonorLabel(d)} → {d.recipientName ?? 'kitchen'} ·{' '}
               <span title={DISTANCE_HINT}>{formatDistanceKm(d, 'distance n/a')}</span>
             </p>
           </button>

@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-56. **D-01…D-55 are implemented in commits
-> up to `3d6f8f8`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-56 is
-> uncommitted in the working tree** (Task 40). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-57. **D-01…D-56 are implemented in commits
+> up to `692266b`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-57 is
+> implemented in the working tree, uncommitted** (Task 41). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -31,7 +31,7 @@
 > | D-21 | `create_all` at startup | superseded by D-23 |
 > | D-22 | Fail-closed signing key with dev opt-in | in force |
 > | D-23 | Alembic owns the schema; runs in the lifespan | in force |
-> | D-24 | Donation read scope is a WHERE clause; denial 404 | ngo half gated on verification by D-53; ⚠️ courier half open (P1-1b) |
+> | D-24 | Donation read scope is a WHERE clause; denial 404 | ngo half gated on verification by D-53; courier half scoped by disclosure, not exclusion (D-57) |
 > | D-25 | CI validates, never deploys, holds no secret | in force; frontend tests run since `d611424` |
 > | D-26 | Recipient reads scoped; denial is an empty list | in force |
 > | D-27 | Per-process sliding-window auth rate limit | in force; donation creation unlimited (P2-1) |
@@ -54,7 +54,7 @@
 > | D-44 | Requirements scoped by role; donors see verified orgs' | in force |
 > | D-45 | Match distance belongs to the org it describes (blur) | in force; `HA-3a` residual open |
 > | D-46 | `includeInactive` is a second axis; donors excluded | in force |
-> | D-47 | Same scope governs `DonationOut` location-derived fields | in force |
+> | D-47 | Same scope governs `DonationOut` location-derived fields | in force; extended to the donor's own pin by D-57 |
 > | D-48 | Pre-login and post-login pages carry no roadmap/course artefacts | in force; donor create page residue (P2-4) |
 > | D-49 | Sign-in screen carries no credential | in force |
 > | D-50 | Availability is a deadline as well as a status | in force |
@@ -63,7 +63,8 @@
 > | D-53 | An NGO reads the open pool only once verified | in force (`c65c65f`) |
 > | D-54 | A real change to an organisation's name or pin voids its verification | in force (`be831b8`) |
 > | D-55 | Every lifecycle status write carries its own precondition | in force (`3d6f8f8`) |
-> | D-56 | Donation photos are resized in the browser, the only place holding the bytes | uncommitted (Task 40) |
+> | D-56 | Donation photos are resized in the browser, the only place holding the bytes | in force (`692266b`) |
+> | D-57 | A courier reads a coarse pickup area until the claim binds the run to them | in force (Task 41, uncommitted) |
 >
 > Reliability accounting (D-15, D-41) has one further gap: donor cancellations count
 > against the kitchen (P1-4).
@@ -572,8 +573,9 @@ relationship.
 ⚠️ **Audit 2026-09-10: the `ngo` and `volunteer` scopes were open to self-signup
 accounts**, so a stranger with a fresh account read every open donation's exact pin,
 address text and donor name (reproduced). **The `ngo` half is closed by D-53** (the pool
-requires a verified organisation). The `volunteer` half is open — couriers have no vetting
-at all — `TASKS.md` P1-1b / DQ-1.
+requires a verified organisation) and **the `volunteer` half by D-57** — couriers still have
+no vetting, so the pool stays readable and the donor's pin, address and name are withheld
+until the claim binds the run to them.
 
 ⚠️ **The write path was left untouched here, and that was wrong.** This section used to
 read that `update_status` could keep the unscoped `_get_or_404` "because its authorisation
@@ -673,7 +675,7 @@ readable by any self-signup `ngo` account (`HA-1`).
 position upstream of scoring, not by rounding the distance (rounding leaves boundaries at
 known distances). Residual `HA-3a`, the eligibility gate as an oracle, is `TASKS.md` P2-1.
 The same "self-signup role is not permission to read people" lesson is applied to donors'
-pickup data for the `ngo` role by D-53; ⚠️ the courier half is open (P1-1b).
+pickup data for the `ngo` role by D-53 and for the courier by D-57.
 
 ---
 
@@ -2445,8 +2447,8 @@ D-50) **or** its own. `Recipient.is_verified` is read on every request. Committe
 
 **Constraints.**
 
-- ⚠️ **Couriers are unchanged** — any self-signup `volunteer` still reads unclaimed
-  `ACCEPTED` pickups with exact pins (P1-1b, DQ-1).
+- **Couriers were left unchanged here**, and are handled differently: they must keep
+  browsing the pool, so D-57 scopes what an unclaimed pickup *says* rather than excluding it.
 - `ACCEPTED` from the open pool is not read-scoped, so an unverified kitchen posting it by
   id still gets the pre-existing 403 "awaiting verification"; that and the transition 409s
   are a pre-existing existence/status oracle (`TASKS.md` P3).
@@ -2466,7 +2468,8 @@ D-50) **or** its own. `Recipient.is_verified` is read on every request. Committe
 **Decision.** `PATCH /recipients/me` (`routers/organisations.update_my_recipient`) clears
 `Recipient.is_verified` in the same commit whenever a submitted `name`, `latitude` or
 `longitude` differs from the stored value (`organisations.VERIFIED_IDENTITY_FIELDS`). The
-policy was approved by the Project Manager as the answer to DQ-2. Uncommitted (Task 38).
+policy was approved by the Project Manager as the answer to DQ-2. Committed as `be831b8`
+(Task 38).
 
 **The rule, exactly.**
 
@@ -2589,7 +2592,8 @@ acceptance branch: `ACCEPTED` in both its meanings (the acceptance and the relea
 re-encode as **JPEG** down a fixed quality ladder (0.72 → 0.55 at 1280, then 960 px and
 720 px) until the resulting `data:` URL fits `MAX_IMAGE_URL_LENGTH`, and refuse with a
 readable sentence if it cannot. Both create-donation screens call it. The server keeps the
-256 KiB cap and gains a shape check, `schemas.IMAGE_URL_PATTERN`. Uncommitted (Task 40).
+256 KiB cap and gains a shape check, `schemas.IMAGE_URL_PATTERN`. Committed as `692266b`
+(Task 40).
 
 **Why the browser.** There is no upload endpoint and no object storage: the donation row
 *is* the image store, and the backend only ever receives a string. The bytes exist nowhere
@@ -2647,3 +2651,82 @@ real byte-level check stays where the bytes are.
 - ⚠️ `createImageBitmap` is unavailable on Safari 14 and older; such a browser now gets the
   unreadable-image message rather than an oversized upload. Acceptable here, and a
   fallback through an `<img>` element is the change if it ever matters.
+
+---
+
+## D-57 · A courier reads a coarse pickup area until the claim binds the run to them **[documented]**
+
+**Decision.** `serialize.donation_out` takes a second reader scope,
+`precise_pickup_for`, built by `donations._precise_pickup_scope` in the convention
+`_precise_distance_scope` already uses: `None` is unrestricted, a set holds the courier ids
+whose own runs may be read in full. A `volunteer` gets `{own id}` (or the empty set with no
+courier row); every other role gets `None` and reads exactly what it always did. For a
+donation outside that scope — which for a courier means every pickup they have not claimed —
+`latitude`, `longitude`, `location`, `donorName`, `donorOrganization` and `donorId` are
+**null**, and a new `pickupArea` carries the donor's pin snapped to `LOCATION_BLUR_GRID_DEG`
+and rendered as text. The read scope itself is untouched: the unclaimed pool stays readable.
+This is the answer to DQ-1, approved by the Project Manager. Task 41, uncommitted.
+
+**Reasoning.**
+
+- **The trust boundary already existed; it was only written, never read.** `_readable_by`'s
+  volunteer branch is two disjuncts — `ACCEPTED AND volunteer_id IS NULL`, or
+  `volunteer_id == me` — and `_claim_pickup`'s conditional UPDATE is the one atomic step
+  that moves a row from the first to the second. Hanging the disclosure on
+  `donation.volunteer_id` makes it a fact about the row, settled by the same write that
+  settles the claim, so there is no window in which a courier is told where to go before
+  the database agrees the run is theirs.
+- **Scoped, not excluded — the opposite of D-53.** An unverified NGO was dropped from the
+  pool because it could not accept anyway, so the data bought it nothing. A courier *must*
+  browse the pool; that is the work. Excluding them would close the product, so this
+  narrows what a donation says instead of which donations there are. That is D-47's shape
+  (`matchScore`, `distanceKm`) applied to the donor rather than the kitchen, and it reuses
+  D-47's helper shape rather than adding a second authorization model.
+- **Withheld, then stood in for.** The pin is null rather than rounded in place, because
+  D-33 forbids printing a plausible number in place of one the server does not have and a
+  coarsened `latitude` would be exactly that — a field named for the pin, holding something
+  else. `pickupArea` is separately named and plainly approximate, so no reader has to
+  decide which of two coordinates to believe, and the two are never both present.
+- **The 0.01° grid, because it already means "coarse enough" here.** About a kilometre a
+  side: enough for a courier to tell which part of town a run is in and judge whether to
+  take it, not enough to find a doorstep. D-45 rejected coarsening for `/matches` distances
+  because a reader who can move their own pin and re-ask walks the boundary and recovers
+  the point. That attack needs a *movable* probe, and a courier cannot move the donor's
+  pin: one donation yields one cell, re-read as often as you like. So the objection that
+  ruled blurring out there does not apply here, and reusing the constant avoids a second
+  notion of coarse.
+- **No courier vetting.** `Volunteer` has no verification column and the platform has no
+  concept of one; inventing it would be a new authorization subsystem, an admin screen that
+  does not exist, and a queue nobody staffs — and it would still not answer why an
+  *un*claimed pickup needs to show a doorstep at all.
+- **Donor identity goes with the pin, including `donorId`.** A name beside a coarse cell is
+  most of the way back to an address, and the id alone clusters a donor's postings. None of
+  the three is needed to choose a run.
+
+**Constraints.**
+
+- **`DonationOut.latitude`, `longitude`, `location`, `donorName` and `donorId` are now
+  nullable** on the wire. `DonationCreate` is unchanged — a donor still posts an exact,
+  required pin — and `Donation.latitude`/`longitude` still store it exactly. Only who is
+  shown it moved.
+- The frontend's domain `Donation` keeps those fields required and the adapter maps a
+  withheld value to `''`, so screens outside the courier portal are untouched. Courier
+  screens read `lib/geo.displayPickupLocation` / `displayDonorLabel` instead of the raw
+  fields; reading them raw would render a blank line rather than the area.
+- ⚠️ **Protection varies with density.** A 1 km cell hides a city donor among thousands of
+  buildings and a rural one among very few. The grid is fixed, so the guarantee is "not the
+  pin", not "k people".
+- ⚠️ **Not redacted:** `description`, `imageUrl` and event notes stay as they were, and a
+  donor who types an address into the description, or photographs their house front, has
+  disclosed it. Those are unbounded free-text fields (`TASKS.md` P2-2) and bounding or
+  scoping them is separate work.
+- The 8 km eligibility gate remains inferable through `/matches` (`HA-3a`, P2-1), but it
+  localises a donation far less precisely than the ~1 km cell this deliberately publishes,
+  so it does not undo the boundary. `MatchOut` carries no donor field, and `distanceKm` was
+  already null for a courier (D-47).
+- A **release** (D-41) clears `volunteer_id`, so the donation returns to the pool and to the
+  coarse area for the courier who held it — the boundary turns back over with the row.
+- A losing claim is refused by `_claim_pickup` before anything is serialized, so a second
+  claim attempt cannot be used as a read (D-28, D-55 unchanged).
+- Two extra `Volunteer` lookups per courier request — one in `_readable_by`, one here.
+  Measurable only if the pool grows; the scope is resolved once per page, not per donation.

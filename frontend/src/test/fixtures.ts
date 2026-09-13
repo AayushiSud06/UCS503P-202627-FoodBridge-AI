@@ -69,6 +69,7 @@ export function apiDonation(overrides: Partial<ApiDonation> = {}): ApiDonation {
     location: 'Patiala',
     latitude: 30.354,
     longitude: 76.363,
+    pickupArea: null,
     preparedAt: null,
     pickupDeadline: '2026-09-05T18:00:00.000Z',
     status: 'AVAILABLE',

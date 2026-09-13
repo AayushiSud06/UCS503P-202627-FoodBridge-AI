@@ -279,8 +279,17 @@ class StatusEventOut(Schema):
 
 class DonationOut(Schema):
     id: int
-    donor_id: int
-    donor_name: str
+    #: Who posted this, and where it is. **Null for a courier who has not
+    #: claimed this pickup** — `volunteer` is a self-signup role whose read
+    #: scope covers the whole unclaimed `ACCEPTED` pool, and these five fields
+    #: are a donor's doorstep and name. They are withheld rather than
+    #: coarsened, exactly as `match_score` and `distance_km` are below, and
+    #: `pickup_area` carries the coarse stand-in instead. Every other reader —
+    #: the donor, the organisation that accepted, an administrator, and the
+    #: courier once the claim is in the row — reads them unchanged. See
+    #: `serialize._may_collect`, `donations._precise_pickup_scope`, D-57.
+    donor_id: int | None = None
+    donor_name: str | None = None
     donor_organization: str | None = None
     food_name: str
     category: str
@@ -289,9 +298,15 @@ class DonationOut(Schema):
     storage_type: str
     description: str
     image_url: str | None = None
-    location: str
-    latitude: float
-    longitude: float
+    location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    #: Where the pickup roughly is, for a reader withheld the pin above: the
+    #: donor's coordinates snapped to the 0.01° grid D-45 already uses and
+    #: printed as text. Null whenever the exact pin *is* disclosed — the two are
+    #: alternatives, never both, so no reader has to decide which to believe
+    #: and no screen can show a coarse cell beside the address it stands in for.
+    pickup_area: str | None = None
     prepared_at: datetime | None = None
     pickup_deadline: datetime
     status: DonationStatus

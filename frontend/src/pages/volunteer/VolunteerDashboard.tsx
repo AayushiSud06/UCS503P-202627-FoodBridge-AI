@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import DonationRow from '../../components/DonationRow';
 import { useDonations, useMyVolunteer } from '../../context/AppContext';
 import { deadlineStatus, byUrgency, formatClock } from '../../lib/time';
-import { displayDistanceKm, formatTotalDistanceKm } from '../../lib/geo';
+import { displayDistanceKm, displayDonorLabel, formatTotalDistanceKm } from '../../lib/geo';
 import { useCurrentUser } from '../../context/AuthContext';
 import TaskCard from './TaskCard';
 import { volunteerImpact } from '../../lib/impact';
@@ -85,7 +85,9 @@ export default function VolunteerDashboard() {
             ) : (
               <>
                 Your next run is{' '}
-                <span className="italic text-emerald-800">{nextRun.donorOrganization}</span>.
+                <span className="italic text-emerald-800">
+                  {displayDonorLabel(nextRun, 'an unclaimed pickup')}
+                </span>.
               </>
             )}
           </h1>

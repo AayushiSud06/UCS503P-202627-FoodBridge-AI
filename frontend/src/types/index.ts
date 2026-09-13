@@ -54,7 +54,14 @@ export interface Donation {
   unit: FoodUnit;
   preparedAt: string;       // "HH:MM" 24h or display string
   pickupDeadline: string;   // "HH:MM" or display string
+  /** The donor's address text, or `''` when the server withheld it — which it
+   *  does for a courier who has not claimed this pickup. Read it through
+   *  `lib/geo.displayPickupLocation`, never on its own, so a blank cannot be
+   *  rendered where `pickupArea` is the field that has the answer. */
   location: string;
+  /** The coarse stand-in a courier chooses a run from before claiming it.
+   *  Present only when `location` was withheld (D-57). */
+  pickupArea?: string;
   description: string;
   storageType: StorageType;
   imagePreview?: string;    // base64 or URL

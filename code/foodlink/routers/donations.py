@@ -273,6 +273,39 @@ def _precise_distance_scope(db: Session, user: User) -> set[int] | None:
     return {recipient.id} if recipient is not None else set()
 
 
+def _precise_pickup_scope(db: Session, user: User) -> set[int] | None:
+    """The couriers whose own runs this caller may read the donor's pin on.
+
+    `None` is unrestricted, matching `_readable_by` and
+    `_precise_distance_scope`. This is those helpers' question asked about the
+    *donor*: the exact pin, the address text and the name of whoever posted the
+    food — read, on a home donation, as somebody's doorstep.
+
+    * admin, donor, ngo — unrestricted, exactly as before. A donor reads the pin
+      they chose; the organisation that accepted has to send somebody to it;
+      an administrator reads everything.
+    * volunteer — their own courier id alone, so the scope is satisfied only by
+      a donation whose `volunteer_id` is already theirs. Every other donation
+      their read scope reaches is an *unclaimed* one (`volunteer_id IS NULL`),
+      and an unclaimed pickup is nobody's: the coarse `pickupArea` is what they
+      choose a run from, and claiming it is what discloses the rest.
+
+    A volunteer account with no courier row gets the empty set and reads no
+    pin at all — the same narrowing `_readable_by` and `_precise_distance_scope`
+    apply to a profile that does not exist yet.
+
+    The membership test lives in `serialize._may_collect` rather than in the
+    WHERE clause because the pool must stay *readable*: a courier is meant to
+    browse it, so this narrows what a donation says, never which donations
+    there are. That is D-47's shape, applied to the donor instead of the
+    kitchen. See `DECISIONS.md` D-57.
+    """
+    if user.role is not UserRole.volunteer:
+        return None
+    volunteer = db.scalar(select(Volunteer).where(Volunteer.user_id == user.id))
+    return {volunteer.id} if volunteer is not None else set()
+
+
 def _requirement_disclosure_scope(db: Session, user: User) -> set[int] | None:
     """The recipients whose standing needs may shape what this caller is told.
 
@@ -601,6 +634,7 @@ def create_donation(
         fresh,
         viewer_match=_viewer_match(fresh, viewer, _active_requirements_for(db, viewer)),
         precise_for=_precise_distance_scope(db, user),
+        precise_pickup_for=_precise_pickup_scope(db, user),
     )
 
 
@@ -641,11 +675,13 @@ def list_donations(
     viewer = _viewer_recipient(db, user)
     viewer_requirements = _active_requirements_for(db, viewer)
     precise_for = _precise_distance_scope(db, user)
+    precise_pickup_for = _precise_pickup_scope(db, user)
     return [
         donation_out(
             d,
             viewer_match=_viewer_match(d, viewer, viewer_requirements),
             precise_for=precise_for,
+            precise_pickup_for=precise_pickup_for,
         )
         for d in db.scalars(stmt.limit(limit))
     ]
@@ -663,6 +699,7 @@ def get_donation(
         donation,
         viewer_match=_viewer_match(donation, viewer, _active_requirements_for(db, viewer)),
         precise_for=_precise_distance_scope(db, user),
+        precise_pickup_for=_precise_pickup_scope(db, user),
     )
 
 
@@ -876,4 +913,5 @@ def update_status(
         fresh,
         viewer_match=_viewer_match(fresh, viewer, _active_requirements_for(db, viewer)),
         precise_for=_precise_distance_scope(db, user),
+        precise_pickup_for=_precise_pickup_scope(db, user),
     )

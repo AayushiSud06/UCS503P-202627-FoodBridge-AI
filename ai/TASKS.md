@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-12, `master` at `3d6f8f8`, plus the
-> uncommitted Task 40 (P1-5) changes.** The full health audit of that date was run against
+> **Verified against the repository on 2026-09-12, `master` at `692266b`, plus the
+> uncommitted Task 41 (P1-1b) changes.** The full health audit of that date was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,9 +18,11 @@
 
 ## Current
 
-**Task 40 · P1-5 — implemented, uncommitted, awaiting review.** Donation photos are resized
-to 1280 px and re-encoded as JPEG in the browser before the data URL is built (D-56). See
-P1-5 below.
+**Task 41 · P1-1b — implemented, uncommitted, awaiting review.** A courier reads a coarse
+`pickupArea` instead of the donor's pin, address and name until their claim binds the run to
+them (D-57, answering DQ-1). See P1-1 below.
+
+**That clears every P1 except P1-4**, which is still waiting on DQ-3.
 
 ## P0 — urgent
 
@@ -44,10 +46,21 @@ P1-5 below.
   `test_match_score_consistency.py` that asserted the pool read was corrected. All five
   fail against the pre-fix router. UI copy promising unverified kitchens could "browse"
   corrected on four screens.
-- ⚠️ **(b) `volunteer` half — STILL OPEN.** Any self-signup courier still reads every
-  unclaimed `ACCEPTED` pickup with the exact pin and donor name (`_readable_by` volunteer
-  branch, unchanged). Blocked on DQ-1 (no courier vetting exists).
-- **Risk if (b) postponed:** donor addresses harvestable by one courier registration.
+- ✅ **(b) `volunteer` half — FIXED by Task 41 (uncommitted, awaiting review), D-57.**
+  DQ-1 answered: a courier keeps the whole unclaimed pool readable, but a pickup they have
+  not claimed carries `latitude`, `longitude`, `location`, `donorName`, `donorOrganization`
+  and `donorId` as **null**, plus a new `pickupArea` — the donor's pin on the 0.01° grid
+  D-45 already uses, about a kilometre a side. The claim's own conditional UPDATE is what
+  turns the disclosure over, so `volunteer_id == the caller` is the whole test
+  (`donations._precise_pickup_scope` → `serialize._may_collect`). No courier verification
+  was introduced; the read scope is unchanged. A release puts the donation back behind the
+  coarse area.
+- **Evidence:** new `test_courier_pickup_disclosure.py` (18 tests; 7 fail against the
+  pre-fix serializer), including a whole-response leak check, list-vs-id agreement, the
+  `/matches` reading, a lost claim disclosing nothing, the release, and donor/NGO/admin
+  visibility held unchanged. Frontend: `displayPickupLocation` / `displayDonorLabel` /
+  `isPickupCoarse` in `lib/geo.ts`, used by the four courier surfaces that can render an
+  unclaimed pickup; 6 new tests in `geo.test.ts` and `adapters.test.ts`.
 
 ### P1-2 · Verification survives the organisation editing what was verified
 - **Category:** SECURITY ISSUE (trust model)
@@ -99,7 +112,7 @@ P1-5 below.
 
 ### P1-5 · Attaching a normal phone photo makes donation creation fail
 - **Category:** CONFIRMED BUG (UX, core flow)
-- ✅ **FIXED by Task 40 (uncommitted, awaiting review), D-56.** `HA-7` capped `imageUrl` at
+- ✅ **FIXED by Task 40 (`692266b`), D-56.** `HA-7` capped `imageUrl` at
   256 KiB but neither create screen resized, so both `readAsDataURL`-ed the raw file and a
   1–5 MB phone photo was a 422. New `frontend/src/lib/image.ts` decodes the file (the decode
   *is* the validation — neither extension nor MIME is trusted), clamps the long edge to
@@ -202,9 +215,9 @@ donations (`R-35`); PostGIS (§16.3).
 
 ## Decisions needed (blocked on product input, not effort)
 
-- **DQ-1 · Who may see a donor's exact pickup location, and when?** Couriers have no vetting
-  concept; options include a coarse pin until a courier claims, or courier verification.
-  Blocks P1-1(b).
+- ~~**DQ-1 · Who may see a donor's exact pickup location, and when?**~~ ✅ **Answered
+  (Task 41, D-57):** a coarse area until the courier claims, then the exact pin and donor;
+  no courier verification.
 - ~~**DQ-2 · Which recipient edits void verification?**~~ ✅ **Answered (Task 38, D-54):**
   name, latitude, longitude; no first-pin exemption. Address text was left out — see P3.
 - **DQ-3 · What counts against reliability, and may a donor cancel after pickup?** Blocks P1-4.
@@ -255,7 +268,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 40 · P1-5: donation photos resized and re-encoded in the browser (D-56) |
+| uncommitted | Task 41 · P1-1b: a courier reads a coarse pickup area until they claim (D-57) |
+| `692266b` | Task 40 · P1-5: donation photos resized and re-encoded in the browser (D-56) |
 | `3d6f8f8` | Task 39 · P1-3: every lifecycle status write is a conditional UPDATE (D-55) |
 | `be831b8` | Task 38 · P1-2: a real name/coordinate change voids verification (D-54) |
 | `c65c65f` | Task 37 · P1-1a: the open pool requires a verified organisation (D-53) |

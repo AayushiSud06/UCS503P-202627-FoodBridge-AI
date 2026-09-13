@@ -53,9 +53,13 @@ export function toDonation(api: ApiDonation): Donation {
   const events = api.events ?? [];
   return {
     id: String(api.id),
-    donorId: String(api.donorId),
-    donorName: api.donorName,
-    donorOrganization: api.donorOrganization ?? api.donorName,
+    // Withheld donor fields become empty rather than a stand-in name: the
+    // server says nothing about this donor to this reader (D-57), and a
+    // placeholder here would be a claim of its own. `lib/geo`'s two display
+    // helpers are what screens read them through.
+    donorId: api.donorId !== null ? String(api.donorId) : '',
+    donorName: api.donorName ?? '',
+    donorOrganization: api.donorOrganization ?? api.donorName ?? '',
     foodName: api.foodName,
     category: api.category as FoodCategory,
     quantity: api.quantity,
@@ -65,7 +69,8 @@ export function toDonation(api: ApiDonation): Donation {
     // tomorrow morning from this morning.
     preparedAt: api.preparedAt ?? '',
     pickupDeadline: api.pickupDeadline,
-    location: api.location,
+    location: api.location ?? '',
+    pickupArea: api.pickupArea ?? undefined,
     description: api.description,
     storageType: api.storageType as StorageType,
     imagePreview: api.imageUrl ?? undefined,

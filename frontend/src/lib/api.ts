@@ -230,8 +230,13 @@ export interface ApiStatusEvent {
 
 export interface ApiDonation {
   id: number;
-  donorId: number;
-  donorName: string;
+  /** Who posted this, and where. All null for a courier who has not claimed
+   *  this pickup: `volunteer` is self-signup and reads the whole unclaimed
+   *  pool, so the donor's pin, address and name are withheld until the claim
+   *  binds the run to them, and `pickupArea` stands in (D-57). Every other
+   *  reader, and the assigned courier, gets them as before. */
+  donorId: number | null;
+  donorName: string | null;
   donorOrganization: string | null;
   foodName: string;
   category: string;
@@ -240,9 +245,12 @@ export interface ApiDonation {
   storageType: string;
   description: string;
   imageUrl: string | null;
-  location: string;
-  latitude: number;
-  longitude: number;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** The coarse cell a withheld pin is replaced by, already rendered as text.
+   *  Null whenever the exact pin is disclosed — never both. */
+  pickupArea: string | null;
   preparedAt: string | null;
   pickupDeadline: string;
   status: DonationStatus;

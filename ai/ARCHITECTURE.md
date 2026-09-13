@@ -2,8 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
-> date; updated for Tasks 37–39 (`c65c65f`, `be831b8`, `3d6f8f8`; D-53–D-55) and the
-> uncommitted Task 40 (D-56). ⚠️ marks a known weakness with its `TASKS.md` id.
+> date; updated for Tasks 37–40 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`; D-53–D-56) and
+> the uncommitted Task 41 (D-57). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -46,7 +46,7 @@ Axios, no form library, no eslint.
 | `security.py` | bcrypt, JWT HS256 mint/verify, `get_current_user` (re-reads the user row, D-03), `require_roles`. |
 | `ratelimit.py` | Per-IP sliding window, process-local, on login and register only (D-27). |
 | `matching.py` | Pure (no DB): haversine, 5 criteria, `WEIGHTS`, blur, requirement fit, `rank_recipients`. |
-| `serialize.py` | `donation_out()` — ORM → `DonationOut`, applying the reader's `precise_for` scope (D-47). |
+| `serialize.py` | `donation_out()` — ORM → `DonationOut`, applying the reader's two scopes: `precise_for` for the kitchen-derived figures (D-47) and `precise_pickup_for` for the donor's pin, address and identity, with `coarse_pickup_area()` standing in (D-57). |
 | `routers/donations.py` | Read scopes, lifecycle endpoint, ranking calls. The core of the system (~820 lines). |
 | `routers/organisations.py` | Recipients, requirements, couriers and their scopes. |
 | `routers/admin.py` | Router-level admin gate; users, verification, expiry sweep. |
@@ -64,7 +64,7 @@ transition must come from anything but a request.
 | `lib/api.ts` | The only `fetch`. Token attach, `ApiError`/`NetworkError`, global 401, hand-mirrored wire types. ⚠️ a bodiless 5xx becomes `NetworkError` ("cannot reach server", P2-3). |
 | `lib/adapters.ts` | Wire → domain types; activity feed text. |
 | `lib/hooks.ts` | `useAction` (keyed in-flight state + toasts); `useMatchAnalysis` (leading match via `/matches`, used only by the mobile camera flow). |
-| `lib/geo.ts`, `lib/time.ts`, `lib/impact.ts` | Distance selection (D-33), deadline/urgency, per-account impact (D-32). |
+| `lib/geo.ts`, `lib/time.ts`, `lib/impact.ts` | Distance selection (D-33), deadline/urgency, per-account impact (D-32). `geo` also holds `displayPickupLocation` / `displayDonorLabel` / `isPickupCoarse`, which every courier surface reads instead of the raw fields D-57 may have withheld. |
 | `lib/image.ts` | The donation photo pipeline: decode (which is the validation), clamp the long edge to 1280 px without upscaling, re-encode as JPEG down a quality ladder until it fits the server cap (D-56). Its decode/encode pair is injectable, because jsdom has no canvas. Both create-donation screens call it. |
 | `context/AuthContext.tsx` | Token in `localStorage['foodlink.token']`; user re-fetched on boot. |
 | `context/AppContext.tsx` | Loads everything once per sign-in (`listDonations(limit=500)` + role-gated slices) and **re-loads after every write** (D-11). Selectors: `useAvailableDonations` (D-50), `useRequirements` (active) / `useAllRequirements`. |
@@ -146,11 +146,15 @@ D-54); an administrator re-verifies through the existing endpoint.
 | Couriers (`VolunteerOut`, has phone) | all | 403 | couriers on own donations | 403 | `organisations._visible_volunteers` (D-41) |
 | Requirements | all active | active, verified orgs' | own (retired too with `includeInactive`) | none | `_visible_requirements` + `_may_read_inactive` (D-44, D-46) |
 | True distances / frozen score | all | none | own org | none | `donations._precise_distance_scope` (D-45, D-47) |
+| Donor pin, address, identity | all | own | all readable | **own claimed runs only** | `donations._precise_pickup_scope` (D-57) |
 | Requirement inputs to ranking | all | verified orgs | own org | none | `donations._requirement_disclosure_scope` (D-52) |
 
-Denial is a 404 for donations and an empty list for directories. ⚠️ The volunteer donation
-scope is still open to any **self-signup** courier and carries exact donor coordinates and
-names (P1-1b, DQ-1); the ngo scope has required verification since D-53.
+Denial is a 404 for donations and an empty list for directories — except the last row,
+which is a **disclosure** scope rather than a read scope: the unclaimed pool stays fully
+readable to any self-signup courier, and a pickup they have not claimed simply carries
+`pickupArea` (the donor's pin on the 0.01° grid) in place of the pin, address text and
+donor name. `volunteer_id == the caller` is the whole test, so the claim's conditional
+UPDATE is what turns it over (D-57). The ngo scope has required verification since D-53.
 
 ## API — prefix `/api`, camelCase bodies, docs at `/docs`
 
@@ -164,7 +168,9 @@ names (P1-1b, DQ-1); the ngo scope has required verification since D-53.
 
 `DonationOut` carries `matchScore` (frozen decision, reader-scoped) and `viewerMatch` (the
 calling kitchen's live `MatchOut`, open-pool donations only) — two different questions
-(D-30). No error responses are declared in OpenAPI; there is no global exception handler.
+(D-30). Its `latitude`, `longitude`, `location`, `donorName` and `donorId` are **nullable**,
+being the fields D-57 withholds from an unclaimed courier; `DonationCreate` is unchanged and
+still requires an exact pin. No error responses are declared in OpenAPI; there is no global exception handler.
 
 ## Matching engine — `matching.py`
 
@@ -235,7 +241,7 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
 
 ## Testing
 
-**Backend — `pytest code/tests`: 353 tests, ~4 min** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 371 tests, ~5 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
@@ -243,7 +249,7 @@ signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifes
 | Area | Files |
 |---|---|
 | Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
-| Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py` |
+| Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py`, `test_courier_pickup_disclosure.py` |
 | Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_courier_claim.py` and `test_lifecycle_concurrency.py` (both file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
 | Matching & privacy | `test_matching_scores.py` (unit), `test_match_score_consistency.py`, `test_match_distance_privacy.py`, `test_donation_privacy_scope.py`, `test_requirement_matching.py` |
 
@@ -251,7 +257,7 @@ Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, t
 and claim concurrency. Missing: cancellation accounting, the expiry sweep under
 concurrency, `UtcDateTime`, input size bounds.
 
-**Frontend — `npm test`: 134 tests over 16 files, ~3 s.** Vitest on the project's own
+**Frontend — `npm test`: 140 tests over 16 files, ~4 s.** Vitest on the project's own
 `vite.config.ts`; node environment by default, jsdom per file where rendering. Covers the
 `lib/` arithmetic (adapters, time, geo, impact, api), `ProtectedRoute`, the requirements
 slice, and content/absence tests for Landing, Login, DonorNeedsBoard, NGORequirements,

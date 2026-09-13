@@ -7,7 +7,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { displayDistanceKm, formatDistanceKm, isValidCoords } from '../geo';
+import {
+  displayDistanceKm, displayDonorLabel, displayPickupLocation, formatDistanceKm,
+  isPickupCoarse, isValidCoords,
+} from '../geo';
 import { apiMatch, donation } from '../../test/fixtures';
 
 describe('displayDistanceKm', () => {
@@ -53,5 +56,56 @@ describe('isValidCoords', () => {
     expect(isValidCoords(91, 0)).toBe(false);
     expect(isValidCoords(0, 181)).toBe(false);
     expect(isValidCoords(Number.NaN, 0)).toBe(false);
+  });
+});
+
+/**
+ * What a courier is shown about a pickup they have not claimed.
+ *
+ * The server sends the exact address *or* the coarse cell, never both (D-57),
+ * and the withheld donor fields arrive as empty strings through `toDonation`.
+ * Reading either one directly would put a blank line on screen, which is the
+ * mistake these three helpers exist to make impossible.
+ */
+describe('pre-claim pickup display', () => {
+  const unclaimed = donation({
+    location: null,
+    latitude: null,
+    longitude: null,
+    pickupArea: 'Approx. 30.35N, 76.36E',
+    donorName: null,
+    donorOrganization: null,
+    donorId: null,
+  });
+
+  const claimed = donation({
+    location: '42 Rajindra Road, Model Town, Patiala',
+    pickupArea: null,
+    donorName: 'Asha Menon',
+    donorOrganization: 'Green Leaf Cafe',
+  });
+
+  it('shows the coarse area when the address was withheld', () => {
+    expect(displayPickupLocation(unclaimed)).toBe('Approx. 30.35N, 76.36E');
+    expect(isPickupCoarse(unclaimed)).toBe(true);
+  });
+
+  it('shows the real address once the pickup belongs to the reader', () => {
+    expect(displayPickupLocation(claimed)).toBe('42 Rajindra Road, Model Town, Patiala');
+    expect(isPickupCoarse(claimed)).toBe(false);
+  });
+
+  it('never renders a withheld donor as a blank', () => {
+    expect(displayDonorLabel(unclaimed)).toBe('Shown once claimed');
+    expect(displayDonorLabel(unclaimed, 'an unclaimed pickup')).toBe('an unclaimed pickup');
+    expect(displayDonorLabel(claimed)).toBe('Green Leaf Cafe');
+  });
+
+  it('says so honestly when neither the address nor an area arrived', () => {
+    const neither = donation({ location: null, pickupArea: null });
+
+    expect(displayPickupLocation(neither)).toBe('Location unavailable');
+    // Not coarse: there is no area standing in for anything.
+    expect(isPickupCoarse(neither)).toBe(false);
   });
 });
