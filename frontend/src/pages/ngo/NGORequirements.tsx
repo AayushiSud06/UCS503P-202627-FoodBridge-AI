@@ -246,6 +246,7 @@ export default function NGORequirements() {
                   <label className="label">Estimated Beneficiaries</label>
                   <input
                     type="number"
+                    min="0"
                     placeholder="120"
                     value={form.beneficiaryCount}
                     onChange={e => setForm({ ...form, beneficiaryCount: e.target.value })}

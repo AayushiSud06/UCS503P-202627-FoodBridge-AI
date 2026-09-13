@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-13, `master` at `354874c`, plus the
-> uncommitted Task 43 (P2-1) changes.** The full health audit of 2026-09-10 was run against
+> **Verified against the repository on 2026-09-13, `master` at `b583213`, plus the
+> uncommitted Task 44 (P2-2) changes.** The full health audit of 2026-09-10 was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,11 +18,11 @@
 
 ## Current
 
-**Task 43 · P2-1 — implemented, uncommitted, awaiting review.** A donor may post 10 donations
-an hour per account and 30 an hour per network; administrators are exempt (DQ-4, D-59). See
-P2-1 below. Next: P2-2…P2-6.
+**Task 44 · P2-2 — implemented, uncommitted, awaiting review.** Donation, status-note and
+requirement text is bounded at the schema, and `beneficiaryCount` may not be negative (D-60).
+See P2-2 below. Next: the P2-2 profile half, then P2-3…P2-6.
 
-Every P1 is fixed; Task 42 (P1-4) is committed as `354874c`.
+Every P1 is fixed; Task 43 (P2-1) is committed as `b583213`.
 
 ## P0 — urgent
 
@@ -149,7 +149,7 @@ Every P1 is fixed; Task 42 (P1-4) is committed as `354874c`.
   no limit (repro: 40 rapid creations, all 201). Each creation is also a probe of the 8 km
   eligibility gate (the residual membership oracle D-45 named) and a spam entry in every
   kitchen's pool.
-  ✅ **FIXED by Task 43 (uncommitted, awaiting review), D-59.** DQ-4 answered. `POST
+  ✅ **FIXED by Task 43 (`b583213`), D-59.** DQ-4 answered. `POST
   /api/donations` carries `routers/donations._donation_rate_limit`, which runs after the role
   gate and before the handler. For a donor it checks two `RateLimiter`s
   (`ratelimit.check_donation_creation`): 10 an hour keyed on the account, then 30 an hour
@@ -175,6 +175,35 @@ Every P1 is fixed; Task 42 (P1-4) is committed as `354874c`.
   status note and a 200-char `unit` (column `String(24)`) are all stored — and returned
   inline in every list (`limit=500`) after every write. On Postgres the `String(n)` overflows
   become 500s. Scope: `Field(max_length=…)` mirroring the columns, as `HA-7` did. **S**
+  ✅ **Donation and requirement half FIXED by Task 44 (uncommitted, awaiting review), D-60.**
+  Only the request schemas changed. There was no router, model or migration change.
+  - A field stored in a `String(n)` column is bounded at `n`: `DonationCreate` `category` 60,
+    `unit` 24, `storageType` 40, `location` 255; requirement `unit` 24 and `urgency` 16.
+  - A field stored in a `Text` column is bounded at `MAX_FREE_TEXT_LENGTH`, 2,000 (the PM's
+    ceiling): `description`, `StatusUpdate.note`, requirement `notes`.
+  - `beneficiaryCount` is `ge=0`.
+  - `RequirementCreate` and `RequirementUpdate` share the bounds, and a refused PATCH writes
+    nothing. `RequirementOut` redeclares its four fields without them, so a row stored
+    earlier still serializes.
+  - `beneficiaryCount` and the only PATCH path are on requirements. A donation has no PATCH;
+    after posting it changes only through `POST /status`, whose note is bounded.
+  - Refusals are FastAPI's ordinary 422 field errors. Nothing is truncated.
+  - The desktop requirement form gained `min="0"` on beneficiaries; mobile already had it.
+- **Evidence:** new `test_donation_input_bounds.py` (26 tests; 20 fail against the pre-fix
+  schemas). It covers:
+  - the limit−1, limit and limit+1 boundary for every bounded field, on create and on PATCH;
+  - the audit repro (2 MB description, 1 MB note, 200-char unit);
+  - a refused PATCH and a refused note leaving the row unchanged;
+  - defaults, omitted and null values, and 0 and positive counts still accepted;
+  - a pre-existing out-of-bounds requirement still reading and editing;
+  - a schema-vs-column check that every stored text input is bounded and fits its column.
+  The pre-existing-row test fails with the `RequirementOut` override removed.
+- ⚠️ **Still open (profile half):** account and organisation text has no `max_length`. That is
+  `organization` and `phone` on `RegisterRequest`, `AdminUserCreate`, `UserUpdate` and
+  `ProfileUpdate`, `RegisterRequest.organization_type`/`location`, `RecipientUpdate`
+  `type`/`location`/`contact_person`/`phone`, and `VolunteerUpdate.location`. Every one is a
+  `String(n)` column, so mirroring it needs no product decision. Kept out of Task 44's
+  donation scope.
 - **P2-3 · Server errors look like outages.** CONFIRMED BUG. `{"name": null}` on
   `PATCH /recipients/me` (and `/volunteers/me`) is an unhandled `IntegrityError` → bare 500
   (repro), which `api.ts` renders as "Cannot reach the FoodLink server". Scope: skip explicit
@@ -287,7 +316,7 @@ donations (`R-35`); PostGIS (§16.3).
 | `HA-1` courier roster readable by any ngo | FIXED | `_visible_volunteers`; `test_volunteer_reads.py` |
 | `HA-2` release did not release | FIXED | `update_status` clears `volunteer_id`; `test_pickup_release.py` |
 | `HA-3` `/matches` coordinate oracle | FIXED (blur, D-45) | `score_pair(blur_location)` |
-| `HA-3a` 8 km gate membership oracle | RATE-LIMITED, not closed (Task 43, uncommitted) | D-59; `test_donation_rate_limit.py` |
+| `HA-3a` 8 km gate membership oracle | RATE-LIMITED, not closed (Task 43, `b583213`) | D-59; `test_donation_rate_limit.py` |
 | `HA-3b` `matchScore`/`distanceKm` on `DonationOut` | FIXED (D-47) | `serialize._may_measure` |
 | `HA-4`/`HA-5` collinear, unit-blind size criteria | FIXED (D-42) | `matching.py`; `test_matching_scores.py` |
 | `HA-6` invented landing figures | FIXED | `Landing.test.tsx` |
@@ -318,7 +347,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 43 · P2-1: donation creation rate-limited per donor account (10/h) and per IP (30/h); admins exempt (D-59) |
+| uncommitted | Task 44 · P2-2 (donation/requirement half): text bounded at the schema, `beneficiaryCount` ≥ 0 (D-60) |
+| `b583213` | Task 43 · P2-1: donation creation rate-limited per donor account (10/h) and per IP (30/h); admins exempt (D-59) |
 | `354874c` | Task 42 · P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup (D-58) |
 | `d34190c` | Task 41 · P1-1b: a courier reads a coarse pickup area until they claim (D-57) |
 | `692266b` | Task 40 · P1-5: donation photos resized and re-encoded in the browser (D-56) |

@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-59. **D-01…D-58 are implemented in commits
-> up to `354874c`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-59 is
-> implemented in the working tree, uncommitted** (Task 43). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-60. **D-01…D-59 are implemented in commits
+> up to `b583213`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-60 is
+> implemented in the working tree, uncommitted** (Task 44). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -66,7 +66,8 @@
 > | D-56 | Donation photos are resized in the browser, the only place holding the bytes | in force (`692266b`) |
 > | D-57 | A courier reads a coarse pickup area until the claim binds the run to them | in force (`d34190c`) |
 > | D-58 | A cancellation is neutral to reliability; collection ends the donor's right to cancel | in force (`354874c`) |
-> | D-59 | Donation creation is limited per donor account and per network; admins exempt | in force (Task 43, uncommitted) |
+> | D-59 | Donation creation is limited per donor account and per network; admins exempt | in force (`b583213`) |
+> | D-60 | Submitted donation and requirement text is bounded at the schema: columns at their size, `Text` at 2,000 | in force (Task 44, uncommitted) |
 >
 > Reliability accounting (D-15, D-41, D-58): a release is not an acceptance, and a
 > cancellation — the donor's before `PICKED_UP`, or an administrator's — takes its acceptance
@@ -1707,9 +1708,10 @@ photo is a 422.
   That is an honest reduction, not a regression — but it means the platform's headline score
   is less discriminating for those donations, and the way to change it is a real unit model,
   not a conversion constant.
-- **`Donation.unit` is still unvalidated on the wire.** Anything a client sends is stored;
-  the matcher simply declines to interpret it. Constraining the column to the four the
-  picker offers is a separate change and was not made here.
+- **`Donation.unit` is still unvalidated on the wire.** Any value that fits the column's 24
+  characters is stored (D-60 bounds the length, not the vocabulary), and the matcher declines
+  to interpret it. Constraining the column to the four the picker offers is a separate change
+  and was not made here.
 
 **Scope.** `matching.py` only: `CAPACITY_UNIT`, `UNASSESSED_SIZE_SCORE`,
 `FULL_HEADROOM_MEALS`, `is_comparable_unit()`, `_capacity_score()`, and the unit branch plus
@@ -2726,8 +2728,8 @@ This is the answer to DQ-1, approved by the Project Manager. Committed as `d3419
   pin", not "k people".
 - ⚠️ **Not redacted:** `description`, `imageUrl` and event notes stay as they were, and a
   donor who types an address into the description, or photographs their house front, has
-  disclosed it. Those are unbounded free-text fields (`TASKS.md` P2-2) and bounding or
-  scoping them is separate work.
+  disclosed it. Those are free-text fields; scoping them is separate work. ✅ D-60 bounds
+  the description and notes at 2,000 characters, and it does not scope them.
 - The 8 km eligibility gate remains inferable through `/matches` (`HA-3a`, P2-1), but it
   localises a donation far less precisely than the ~1 km cell this deliberately publishes,
   so it does not undo the boundary. `MatchOut` carries no donor field, and `distanceKm` was
@@ -2836,7 +2838,7 @@ carries a route dependency, `routers/donations._donation_rate_limit`. It calls
 Both refuse with a 429 and a `Retry-After`. Both settings come from the environment,
 through `_positive_int`: `DONATION_ACCOUNT_RATE_LIMIT` / `_WINDOW_SECONDS` and
 `DONATION_IP_RATE_LIMIT` / `_WINDOW_SECONDS`. Only donors are counted. The login and
-register policy is unchanged. Task 43, uncommitted.
+register policy is unchanged. Committed as `b583213` (Task 43).
 
 **Reasoning.**
 
@@ -2888,3 +2890,59 @@ register policy is unchanged. Task 43, uncommitted.
 - No schema change, no migration, no new dependency. No frontend change: `api.ts` already
   renders a 429's `detail`.
 - Tests: `test_donation_rate_limit.py` (32). `test_rate_limit.py` is unchanged.
+
+---
+
+## D-60 · Submitted donation and requirement text is bounded at the schema; what is served back is not **[documented]**
+
+**Decision.** P2-2's donation and requirement half, with the ceiling set by the Project
+Manager. Every text field a donor or a kitchen submits that is stored in the row has a
+`max_length` on its request schema. `beneficiaryCount` is `ge=0`. Task 44, uncommitted.
+
+- **A `String(n)` column bounds its field at `n`.** On `DonationCreate` that is `category` 60,
+  `unit` 24, `storageType` 40 and `location` 255. On the requirement schemas it is `unit` 24
+  and `urgency` 16.
+- **A `Text` column bounds its field at `schemas.MAX_FREE_TEXT_LENGTH`, 2,000 characters.**
+  That covers `DonationCreate.description`, `StatusUpdate.note` and requirement `notes`.
+- **Create and PATCH share the bounds** (`RequirementCreate` / `RequirementUpdate`). A refusal
+  is FastAPI's ordinary 422 field error, which `api.ts` already renders, and a refused request
+  writes nothing.
+
+**Reasoning.**
+
+- **The column size is the only honest number for a `String(n)` field.** Accepting more lets
+  SQLite store what Postgres would reject with a 500. Accepting less would be a policy nobody
+  set.
+- **A `Text` column has no size, so its number had to be chosen, and the PM chose it.** The
+  repository held no limit in the model, the UI or the docs. 2,000 characters is about 300
+  words: far above a note on dishes, allergens or gate access, and far below the 2 MB and
+  1 MB payloads the audit stored and the lists re-download after every write. One shared
+  ceiling rather than one per field, because the three fields do the same job.
+- **Refused, never truncated.** A cut-down note could lose the one instruction that mattered,
+  and nothing would tell the person who wrote it.
+- **Input bounds are not output bounds.** `RequirementOut` inherits `RequirementCreate`, so
+  the new bounds would also have validated rows on the way out. A requirement stored earlier,
+  with a negative count from the desktop form or an over-long unit SQLite accepted, would then
+  turn every board listing it into a 500. `RequirementOut` redeclares those four fields
+  without bounds. Its existing `foodType`/`quantityNeeded` bounds are unchanged.
+  `DonationOut` and `StatusEventOut` never inherited input bounds.
+- **Requirements, because the task's targets live there.** `beneficiary_count` is a
+  `Requirement` column, and `PATCH /requirements/{id}` is the only PATCH path. A donation
+  changes after posting only through `POST /donations/{id}/status`, and its note is the
+  bounded field there.
+
+**Constraints.**
+
+- No router, model or migration change, and no wire change beyond the published bounds. The
+  OpenAPI diff is 14 added `maxLength`/`minimum` constraints on the four input schemas, with
+  every path and response schema identical.
+- ⚠️ **A stored out-of-bounds requirement still reads, but cannot be re-saved unchanged.** The
+  desktop form resends every field, so its owner must correct the value first. The form now
+  refuses a negative count itself (`min="0"`, as mobile already did). No existing rows are
+  rewritten.
+- ⚠️ **Account and organisation profile text is not covered.** That means `organization`,
+  `phone`, recipient `type`/`location`/`contact_person` and courier `location`, all `String(n)`
+  columns. It remains in `TASKS.md` P2-2.
+- Bounded, not scoped: a description can still carry an address (D-57).
+- Tests: `test_donation_input_bounds.py` (26), including a check that every stored text input
+  on the four schemas is bounded and fits its column.

@@ -211,6 +211,18 @@ class MatchOut(Schema):
 
 # ─── Donations ───────────────────────────────────────────────────────────────
 
+#: Ceiling on the free text a donor or a kitchen writes into an unbounded `Text`
+#: column: a donation's description, a status note, a requirement's notes.
+#:
+#: Each is stored in the row and returned inline by the lists that re-download
+#: after every write, so without a bound one account's payload was priced into
+#: everyone else's next request (the audit stored a 2 MB description). 2,000
+#: characters is the ceiling the Project Manager set for Task 44 (D-60). It is
+#: far above a note about dishes, allergens or gate access, and a thousandth of
+#: that description. Text stored in a `String(n)` column is bounded at `n`
+#: instead, on the field itself.
+MAX_FREE_TEXT_LENGTH = 2_000
+
 #: Ceiling on `image_url`, in characters, enforced at the request boundary.
 #:
 #: There is no upload endpoint and no object storage, so the frontend sends a
@@ -241,13 +253,15 @@ IMAGE_URL_PATTERN = re.compile(
 
 
 class DonationCreate(Schema):
+    # String bounds are the `Donation` column sizes, so nothing is accepted
+    # that the database could not hold (Postgres would refuse it with a 500).
     food_name: str = Field(min_length=1, max_length=160)
-    category: str
+    category: str = Field(max_length=60)
     quantity: int = Field(gt=0)
-    unit: str = "Meals"
-    storage_type: str = "Room Temperature"
-    description: str = ""
-    location: str
+    unit: str = Field(default="Meals", max_length=24)
+    storage_type: str = Field(default="Room Temperature", max_length=40)
+    description: str = Field(default="", max_length=MAX_FREE_TEXT_LENGTH)
+    location: str = Field(max_length=255)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     prepared_at: datetime | None = None
@@ -357,19 +371,20 @@ class StatusUpdate(Schema):
     status: DonationStatus
     #: Only meaningful on ACCEPTED — which recipient is taking it.
     recipient_id: int | None = None
-    note: str | None = None
+    note: str | None = Field(default=None, max_length=MAX_FREE_TEXT_LENGTH)
 
 
 # ─── Requirements ────────────────────────────────────────────────────────────
 
 class RequirementCreate(Schema):
+    # String bounds are the `Requirement` column sizes, as on `DonationCreate`.
     food_type: str = Field(min_length=1, max_length=160)
     quantity_needed: int = Field(gt=0)
-    unit: str = "Meals"
-    beneficiary_count: int = 0
-    urgency: str = "Medium"
+    unit: str = Field(default="Meals", max_length=24)
+    beneficiary_count: int = Field(default=0, ge=0)
+    urgency: str = Field(default="Medium", max_length=16)
     daily_recurring: bool = False
-    notes: str = ""
+    notes: str = Field(default="", max_length=MAX_FREE_TEXT_LENGTH)
 
 
 class RequirementUpdate(Schema):
@@ -388,15 +403,24 @@ class RequirementUpdate(Schema):
 
     food_type: str | None = Field(default=None, min_length=1, max_length=160)
     quantity_needed: int | None = Field(default=None, gt=0)
-    unit: str | None = None
-    beneficiary_count: int | None = None
-    urgency: str | None = None
+    unit: str | None = Field(default=None, max_length=24)
+    beneficiary_count: int | None = Field(default=None, ge=0)
+    urgency: str | None = Field(default=None, max_length=16)
     daily_recurring: bool | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=MAX_FREE_TEXT_LENGTH)
     is_active: bool | None = None
 
 
 class RequirementOut(RequirementCreate):
+    #: Redeclared without `RequirementCreate`'s bounds, which govern what may be
+    #: submitted and not what is served back: a row stored before they existed
+    #: (a negative count, or an over-long unit SQLite did not refuse) must still
+    #: read, or it would turn every board that lists it into a 500.
+    unit: str = "Meals"
+    beneficiary_count: int = 0
+    urgency: str = "Medium"
+    notes: str = ""
+
     id: int
     recipient_id: int
     recipient_name: str
