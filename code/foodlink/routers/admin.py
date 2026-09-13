@@ -26,7 +26,7 @@ from ..database import get_db
 from ..models import (
     Donation, DonationStatus, Recipient, StatusEvent, User, UserRole, Volunteer,
 )
-from ..schemas import AdminUserCreate, RecipientOut, UserAdminOut, UserUpdate
+from ..schemas import AdminUserCreate, RecipientOut, UserAdminOut, UserUpdate, patch_changes
 from ..security import hash_password, require_roles
 
 # One gate for the whole router: reaching any path below requires an
@@ -129,7 +129,9 @@ def update_user(
 ) -> UserAdminOut:
     """Suspend, restore, rename or re-role an account."""
     user = _get_user_or_404(db, user_id)
-    changes = body.model_dump(exclude_unset=True)
+    # `role` and `is_active` cannot be null, so a null for either is dropped
+    # here and is never mistaken below for a demotion or a suspension.
+    changes = patch_changes(body, user)
 
     demoted = "role" in changes and changes["role"] is not UserRole.admin
     suspended = changes.get("is_active") is False

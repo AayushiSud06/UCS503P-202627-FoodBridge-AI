@@ -12,6 +12,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from pydantic.alias_generators import to_camel
+from sqlalchemy import inspect
 
 from .models import SELF_SIGNUP_ROLES, DonationStatus, UserRole
 
@@ -22,6 +23,27 @@ class Schema(BaseModel):
         populate_by_name=True,
         from_attributes=True,
     )
+
+
+def patch_changes(body: Schema, row: object) -> dict[str, object]:
+    """What a PATCH body changes on `row`, as `{attribute: value}` to apply.
+
+    A field has three states, not two. Left out of the body, it is not a change.
+    Sent with a value, it is. Sent as `null`, it clears the column only where
+    the column can hold null — a pin, a contact person, a phone number. Where it
+    cannot, `null` leaves the stored value alone, the rule D-29 set for
+    requirements; written through, it would reach the database as a NOT NULL
+    violation and come back as a 500.
+
+    Read from the mapped column rather than listed per schema, so the answer
+    cannot drift from what the database will actually accept.
+    """
+    columns = inspect(row).mapper.columns
+    return {
+        field: value
+        for field, value in body.model_dump(exclude_unset=True).items()
+        if value is not None or columns[field].nullable
+    }
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────

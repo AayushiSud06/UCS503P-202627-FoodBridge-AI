@@ -10,7 +10,7 @@ from ..database import get_db
 from ..models import Donation, Recipient, Requirement, User, UserRole, Volunteer
 from ..schemas import (
     RecipientOut, RecipientUpdate, RequirementCreate, RequirementOut, RequirementUpdate,
-    VolunteerOut, VolunteerUpdate,
+    VolunteerOut, VolunteerUpdate, patch_changes,
 )
 from ..security import get_current_user, require_roles
 
@@ -109,7 +109,9 @@ def update_my_recipient(
     save — leaves the verification alone, as does every other field.
     """
     recipient = _own_recipient(db, user)
-    changes = body.model_dump(exclude_unset=True)
+    # A null name is not a rename: it is dropped here, before the comparison.
+    # A null pin is kept, and clearing a pin does void the verification.
+    changes = patch_changes(body, recipient)
     if recipient.is_verified and any(
         field in changes and changes[field] != getattr(recipient, field)
         for field in VERIFIED_IDENTITY_FIELDS
@@ -297,11 +299,10 @@ def update_requirement(
     operation.
     """
     requirement = _own_requirement_or_404(db, _own_recipient(db, user), requirement_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
-        # No requirement column is nullable, so an explicit null cannot mean
-        # "clear this field" — it can only mean "leave it alone".
-        if value is not None:
-            setattr(requirement, field, value)
+    # No requirement column is nullable, so an explicit null never clears one
+    # here — it leaves the field alone (D-29).
+    for field, value in patch_changes(body, requirement).items():
+        setattr(requirement, field, value)
     db.commit()
     db.refresh(requirement)
     return _requirement_out(requirement)
@@ -411,7 +412,7 @@ def update_my_volunteer(
     completed runs, so they are the server's to maintain, not the courier's.
     """
     volunteer = _own_volunteer(db, user)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    for field, value in patch_changes(body, volunteer).items():
         setattr(volunteer, field, value)
     db.commit()
     db.refresh(volunteer)

@@ -3,7 +3,7 @@
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
 > date; updated for Tasks 37–43 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`, `d34190c`,
-> `354874c`, `b583213`; D-53–D-59) and the uncommitted Task 44 (D-60). ⚠️ marks a known weakness with its `TASKS.md` id.
+> `354874c`, `b583213`, `7764e06`; D-53–D-60) and the uncommitted Task 45 (D-61). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -42,7 +42,7 @@ Axios, no form library, no eslint.
 | `database.py` | Engine, `SessionLocal`, `Base`, `get_db`. No isolation level set; no `PRAGMA foreign_keys`. |
 | `migrate.py` | In-process `alembic upgrade head`; a pre-Alembic DB is reported, never rewritten (D-23). |
 | `models.py` | 6 tables, `UserRole`, `DonationStatus`, `ALLOWED_TRANSITIONS`, `SELF_SIGNUP_ROLES`, `UtcDateTime` (D-09). |
-| `schemas.py` | All wire shapes, camelCase aliases. `imageUrl` ≤ 256 KiB and must be an image data URL or an http(s) link (`IMAGE_URL_PATTERN`, D-56). Submitted donation, status-note and requirement text is bounded on the request schemas only: a `String(n)` column's field at `n`, a `Text` column's at `MAX_FREE_TEXT_LENGTH` (2,000); `beneficiaryCount` ≥ 0 (D-60). `RequirementOut` redeclares those fields unbounded so stored rows still serialize. ⚠️ account/organisation profile strings still unbounded (P2-2). |
+| `schemas.py` | All wire shapes, camelCase aliases. `imageUrl` ≤ 256 KiB and must be an image data URL or an http(s) link (`IMAGE_URL_PATTERN`, D-56). Submitted donation, status-note and requirement text is bounded on the request schemas only: a `String(n)` column's field at `n`, a `Text` column's at `MAX_FREE_TEXT_LENGTH` (2,000); `beneficiaryCount` ≥ 0 (D-60). `RequirementOut` redeclares those fields unbounded so stored rows still serialize. `patch_changes(body, row)` is how every PATCH handler reads its body: omitted fields are not changes, and `null` is kept only for a nullable column, otherwise dropped (D-61). ⚠️ account/organisation profile strings still unbounded (P2-2). |
 | `security.py` | bcrypt, JWT HS256 mint/verify, `get_current_user` (re-reads the user row, D-03), `require_roles`. |
 | `ratelimit.py` | Sliding-window `RateLimiter`, process-local (D-27). Login and register are limited per IP. Donation creation is limited per donor account and per IP, with admins exempt and each limit carrying its own 429 sentence (`check_donation_creation`, D-59). |
 | `matching.py` | Pure (no DB): haversine, 5 criteria, `WEIGHTS`, blur, requirement fit, `rank_recipients`. |
@@ -174,6 +174,11 @@ calling kitchen's live `MatchOut`, open-pool donations only) — two different q
 being the fields D-57 withholds from an unclaimed courier; `DonationCreate` is unchanged and
 still requires an exact pin. No error responses are declared in OpenAPI; there is no global exception handler.
 
+**PATCH semantics (D-61):** a field left out is untouched; an explicit `null` clears a nullable
+column (pin, contact person, phone, organization) and leaves a NOT NULL column alone
+(`schemas.patch_changes`, all five PATCH routes). The null is dropped before D-54's rename
+comparison and the admin lockout guard read the changes.
+
 ## Matching engine — `matching.py`
 
 - **Score:** `distance .25 · quantity-fit .25 · capacity-headroom .20 · deadline .15 ·
@@ -246,7 +251,7 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
 
 ## Testing
 
-**Backend — `pytest code/tests`: 452 tests, ~6 min** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 495 tests, ~7 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
@@ -254,14 +259,14 @@ signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifes
 | Area | Files |
 |---|---|
 | Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_donation_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
-| Input bounds | `test_donation_input_bounds.py` |
+| Input bounds, PATCH nulls | `test_donation_input_bounds.py`, `test_patch_null_semantics.py` |
 | Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py`, `test_courier_pickup_disclosure.py` |
 | Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_cancellation_reliability.py`, `test_courier_claim.py` and `test_lifecycle_concurrency.py` (both file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
 | Matching & privacy | `test_matching_scores.py` (unit), `test_match_score_consistency.py`, `test_match_distance_privacy.py`, `test_donation_privacy_scope.py`, `test_requirement_matching.py` |
 
 Strong: authorization boundaries per role, matcher arithmetic, privacy scopes, transition
 and claim concurrency, cancellation accounting (D-58), donation and requirement input bounds
-(D-60). Missing: the expiry sweep under concurrency, `UtcDateTime`, profile input bounds.
+(D-60), PATCH null handling on every route (D-61). Missing: the expiry sweep under concurrency, `UtcDateTime`, profile input bounds.
 
 **Frontend — `npm test`: 140 tests over 16 files, ~4 s.** Vitest on the project's own
 `vite.config.ts`; node environment by default, jsdom per file where rendering. Covers the

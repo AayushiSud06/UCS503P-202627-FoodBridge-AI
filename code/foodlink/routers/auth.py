@@ -25,7 +25,9 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Recipient, User, UserRole, Volunteer
 from ..ratelimit import login_rate_limit, register_rate_limit
-from ..schemas import PasswordChange, ProfileUpdate, RegisterRequest, TokenResponse, UserOut
+from ..schemas import (
+    PasswordChange, ProfileUpdate, RegisterRequest, TokenResponse, UserOut, patch_changes,
+)
 from ..security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -118,7 +120,7 @@ def update_me(
     user: User = Depends(get_current_user),
 ) -> UserOut:
     """Correct your own name, organisation or phone number."""
-    for field, value in body.model_dump(exclude_unset=True).items():
+    for field, value in patch_changes(body, user).items():
         setattr(user, field, value)
     db.commit()
     db.refresh(user)

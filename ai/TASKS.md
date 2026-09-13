@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-13, `master` at `b583213`, plus the
-> uncommitted Task 44 (P2-2) changes.** The full health audit of 2026-09-10 was run against
+> **Verified against the repository on 2026-09-13, `master` at `7764e06`, plus the
+> uncommitted Task 45 (P2-3) changes.** The full health audit of 2026-09-10 was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,11 +18,12 @@
 
 ## Current
 
-**Task 44 · P2-2 — implemented, uncommitted, awaiting review.** Donation, status-note and
-requirement text is bounded at the schema, and `beneficiaryCount` may not be negative (D-60).
-See P2-2 below. Next: the P2-2 profile half, then P2-3…P2-6.
+**Task 45 · P2-3 (null half) — implemented, uncommitted, awaiting review.** An explicit
+`null` in any PATCH clears a nullable column and leaves a NOT NULL column alone, instead of
+a 500 (D-61). See P2-3 below. Next: the P2-2 profile half, P2-3's exception-handler half,
+then P2-4…P2-6.
 
-Every P1 is fixed; Task 43 (P2-1) is committed as `b583213`.
+Every P1 is fixed; P2-1 and P2-2's donation half are committed (`b583213`, `7764e06`).
 
 ## P0 — urgent
 
@@ -175,7 +176,7 @@ Every P1 is fixed; Task 43 (P2-1) is committed as `b583213`.
   status note and a 200-char `unit` (column `String(24)`) are all stored — and returned
   inline in every list (`limit=500`) after every write. On Postgres the `String(n)` overflows
   become 500s. Scope: `Field(max_length=…)` mirroring the columns, as `HA-7` did. **S**
-  ✅ **Donation and requirement half FIXED by Task 44 (uncommitted, awaiting review), D-60.**
+  ✅ **Donation and requirement half FIXED by Task 44 (`7764e06`), D-60.**
   Only the request schemas changed. There was no router, model or migration change.
   - A field stored in a `String(n)` column is bounded at `n`: `DonationCreate` `category` 60,
     `unit` 24, `storageType` 40, `location` 255; requirement `unit` 24 and `urgency` 16.
@@ -209,6 +210,25 @@ Every P1 is fixed; Task 43 (P2-1) is committed as `b583213`.
   (repro), which `api.ts` renders as "Cannot reach the FoodLink server". Scope: skip explicit
   nulls as `update_requirement` does; add one exception handler returning a sentence and a
   correlation id. `[B-7 · R-18]` **S–M**
+  ✅ **Null half FIXED by Task 45 (uncommitted, awaiting review), D-61.** Reproduced on four
+  routes, not two: null on any NOT NULL column of `/recipients/me` (`name`, `type`,
+  `location`, `capacity`), `/volunteers/me` (`isAvailable`, `location`), `/auth/me` (`name`)
+  and `/admin/users/{id}` (`isActive`, `role`, `name`) was a 500. All five PATCH handlers now
+  use `schemas.patch_changes`: null clears a nullable column (unchanged) and leaves a NOT NULL
+  one alone. The null is dropped before D-54's rename comparison and the admin lockout guard,
+  so `{"role": null}` on your own admin account is no longer refused as a demotion. No schema,
+  wire, model or frontend change; OpenAPI byte-identical.
+- **Evidence:** new `test_patch_null_semantics.py` (43 tests; 16 fail against the pre-fix
+  routers). It covers:
+  - null on every NOT NULL field of all five routes leaving the whole row unchanged, and null
+    on every nullable field still clearing it;
+  - omitted / null / value side by side for a nullable and a NOT NULL field, and an empty body;
+  - an invalid value beside nulls refused with 422 and writing nothing;
+  - the NGO form's own `phone: null` save, verification kept on a null name and voided by a
+    cleared pin, and a real self-demotion still 409;
+  - a guard that every update-schema field is tested and filed by its column's nullability.
+- ⚠️ **Still open (exception-handler half):** there is still no handler, so any other unhandled
+  500 is bodiless and reads as an outage. Not part of Task 45's scope.
 - **P2-4 · Residual misleading copy.** UX ISSUE. `mobile/nav.ts:64,70` hard-codes the seeded
   org names "College Central Mess" / "Helping Hands Kitchen" as the header kicker, rendered
   for **every** donor/NGO by `MobileShell.tsx:31` (I-1 missed it). Also `CreateDonation.tsx`
@@ -328,7 +348,7 @@ donations (`R-35`); PostGIS (§16.3).
 | QA I-1…I-9 interface claims | FIXED | D-32…D-40 |
 | I-10 `index.html` "AI-assisted", I-11 donor "Future Intelligence" note | STILL PRESENT | P2-4 |
 | Hard-coded seeded identities (I-1) | PARTIALLY FIXED | desktop fixed; mobile kicker → P2-4 |
-| Explicit-null PATCH → 500 | STILL PRESENT | P2-3 |
+| Explicit-null PATCH → 500 | FIXED (Task 45, uncommitted) | D-61; `test_patch_null_semantics.py` |
 | `/ngo/available/:id` deep link | STILL PRESENT | P2-5 |
 | `MATCHED` activity line uses current score | STILL PRESENT, narrowed | P3 |
 | Retired requirement had no reader (`F-1`) | FIXED (D-46) | `includeInactive` |
@@ -347,7 +367,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 44 · P2-2 (donation/requirement half): text bounded at the schema, `beneficiaryCount` ≥ 0 (D-60) |
+| uncommitted | Task 45 · P2-3 (null half): an explicit PATCH `null` clears a nullable column and leaves a NOT NULL one alone, instead of a 500 (D-61) |
+| `7764e06` | Task 44 · P2-2 (donation/requirement half): text bounded at the schema, `beneficiaryCount` ≥ 0 (D-60) |
 | `b583213` | Task 43 · P2-1: donation creation rate-limited per donor account (10/h) and per IP (30/h); admins exempt (D-59) |
 | `354874c` | Task 42 · P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup (D-58) |
 | `d34190c` | Task 41 · P1-1b: a courier reads a coarse pickup area until they claim (D-57) |

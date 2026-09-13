@@ -2,7 +2,7 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built), `TASKS.md`
 > (what is left, prioritised), `DECISIONS.md` (why it is built that way).
-> **Last verified: 2026-09-13, `master` at `b583213` plus the uncommitted Task 44 (P2-2)
+> **Last verified: 2026-09-13, `master` at `7764e06` plus the uncommitted Task 45 (P2-3)
 > changes.** The full health audit of 2026-09-10 ran against `640af0c`. This file
 > describes the present; how the project got here is in git history and `DECISIONS.md`.
 
@@ -57,7 +57,7 @@ separate, undecided work.
 
 | Area | State |
 |---|---|
-| Backend API | ✅ 5 routers, 6 tables, full 9-state lifecycle, role/ownership/lifecycle/trust gates. A donor cancels only before `PICKED_UP`; donor and admin cancellations are neutral to reliability (D-58). Submitted donation, status-note and requirement text bounded at the schema; `beneficiaryCount` ≥ 0 (D-60). ⚠️ an admin `ACCEPTED → EXPIRED` still leaves the acceptance counted (P3); account/organisation profile text still unbounded (P2-2) |
+| Backend API | ✅ 5 routers, 6 tables, full 9-state lifecycle, role/ownership/lifecycle/trust gates. A donor cancels only before `PICKED_UP`; donor and admin cancellations are neutral to reliability (D-58). Submitted donation, status-note and requirement text bounded at the schema; `beneficiaryCount` ≥ 0 (D-60). An explicit PATCH `null` clears a nullable column and leaves a NOT NULL one alone, never a 500 (D-61). ⚠️ an admin `ACCEPTED → EXPIRED` still leaves the acceptance counted (P3); account/organisation profile text still unbounded (P2-2); no exception handler, so any other unhandled 500 is bodiless and reads as an outage (P2-3) |
 | Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle is rate-limited, not closed (D-59) |
 | Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48). ⚠️ residual copy: mobile header hard-codes seeded org names, donor create page still has a "Future Intelligence" note (P2-4) |
 | Frontend mobile | ✅ `/m/*` screens exist; ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20) |
@@ -65,7 +65,7 @@ separate, undecided work.
 | Concurrency | ✅ every lifecycle status write is a conditional UPDATE — the courier claim (D-28) and every other transition (D-55). ⚠️ the expiry sweep writes `EXPIRED` unguarded (P3) |
 | Donation photos | ✅ resized to 1280 px and re-encoded as JPEG in the browser before the data URL is built (D-56); the server keeps the 256 KiB cap and now also checks the shape. ⚠️ still stored inline in the row — object storage is unbuilt |
 | Donor privacy | ✅ a courier browses every unclaimed pickup but reads a coarse `pickupArea` rather than the pin, address or donor until they claim it (D-57); `matchScore`/`distanceKm` already reader-scoped (D-47). ⚠️ `description`, `imageUrl` and event notes are bounded (D-56, D-60) but not scoped |
-| Backend tests | ✅ **452 passed** (~6 min, bcrypt-bound), 26 files |
+| Backend tests | ✅ **495 passed** (~7 min, bcrypt-bound), 27 files |
 | Frontend tests | ✅ **140 passed** over 16 files (~4 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
 | CI | ✅ backend `pytest` + `alembic upgrade head && alembic check`; frontend `npm test` + `npm run build` |
 | Migrations | ✅ Alembic, one revision `ae4636b1e6d4`; `alembic check` clean; applied in the app lifespan |
@@ -79,7 +79,8 @@ separate, undecided work.
 
 | Commit | Work | Decision |
 |---|---|---|
-| uncommitted | Task 44 — P2-2 (donation/requirement half): submitted text bounded at the schema; `beneficiaryCount` ≥ 0 | D-60 |
+| uncommitted | Task 45 — P2-3 (null half): an explicit PATCH `null` no longer 500s; it clears a nullable column and leaves a NOT NULL one alone | D-61 |
+| `7764e06` | Task 44 — P2-2 (donation/requirement half): submitted text bounded at the schema; `beneficiaryCount` ≥ 0 | D-60 |
 | `b583213` | Task 43 — P2-1: donation creation rate-limited per donor account and per IP; admins exempt | D-59 |
 | `354874c` | Task 42 — P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup | D-58 |
 | `d34190c` | Task 41 — P1-1b: a courier reads a coarse pickup area until they claim | D-57 |
@@ -119,11 +120,11 @@ recipient read scope (`16497ea`), auth rate limiting (`91544e3`), atomic courier
 
 ## Immediate next step
 
-Every P1 from the 2026-09-10 audit is fixed and committed; the current focus is P2, and
-P2-1 is committed (`b583213`). Review Task 44 (P2-2, uncommitted): submitted donation,
-status-note and requirement text is bounded at the schema, and `beneficiaryCount` may not be
-negative (D-60). After it comes P2-2's profile half, which mirrors the columns and needs no
-decision, then P2-3…P2-6 in `TASKS.md`.
+Every P1 from the 2026-09-10 audit is fixed and committed; the current focus is P2. P2-1 and
+P2-2's donation half are committed (`b583213`, `7764e06`). Review Task 45 (P2-3's null half,
+uncommitted): every PATCH route reads its body through `schemas.patch_changes`, so `null`
+clears a nullable column and leaves a NOT NULL one alone (D-61). After it: P2-2's profile half
+(mirrors the columns, no decision needed), P2-3's exception-handler half, then P2-4…P2-6.
 
 ## Conventions worth preserving
 

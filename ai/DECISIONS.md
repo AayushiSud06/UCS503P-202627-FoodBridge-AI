@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-60. **D-01…D-59 are implemented in commits
-> up to `b583213`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-60 is
-> implemented in the working tree, uncommitted** (Task 44). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-61. **D-01…D-60 are implemented in commits
+> up to `7764e06`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-61 is
+> implemented in the working tree, uncommitted** (Task 45). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -36,7 +36,7 @@
 > | D-26 | Recipient reads scoped; denial is an empty list | in force |
 > | D-27 | Per-process sliding-window auth rate limit | in force; extended to donation creation by D-59 |
 > | D-28 | Courier claim is a conditional UPDATE | in force; generalised to every transition by D-55 |
-> | D-29 | Requirement lifecycle is `is_active` + one PATCH | in force |
+> | D-29 | Requirement lifecycle is `is_active` + one PATCH | in force; its null rule applied to every PATCH by D-61 |
 > | D-30 | Frozen `matchScore` vs live `viewerMatch` | in force |
 > | D-31 | Interface claims must be honourable; labelled roadmaps allowed | in force |
 > | D-32 | Per-account impact from own rows, not `/metrics` | in force |
@@ -67,7 +67,8 @@
 > | D-57 | A courier reads a coarse pickup area until the claim binds the run to them | in force (`d34190c`) |
 > | D-58 | A cancellation is neutral to reliability; collection ends the donor's right to cancel | in force (`354874c`) |
 > | D-59 | Donation creation is limited per donor account and per network; admins exempt | in force (`b583213`) |
-> | D-60 | Submitted donation and requirement text is bounded at the schema: columns at their size, `Text` at 2,000 | in force (Task 44, uncommitted) |
+> | D-60 | Submitted donation and requirement text is bounded at the schema: columns at their size, `Text` at 2,000 | in force (`7764e06`) |
+> | D-61 | In a PATCH, `null` clears a nullable column and leaves a NOT NULL column alone | in force (Task 45, uncommitted) |
 >
 > Reliability accounting (D-15, D-41, D-58): a release is not an acceptance, and a
 > cancellation — the donor's before `PICKED_UP`, or an administrator's — takes its acceptance
@@ -864,7 +865,8 @@ organisation's id answers 404.
   that confirmed the id exists would leak what the scoping withholds.
 - **`null` means "leave it alone".** No requirement column is nullable, so an explicit
   null cannot mean "clear this field"; it is skipped rather than written, which would
-  otherwise be an IntegrityError surfacing as a 500.
+  otherwise be an IntegrityError surfacing as a 500. **D-61** applies the same rule, column
+  by column, to every other PATCH.
 
 **Constraints.**
 
@@ -2897,7 +2899,7 @@ register policy is unchanged. Committed as `b583213` (Task 43).
 
 **Decision.** P2-2's donation and requirement half, with the ceiling set by the Project
 Manager. Every text field a donor or a kitchen submits that is stored in the row has a
-`max_length` on its request schema. `beneficiaryCount` is `ge=0`. Task 44, uncommitted.
+`max_length` on its request schema. `beneficiaryCount` is `ge=0`. Committed as `7764e06` (Task 44).
 
 - **A `String(n)` column bounds its field at `n`.** On `DonationCreate` that is `category` 60,
   `unit` 24, `storageType` 40 and `location` 255. On the requirement schemas it is `unit` 24
@@ -2946,3 +2948,50 @@ Manager. Every text field a donor or a kitchen submits that is stored in the row
 - Bounded, not scoped: a description can still carry an address (D-57).
 - Tests: `test_donation_input_bounds.py` (26), including a check that every stored text input
   on the four schemas is bounded and fits its column.
+
+---
+
+## D-61 · In a PATCH, `null` clears a column that can hold null and leaves one that cannot alone **[documented]**
+
+**Decision.** P2-3's null half (Task 45, uncommitted). All five PATCH handlers read their body
+through `schemas.patch_changes(body, row)`: `/auth/me`, `/admin/users/{id}`, `/recipients/me`,
+`/volunteers/me` and `/requirements/{id}`. A field left out is not a change. A value is
+applied. An explicit `null` is applied only when the mapped column is nullable; otherwise it is
+dropped and the stored value stays.
+
+- **Now left alone (was a bare 500, a NOT NULL `IntegrityError` at commit):** recipient
+  `name`, `type`, `location`, `capacity`; courier `isAvailable`, `location`; profile `name`;
+  admin `isActive`, `role`, `name`. Requirement fields already were (D-29).
+- **Still cleared, as before:** recipient `latitude`, `longitude`, `contactPerson`, `phone`;
+  courier `latitude`, `longitude`; `organization` and `phone` on both user PATCHes.
+
+**Reasoning.**
+
+- **The repository had already answered both halves.** Null has always cleared a nullable
+  column: the NGO profile form sends `phone: null` for a blank phone, and D-54 names clearing a
+  pin as a change. For a NOT NULL column, D-29 set "null leaves it alone" on the requirement
+  PATCH for this exact failure, and the audit's P2-3 scope said to extend it. The rule was
+  applied per column; nothing new was chosen.
+- **Left alone, not refused.** Every update schema publishes these fields as `T | null`. A 422
+  would narrow that published contract and give the five routes two meanings of null. The
+  OpenAPI document is byte-identical before and after.
+- **Dropped before any rule reads the body.** D-54 compares the submitted `name` with the
+  stored one, and the admin lockout guard read `"role" in changes` as a demotion. Before, a
+  null name counted as a rename (only the 500's rollback undid it), and `{"role": null}` on
+  your own admin account was refused as self-demotion. Clearing a pin still voids
+  verification.
+- **Read from the column, not listed.** `inspect(row).mapper.columns[field].nullable` is what
+  the database accepts, so a new field needs no second declaration.
+- **Fixed at the write, not caught after it.** No exception handler turns the `IntegrityError`
+  into a 4xx; the write that raised it no longer happens. An invalid value beside a null is
+  still FastAPI's ordinary 422, raised before the handler, so nothing is written.
+
+**Constraints.**
+
+- `null` cannot blank a NOT NULL column; a client wanting a different value must send one.
+- ⚠️ **P2-3's other half is open.** There is still no exception handler, so any other
+  unhandled 500 has no body and `api.ts` shows it as "Cannot reach the FoodLink server".
+- No schema, model, migration, wire or frontend change. `update_requirement`'s inline
+  `is not None` check became the helper, with identical behaviour.
+- Tests: `test_patch_null_semantics.py` (43; 16 fail against the pre-fix routers), including a
+  guard that every update-schema field is tested and filed by its column's nullability.
