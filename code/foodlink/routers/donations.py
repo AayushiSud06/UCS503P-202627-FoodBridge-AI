@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, false, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
@@ -16,6 +16,7 @@ from ..models import (
     ALLOWED_TRANSITIONS, Donation, DonationStatus, Recipient, Requirement, StatusEvent,
     User, UserRole, Volunteer,
 )
+from ..ratelimit import check_donation_creation
 from ..schemas import DonationCreate, DonationOut, MatchOut, StatusUpdate
 from ..security import get_current_user, require_roles
 from ..serialize import donation_out
@@ -623,11 +624,27 @@ def _withdraw_acceptance(db: Session, recipient_id: int) -> None:
     )
 
 
-@router.post("", response_model=DonationOut, status_code=status.HTTP_201_CREATED)
+#: Who may post a donation. One callable, shared by the route and its rate limit,
+#: so FastAPI resolves the caller once per request and the role gate answers
+#: 401/403 before the limit counts anything.
+_may_post_donation = require_roles(UserRole.donor, UserRole.admin)
+
+
+def _donation_rate_limit(request: Request, user: User = Depends(_may_post_donation)) -> None:
+    """Refuse a donor over their account or network budget, before any work (D-59)."""
+    check_donation_creation(request, user)
+
+
+@router.post(
+    "",
+    response_model=DonationOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(_donation_rate_limit)],
+)
 def create_donation(
     body: DonationCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.donor, UserRole.admin)),
+    user: User = Depends(_may_post_donation),
 ) -> DonationOut:
     deadline = body.pickup_deadline
     if deadline.tzinfo is None:

@@ -1,9 +1,14 @@
-"""Request-rate limiting for the authentication endpoints.
+"""Request-rate limiting for the authentication endpoints and donation creation.
 
 `POST /api/auth/login` and `POST /api/auth/register` are the two routes an
 anonymous caller can drive as hard as the server will answer them, and bcrypt's
 cost is not a rate limit: it prices one attempt, not ten thousand of them. This
 module prices the attempts.
+
+`POST /api/donations` is limited too (DQ-4, D-59), because every post both lands
+in every kitchen's pool and probes the 8 km matching gate. That caller is
+authenticated, so it is counted per donor account as well as per address — see
+`check_donation_creation`.
 
 Four things are decided here:
 
@@ -13,11 +18,13 @@ Four things are decided here:
   workers would each keep their own count and the effective limit would double;
   two hosts would multiply it again. A shared counter means Redis, which is a
   larger decision than this control needs. See `DECISIONS.md` D-27.
-* **The key is the caller's address, not the submitted email.** Keying on the
-  account would let anyone lock a person out of their own account by failing
-  logins on their behalf, and it would leak: a limited response for one address
-  and an ordinary one for another answers "does this account exist?", which is
-  exactly what the single login error message withholds (D-18).
+* **For login and register the key is the caller's address, not the submitted
+  email.** Keying on the account would let anyone lock a person out of their own
+  account by failing logins on their behalf, and it would leak: a limited
+  response for one address and an ordinary one for another answers "does this
+  account exist?", which is exactly what the single login error message
+  withholds (D-18). Neither objection reaches donation creation, where only the
+  holder of a donor's token can spend that donor's budget.
 * **Every request counts, not only the failures.** The limiter runs before the
   handler and never learns the outcome, so authentication behaviour below the
   threshold is byte-for-byte what it was.
@@ -36,12 +43,20 @@ from collections.abc import Callable
 from fastapi import HTTPException, Request, status
 
 from .config import get_settings
+from .models import User, UserRole
 
 settings = get_settings()
 
 #: The 429 body. It names the network rather than the account deliberately: the
 #: response has to read the same whether or not the email exists.
 RATE_LIMITED_DETAIL = "Too many attempts from this network. Please wait and try again."
+
+#: The 429 body when a donor's own account is over its donation budget. It names
+#: the account because that is what is limited, and says "attempts" because a
+#: post that fails validation counts too.
+DONATION_ACCOUNT_RATE_LIMITED_DETAIL = (
+    "Too many donation attempts from this account. Please wait and try again."
+)
 
 #: Key used when the ASGI server reports no peer address — a direct in-process
 #: call, or a transport without one. Such callers share a single budget rather
@@ -69,11 +84,14 @@ class RateLimiter:
         name: str,
         limit: int,
         window_seconds: int,
+        detail: str = RATE_LIMITED_DETAIL,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.name = name
         self.limit = limit
         self.window_seconds = window_seconds
+        # The sentence a refusal carries; it has to describe what is limited.
+        self.detail = detail
         # Monotonic, so a clock adjustment cannot widen or collapse a window.
         # Injectable so tests can step time instead of sleeping through it.
         self._clock = clock
@@ -89,7 +107,7 @@ class RateLimiter:
             return
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=RATE_LIMITED_DETAIL,
+            detail=self.detail,
             headers={"Retry-After": str(retry_after)},
         )
 
@@ -115,6 +133,20 @@ class RateLimiter:
             hits.append(now)
             return None
 
+    def release(self, key: str) -> None:
+        """Take back the newest request counted against `key`.
+
+        For a request this limiter allowed and a second limiter then refused:
+        a refused request is not counted, and that has to stay true when two
+        budgets guard one route. Hits are interchangeable timestamps, so if a
+        concurrent request landed in between, the one withdrawn is that slightly
+        newer hit rather than the refused request's own; the count is the same.
+        """
+        with self._lock:
+            hits = self._hits.get(key)
+            if hits:
+                hits.pop()
+
     def _sweep(self, cutoff: float) -> None:
         """Drop keys whose most recent request has left the window."""
         stale = [key for key, hits in self._hits.items() if not hits or hits[-1] <= cutoff]
@@ -138,6 +170,19 @@ register_limiter = RateLimiter(
     name="register",
     limit=settings.register_rate_limit,
     window_seconds=settings.register_rate_window_seconds,
+)
+
+donation_account_limiter = RateLimiter(
+    name="donation-account",
+    limit=settings.donation_account_rate_limit,
+    window_seconds=settings.donation_account_rate_window_seconds,
+    detail=DONATION_ACCOUNT_RATE_LIMITED_DETAIL,
+)
+
+donation_ip_limiter = RateLimiter(
+    name="donation-ip",
+    limit=settings.donation_ip_rate_limit,
+    window_seconds=settings.donation_ip_rate_window_seconds,
 )
 
 
@@ -172,7 +217,34 @@ login_rate_limit = _guard(login_limiter)
 register_rate_limit = _guard(register_limiter)
 
 
+def check_donation_creation(request: Request, user: User) -> None:
+    """Count a donor's `POST /api/donations` against their account and address.
+
+    Called by the route's dependency once the role gate has resolved `user`, so
+    a request without a valid donor or admin identity is answered 401/403
+    before anything is counted. Administrators are not counted at all (DQ-4):
+    their posts neither meet a limit nor spend a donor's network budget.
+
+    The account is checked before the address, and a request either limiter
+    refuses is counted by neither. So a donor retrying past their own ceiling
+    does not use up the budget of other donors on their network, and a donor
+    refused because their network is busy keeps their own budget intact.
+    """
+    if user.role is not UserRole.donor:
+        return
+
+    account = str(user.id)
+    donation_account_limiter.check(account)
+    try:
+        donation_ip_limiter.check(client_key(request))
+    except HTTPException:
+        donation_account_limiter.release(account)
+        raise
+
+
 def reset_rate_limits() -> None:
-    """Clear both counters."""
+    """Clear every counter."""
     login_limiter.reset()
     register_limiter.reset()
+    donation_account_limiter.reset()
+    donation_ip_limiter.reset()

@@ -2,8 +2,8 @@
 
 > Compressed project memory. Companions: `ARCHITECTURE.md` (how it is built), `TASKS.md`
 > (what is left, prioritised), `DECISIONS.md` (why it is built that way).
-> **Last verified: 2026-09-13, `master` at `d34190c` plus the uncommitted Task 42
-> (P1-4) changes.** The full health audit of 2026-09-10 ran against `640af0c`. This file
+> **Last verified: 2026-09-13, `master` at `354874c` plus the uncommitted Task 43 (P2-1)
+> changes.** The full health audit of 2026-09-10 ran against `640af0c`. This file
 > describes the present; how the project got here is in git history and `DECISIONS.md`.
 
 ## What this project is
@@ -43,7 +43,7 @@ separate, undecided work.
      409 and its side effects roll back.
   4. ✅ A donor's cancellation used to count against the kitchen's reliability. Three
      accept→cancel cycles took a kitchen from the 85 prior to 0, and a donor could cancel
-     food already `PICKED_UP`. Fixed by Task 42 (uncommitted, D-58). A cancellation now
+     food already `PICKED_UP`. Fixed by Task 42 (`354874c`, D-58). A cancellation now
      takes the acceptance back out, in the same transaction and after the conditional status
      write, whether a donor cancels before `PICKED_UP` or an admin cancels (from `PICKED_UP`
      too). A donor gets 409 from `PICKED_UP`.
@@ -51,21 +51,21 @@ separate, undecided work.
      client-side resize, so a typical photo was a 422. Fixed by Task 40 (`692266b`,
      D-56): both create screens resize to 1280 px and re-encode as JPEG before the data
      URL is built — measured in a browser, 3.46 M characters down to 220 k.
-- **No P1 remains** once Task 42 is reviewed. None of the five needed a schema change.
+- **No P1 remains.** None of the five needed a schema change.
 
 ## Current status
 
 | Area | State |
 |---|---|
 | Backend API | ✅ 5 routers, 6 tables, full 9-state lifecycle, role/ownership/lifecycle/trust gates. A donor cancels only before `PICKED_UP`; donor and admin cancellations are neutral to reliability (D-58). ⚠️ an admin `ACCEPTED → EXPIRED` still leaves the acceptance counted (P3) |
-| Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle still open (P2-1) |
+| Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle is rate-limited, not closed (D-59) |
 | Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48). ⚠️ residual copy: mobile header hard-codes seeded org names, donor create page still has a "Future Intelligence" note (P2-4) |
 | Frontend mobile | ✅ `/m/*` screens exist; ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20) |
-| Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP (process-local). No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53); a real name/coordinate edit clears verification (D-54) |
+| Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP; a donor's donation creation limited to 10/h per account and 30/h per IP, with admins exempt (D-59). All limits are process-local. No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53); a real name/coordinate edit clears verification (D-54) |
 | Concurrency | ✅ every lifecycle status write is a conditional UPDATE — the courier claim (D-28) and every other transition (D-55). ⚠️ the expiry sweep writes `EXPIRED` unguarded (P3) |
 | Donation photos | ✅ resized to 1280 px and re-encoded as JPEG in the browser before the data URL is built (D-56); the server keeps the 256 KiB cap and now also checks the shape. ⚠️ still stored inline in the row — object storage is unbuilt |
 | Donor privacy | ✅ a courier browses every unclaimed pickup but reads a coarse `pickupArea` rather than the pin, address or donor until they claim it (D-57); `matchScore`/`distanceKm` already reader-scoped (D-47). ⚠️ `description`, `imageUrl` and event notes are not scoped (P2-2) |
-| Backend tests | ✅ **394 passed** (~5–6 min, bcrypt-bound), 24 files |
+| Backend tests | ✅ **426 passed** (~6 min, bcrypt-bound), 25 files |
 | Frontend tests | ✅ **140 passed** over 16 files (~4 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
 | CI | ✅ backend `pytest` + `alembic upgrade head && alembic check`; frontend `npm test` + `npm run build` |
 | Migrations | ✅ Alembic, one revision `ae4636b1e6d4`; `alembic check` clean; applied in the app lifespan |
@@ -79,7 +79,8 @@ separate, undecided work.
 
 | Commit | Work | Decision |
 |---|---|---|
-| uncommitted | Task 42 — P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup | D-58 |
+| uncommitted | Task 43 — P2-1: donation creation rate-limited per donor account and per IP; admins exempt | D-59 |
+| `354874c` | Task 42 — P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup | D-58 |
 | `d34190c` | Task 41 — P1-1b: a courier reads a coarse pickup area until they claim | D-57 |
 | `692266b` | Task 40 — P1-5: donation photos resized and re-encoded before upload | D-56 |
 | `3d6f8f8` | Task 39 — P1-3: every lifecycle status write is a conditional UPDATE | D-55 |
@@ -110,14 +111,16 @@ recipient read scope (`16497ea`), auth rate limiting (`91544e3`), atomic courier
 
 - QA audit, 2026-09-02, against `23c27f4` — interface claims the system could not honour
   (`QA-n`); all resolved except I-10/I-11 residue.
-- Health audit, 2026-09-05, against `c274e99` — `HA-1`…`HA-8`; all fixed except `HA-3a`.
+- Health audit, 2026-09-05, against `c274e99` — `HA-1`…`HA-8`; all fixed except `HA-3a`,
+  which is now rate-limited (D-59) but not closed.
 - **Health audit, 2026-09-10, against `640af0c`** — this snapshot; findings are the P-ids in
   `TASKS.md`, with a status table for every earlier finding.
 
 ## Immediate next step
 
-Review Task 42 (P1-4). **That clears every P1 from the 2026-09-10 audit**, so the next work
-is P2 in `TASKS.md`.
+Every P1 from the 2026-09-10 audit is fixed and committed; the current focus is P2.
+Review Task 43 (P2-1, uncommitted): donation creation is rate-limited to the DQ-4 policy
+(D-59). After it, the remaining P2 work is P2-2…P2-6 in `TASKS.md`.
 
 ## Conventions worth preserving
 

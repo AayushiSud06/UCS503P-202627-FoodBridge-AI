@@ -2,8 +2,8 @@
 
 > Structural map for AI context. Rationale lives in `DECISIONS.md`; open work in `TASKS.md`.
 > **Verified against `master` at `640af0c` on 2026-09-10** by the health audit of that
-> date; updated for Tasks 37–41 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`, `d34190c`;
-> D-53–D-57) and the uncommitted Task 42 (D-58). ⚠️ marks a known weakness with its `TASKS.md` id.
+> date; updated for Tasks 37–42 (`c65c65f`, `be831b8`, `3d6f8f8`, `692266b`, `d34190c`,
+> `354874c`; D-53–D-58) and the uncommitted Task 43 (D-59). ⚠️ marks a known weakness with its `TASKS.md` id.
 
 ## Shape
 
@@ -44,7 +44,7 @@ Axios, no form library, no eslint.
 | `models.py` | 6 tables, `UserRole`, `DonationStatus`, `ALLOWED_TRANSITIONS`, `SELF_SIGNUP_ROLES`, `UtcDateTime` (D-09). |
 | `schemas.py` | All wire shapes, camelCase aliases. `imageUrl` ≤ 256 KiB and must be an image data URL or an http(s) link (`IMAGE_URL_PATTERN`, D-56); ⚠️ most other strings unbounded (P2-2). |
 | `security.py` | bcrypt, JWT HS256 mint/verify, `get_current_user` (re-reads the user row, D-03), `require_roles`. |
-| `ratelimit.py` | Per-IP sliding window, process-local, on login and register only (D-27). |
+| `ratelimit.py` | Sliding-window `RateLimiter`, process-local (D-27). Login and register are limited per IP. Donation creation is limited per donor account and per IP, with admins exempt and each limit carrying its own 429 sentence (`check_donation_creation`, D-59). |
 | `matching.py` | Pure (no DB): haversine, 5 criteria, `WEIGHTS`, blur, requirement fit, `rank_recipients`. |
 | `serialize.py` | `donation_out()` — ORM → `DonationOut`, applying the reader's two scopes: `precise_for` for the kitchen-derived figures (D-47) and `precise_pickup_for` for the donor's pin, address and identity, with `coarse_pickup_area()` standing in (D-57). |
 | `routers/donations.py` | Read scopes, lifecycle endpoint, ranking calls. The core of the system (~820 lines). |
@@ -163,7 +163,7 @@ UPDATE is what turns it over (D-57). The ngo scope has required verification sin
 | Group | Endpoints |
 |---|---|
 | auth | `POST /auth/register` · `POST /auth/login` (form-encoded) · `GET|PATCH /auth/me` · `POST /auth/password` |
-| donations | `POST /donations` (ranks on create; ⚠️ not rate-limited, P2-1) · `GET /donations?status=&mine=&limit≤500` · `GET /donations/{id}` · `GET /donations/{id}/matches?limit≤25` · `POST /donations/{id}/status` |
+| donations | `POST /donations` (ranks on create; donor limited to 10/h per account and 30/h per IP, D-59) · `GET /donations?status=&mine=&limit≤500` · `GET /donations/{id}` · `GET /donations/{id}/matches?limit≤25` · `POST /donations/{id}/status` |
 | organisations | `GET /recipients` · `GET|PATCH /recipients/me` · `GET /requirements?includeInactive=` · `POST /requirements` · `PATCH /requirements/{id}` (owner) · `GET /volunteers` · `GET|PATCH /volunteers/me` |
 | metrics | `GET /metrics` — platform-wide, any authenticated role |
 | admin | `GET|POST /admin/users` · `PATCH /admin/users/{id}` · `POST|DELETE /admin/recipients/{id}/verify` · `POST /admin/maintenance/expire` |
@@ -181,7 +181,8 @@ still requires an exact pin. No error responses are declared in OpenAPI; there i
   figures and `reasons` (D-05, D-06).
 - **Gates** (return `None`): unverified, no coordinates, beyond `MAX_MATCH_RADIUS_KM` (8).
   Evaluated on the **true** position before any blur, so the eligible set never depends on
-  the reader. ⚠️ that gate is itself a membership oracle (`HA-3a`, P2-1).
+  the reader. ⚠️ that gate is itself a membership oracle (`HA-3a`); D-59 rate-limits the
+  probing and does not close it.
 - **Distance** is haversine only; travel time is a flat 20 km/h and never leaves the module.
 - **Size:** only `unit == "Meals"` is compared with `Recipient.capacity` (meals by
   convention); other units score 50/50 and say so. Headroom is absolute, saturating at 100
@@ -221,6 +222,8 @@ donation list (D-32).
 | `ACCESS_TOKEN_MINUTES` | 720 | |
 | `LOGIN_RATE_LIMIT` / `_WINDOW_SECONDS` | 30 / 300 | per client IP |
 | `REGISTER_RATE_LIMIT` / `_WINDOW_SECONDS` | 10 / 3600 | per client IP |
+| `DONATION_ACCOUNT_RATE_LIMIT` / `_WINDOW_SECONDS` | 10 / 3600 | per donor account; admins exempt |
+| `DONATION_IP_RATE_LIMIT` / `_WINDOW_SECONDS` | 30 / 3600 | donors, per client IP |
 | `CORS_ORIGINS` | localhost:5173 pair | allowlist |
 | `MAX_MATCH_RADIUS_KM` | 8 | |
 | `FOODLINK_ADMIN_PASSWORD` | unset | scripted CLI bootstrap |
@@ -243,14 +246,14 @@ Frontend build-time: `VITE_API_URL`, `VITE_API_PROXY` (inlined — never secrets
 
 ## Testing
 
-**Backend — `pytest code/tests`: 394 tests, ~5–6 min** (almost all bcrypt). `conftest.py`
+**Backend — `pytest code/tests`: 426 tests, ~6 min** (almost all bcrypt). `conftest.py`
 builds an in-memory SQLite per test with `StaticPool`, overrides `get_db`, and sets its own
 signing key; no mocks (D-17). ⚠️ It sets no `DATABASE_URL`, so the app lifespan migrates
 `./foodlink.db` in the working directory (a no-op at head).
 
 | Area | Files |
 |---|---|
-| Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
+| Happy paths, auth/admin | `test_api.py`, `test_auth_admin.py`, `test_config.py`, `test_rate_limit.py`, `test_donation_rate_limit.py`, `test_migrations.py`, `test_recipient_reverification.py` |
 | Read scopes | `test_donation_reads.py`, `test_recipient_reads.py`, `test_volunteer_reads.py`, `test_requirement_reads.py`, `test_courier_pickup_disclosure.py` |
 | Lifecycle | `test_lifecycle_authorization.py`, `test_pickup_release.py`, `test_cancellation_reliability.py`, `test_courier_claim.py` and `test_lifecycle_concurrency.py` (both file-backed concurrency), `test_available_donations_deadline.py`, `test_volunteer_delivery_history.py`, `test_requirement_lifecycle.py` |
 | Matching & privacy | `test_matching_scores.py` (unit), `test_match_score_consistency.py`, `test_match_distance_privacy.py`, `test_donation_privacy_scope.py`, `test_requirement_matching.py` |

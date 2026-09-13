@@ -1,8 +1,8 @@
 # DECISIONS — FoodLink / FoodBridge-AI
 
-> Decisions evident in the repository, D-01 to D-58. **D-01…D-57 are implemented in commits
-> up to `d34190c`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-58 is
-> implemented in the working tree, uncommitted** (Task 42). Open questions are not decisions — they live in `TASKS.md` → *Decisions
+> Decisions evident in the repository, D-01 to D-59. **D-01…D-58 are implemented in commits
+> up to `354874c`** (D-01…D-52 re-verified by the health audit of 2026-09-10); **D-59 is
+> implemented in the working tree, uncommitted** (Task 43). Open questions are not decisions — they live in `TASKS.md` → *Decisions
 > needed*. Read the index below first and open an entry only when you need its reasoning.
 > ⚠️ marks an entry whose stated constraint the 2026-09-10 audit found wrong or incomplete.
 >
@@ -34,7 +34,7 @@
 > | D-24 | Donation read scope is a WHERE clause; denial 404 | ngo half gated on verification by D-53; courier half scoped by disclosure, not exclusion (D-57) |
 > | D-25 | CI validates, never deploys, holds no secret | in force; frontend tests run since `d611424` |
 > | D-26 | Recipient reads scoped; denial is an empty list | in force |
-> | D-27 | Per-process sliding-window auth rate limit | in force; donation creation unlimited (P2-1) |
+> | D-27 | Per-process sliding-window auth rate limit | in force; extended to donation creation by D-59 |
 > | D-28 | Courier claim is a conditional UPDATE | in force; generalised to every transition by D-55 |
 > | D-29 | Requirement lifecycle is `is_active` + one PATCH | in force |
 > | D-30 | Frozen `matchScore` vs live `viewerMatch` | in force |
@@ -52,7 +52,7 @@
 > | D-42 | Only meals vs capacity; absolute headroom | in force |
 > | D-43 | Vitest on the project's Vite config | in force |
 > | D-44 | Requirements scoped by role; donors see verified orgs' | in force |
-> | D-45 | Match distance belongs to the org it describes (blur) | in force; `HA-3a` residual open |
+> | D-45 | Match distance belongs to the org it describes (blur) | in force; `HA-3a` residual rate-limited, not closed (D-59) |
 > | D-46 | `includeInactive` is a second axis; donors excluded | in force |
 > | D-47 | Same scope governs `DonationOut` location-derived fields | in force; extended to the donor's own pin by D-57 |
 > | D-48 | Pre-login and post-login pages carry no roadmap/course artefacts | in force; donor create page residue (P2-4) |
@@ -65,7 +65,8 @@
 > | D-55 | Every lifecycle status write carries its own precondition | in force (`3d6f8f8`) |
 > | D-56 | Donation photos are resized in the browser, the only place holding the bytes | in force (`692266b`) |
 > | D-57 | A courier reads a coarse pickup area until the claim binds the run to them | in force (`d34190c`) |
-> | D-58 | A cancellation is neutral to reliability; collection ends the donor's right to cancel | in force (Task 42, uncommitted) |
+> | D-58 | A cancellation is neutral to reliability; collection ends the donor's right to cancel | in force (`354874c`) |
+> | D-59 | Donation creation is limited per donor account and per network; admins exempt | in force (Task 43, uncommitted) |
 >
 > Reliability accounting (D-15, D-41, D-58): a release is not an acceptance, and a
 > cancellation — the donor's before `PICKED_UP`, or an administrator's — takes its acceptance
@@ -748,6 +749,10 @@ header and one human sentence. No dependency was added.
   storage, and the worst case is one extra window's worth of attempts. The clock is
   `time.monotonic`, so a system clock adjustment cannot widen or collapse a window
   either.
+
+✅ **Extended by D-59** to `POST /api/donations`. That route also has a per-account key,
+because "keyed on the address, never the account" answers a problem only anonymous routes
+have.
 
 ---
 
@@ -1916,7 +1921,8 @@ blurred.
   binary-searches the pin can still find points on that 8 km circle and trilaterate from
   three of them. Closing that would mean changing eligibility, which the matcher's
   correctness depends on. The control for it is abuse-limiting on donation creation, not
-  a different distance representation. Filed in `TASKS.md` → *Backlog → A*.
+  a different distance representation. ✅ **D-59 is that control:** it slows the search
+  and does not close it.
 - **Two smaller readings in the same family remain open**, both found while implementing
   this and both outside its endpoint: `Donation.match_score` is frozen from a precise
   ranking and shown to the donor who posted the pin (~320 m granularity, one number per
@@ -2739,7 +2745,7 @@ This is the answer to DQ-1, approved by the Project Manager. Committed as `d3419
 
 **Decision.** DQ-3, answered by the Project Manager. Recipient reliability measures
 recipient-controlled fulfilment, not outcomes the donor or the platform caused. Three rules,
-all in `routers/donations.update_status`; Task 42, uncommitted.
+all in `routers/donations.update_status`. Committed as `354874c` (Task 42).
 
 - **A donor may cancel only before collection.** `donations.DONOR_CANCELLABLE` —
   `AVAILABLE`, `MATCHED`, `ACCEPTED`, `VOLUNTEER_ASSIGNED` — is checked after ownership. From
@@ -2811,3 +2817,74 @@ all in `routers/donations.update_status`; Task 42, uncommitted.
   same kitchen's counter. Both are in `TASKS.md` P3.
 - No frontend change. No screen offers any role a cancel control; the endpoint is reached
   only through the API.
+
+---
+
+## D-59 · Donation creation is limited per donor account and per network; administrators are exempt **[documented]**
+
+**Decision.** DQ-4, answered by the Project Manager (P2-1, `HA-3a`). `POST /api/donations`
+carries a route dependency, `routers/donations._donation_rate_limit`. It calls
+`ratelimit.check_donation_creation`, which uses two more instances of D-27's `RateLimiter`:
+
+- **Account limit:** 10 an hour per donor account (`donation_account_limiter`, keyed on
+  `user.id`). Its refusal says "Too many donation attempts from this account. Please wait
+  and try again."
+- **Network limit:** 30 an hour per client address (`donation_ip_limiter`, keyed by
+  `client_key`, as login and register are). Its refusal is D-27's existing "from this
+  network" sentence.
+
+Both refuse with a 429 and a `Retry-After`. Both settings come from the environment,
+through `_positive_int`: `DONATION_ACCOUNT_RATE_LIMIT` / `_WINDOW_SECONDS` and
+`DONATION_IP_RATE_LIMIT` / `_WINDOW_SECONDS`. Only donors are counted. The login and
+register policy is unchanged. Task 43, uncommitted.
+
+**Reasoning.**
+
+- **The goal is an abuse rate, not a proof.** The audit posted 40 donations in a row, all
+  `201`. No endpoint moves a donation's pin, so every probe of the 8 km gate is a new
+  donation. Ten an hour stops the flood and turns a probing run of tens of posts into hours.
+  It does not make the membership oracle impossible, and it does not claim to.
+- **Two keys, because one person can hold several accounts.** Self-registration allows 10
+  accounts an hour per address (D-27). An account key alone would let anyone multiply their
+  budget that way. An address key alone would make donors on one network share ten. The
+  network limit is three accounts' worth, so real donors behind a NAT are not throttled by
+  each other.
+- **Keying by account is safe here, unlike at login.** D-27 keyed login on the address
+  because an account key there lets a stranger lock someone out and reveals which accounts
+  exist. Neither applies to an authenticated route: only the holder of a donor's token can
+  spend that donor's budget.
+- **The limit runs after the role gate, before the handler.** The dependency and the handler
+  share one `require_roles` callable, so FastAPI resolves the caller once. A 401 or 403 is
+  therefore answered before anything is counted. Every request that reaches the limiter
+  counts, as under D-27, including one the schema or the handler then rejects with 422.
+  FastAPI runs route dependencies before it validates the body, and the limiter never learns
+  the outcome. Counting only successes was rejected: it would need a check-then-record split
+  in the limiter.
+- **A request refused by either limit is counted by neither.** This is D-27's "a refused
+  request is not counted", kept true across two budgets. The account is checked first, so a
+  donor hammering past their own limit never spends their network's budget. When the network
+  limit refuses, `RateLimiter.release` takes back the account hit just recorded, so a donor
+  turned away because their network is busy keeps their own budget. The two additions to
+  `RateLimiter` are a per-limiter `detail` and `release`. The sliding window, the sweep and
+  the "a refused hit is not appended" rule are unchanged.
+- **A separate sentence for the account.** Error `detail` is shown verbatim (D-18), and "from
+  this network" would be false for an account refusal. The message says "attempts" because a
+  rejected post counts too.
+- **Administrators are exempt.** Their posts neither meet a limit nor spend a donor's network
+  budget.
+
+**Constraints.**
+
+- ⚠️ **Process-local, as D-27 is.** `n` workers keep `n` counters, and behind a proxy every
+  donor shares the proxy's address unless uvicorn trusts forwarded headers. The same
+  deployment follow-up applies (`TASKS.md` P3).
+- ⚠️ **Not a closure of `HA-3a`.** Several donors, or several networks, still probe in
+  parallel, only more slowly.
+- `release` removes the key's newest hit. If a concurrent request from the same account
+  lands between the two checks, that request's slightly newer hit is withdrawn instead of
+  the refused one. The count is still exact.
+- If both limits are over, the account sentence is the one returned, because the account
+  is checked first.
+- No schema change, no migration, no new dependency. No frontend change: `api.ts` already
+  renders a 429's `detail`.
+- Tests: `test_donation_rate_limit.py` (32). `test_rate_limit.py` is unchanged.

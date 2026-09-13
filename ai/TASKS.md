@@ -1,7 +1,7 @@
 # TASKS — FoodLink / FoodBridge-AI
 
-> **Verified against the repository on 2026-09-13, `master` at `d34190c`, plus the
-> uncommitted Task 42 (P1-4) changes.** The full health audit of 2026-09-10 was run against
+> **Verified against the repository on 2026-09-13, `master` at `354874c`, plus the
+> uncommitted Task 43 (P2-1) changes.** The full health audit of 2026-09-10 was run against
 > `640af0c`. Context: `PROJECT_STATE.md`.
 >
 > **Provenance rule.** *Completed* is verified present in the repository. Everything else is
@@ -18,12 +18,11 @@
 
 ## Current
 
-**Task 42 · P1-4 — implemented (with the admin-neutrality revision), uncommitted, awaiting
-review.** A cancellation takes the kitchen's acceptance back out of its reliability record,
-whether a donor cancels before `PICKED_UP` or an administrator cancels. A donor can no longer
-cancel once the food is collected (D-58, answering DQ-3). See P1-4 below.
+**Task 43 · P2-1 — implemented, uncommitted, awaiting review.** A donor may post 10 donations
+an hour per account and 30 an hour per network; administrators are exempt (DQ-4, D-59). See
+P2-1 below. Next: P2-2…P2-6.
 
-**That clears every P1.** Next: P2.
+Every P1 is fixed; Task 42 (P1-4) is committed as `354874c`.
 
 ## P0 — urgent
 
@@ -99,7 +98,7 @@ cancel once the food is collected (D-58, answering DQ-3). See P1-4 below.
 
 ### P1-4 · A donor's cancellation is booked as the kitchen's failure
 - **Category:** DATA INTEGRITY ISSUE
-- ✅ **FIXED by Task 42 (uncommitted, awaiting review), D-58.** DQ-3 answered. A donor
+- ✅ **FIXED by Task 42 (`354874c`), D-58.** DQ-3 answered. A donor
   may cancel only from `DONOR_CANCELLABLE` (`AVAILABLE`, `MATCHED`, `ACCEPTED`,
   `VOLUNTEER_ASSIGNED`). From `PICKED_UP` the answer is 409 with the transition table's
   wording, checked after ownership. For a bound donation, any cancellation (a donor's, or an
@@ -149,7 +148,26 @@ cancel once the food is collected (D-58, answering DQ-3). See P1-4 below.
 - **P2-1 · Abuse-limit donation creation (`HA-3a`).** SECURITY ISSUE. `POST /donations` has
   no limit (repro: 40 rapid creations, all 201). Each creation is also a probe of the 8 km
   eligibility gate (the residual membership oracle D-45 named) and a spam entry in every
-  kitchen's pool. Scope: a per-account + per-IP limiter reusing `ratelimit.RateLimiter`. **S–M**
+  kitchen's pool.
+  ✅ **FIXED by Task 43 (uncommitted, awaiting review), D-59.** DQ-4 answered. `POST
+  /api/donations` carries `routers/donations._donation_rate_limit`, which runs after the role
+  gate and before the handler. For a donor it checks two `RateLimiter`s
+  (`ratelimit.check_donation_creation`): 10 an hour keyed on the account, then 30 an hour
+  keyed on the client address. Each refuses with its own 429 sentence and a `Retry-After`.
+  Administrators are not counted. A request either limiter refuses is counted by neither
+  (`RateLimiter.release`). Every request that reaches the limiter counts, as under D-27,
+  including one the schema or handler then rejects with 422. `HA-3a` is slowed, not closed.
+- **Evidence:** new `test_donation_rate_limit.py` (32 tests; 12 fail against the pre-fix
+  router, and the cross-limiter test fails with `release` removed). It covers:
+  - the exact 10 and 30 boundaries, the audit's 40-post repro (10 × 201, then 429s), the
+    exact `Retry-After`, the sliding window, and each budget lifting;
+  - separate account budgets on one network, an account budget that follows the donor
+    across networks, and a shared network budget;
+  - neither budget spent by the other's refusals, and which message wins when both are
+    over;
+  - admin exemption, no counting for a 401/403, a 422 still counting, and config
+    validation.
+  `test_rate_limit.py` is unchanged and still passes.
 - **P2-2 · Bound every free-text field at the schema.** SECURITY/DATA INTEGRITY.
   `description`, `StatusUpdate.note`, `location`, `category`, `unit`, `storage_type`,
   requirement `food_type`/`unit`/`urgency`/`notes`, `phone`, recipient `type`/`location` have
@@ -249,6 +267,10 @@ donations (`R-35`); PostGIS (§16.3).
   cancellation before `PICKED_UP` and an administrator's cancellation (including from
   `PICKED_UP`) are both neutral: the acceptance stops counting. No donor cancellation from
   `PICKED_UP`.
+- ~~**DQ-4 · What is the donation-creation rate limit?**~~ ✅ **Answered (Task 43, D-59):**
+  10 an hour per donor account and 30 an hour per IP. Every request reaching the limiter
+  counts. The account and the network each get their own 429 sentence. Administrators are
+  exempt. Login and register limits are unchanged.
 - **Older, still open:** road vs straight-line distance (`QA-1`, `R-30`); a real exportable
   impact report (`QA-4`); should an `ACCEPTED` donation past its deadline expire (the sweep
   covers `AVAILABLE`/`MATCHED` only); what revoking verification does to donations already
@@ -265,7 +287,7 @@ donations (`R-35`); PostGIS (§16.3).
 | `HA-1` courier roster readable by any ngo | FIXED | `_visible_volunteers`; `test_volunteer_reads.py` |
 | `HA-2` release did not release | FIXED | `update_status` clears `volunteer_id`; `test_pickup_release.py` |
 | `HA-3` `/matches` coordinate oracle | FIXED (blur, D-45) | `score_pair(blur_location)` |
-| `HA-3a` 8 km gate membership oracle | STILL PRESENT | P2-1 |
+| `HA-3a` 8 km gate membership oracle | RATE-LIMITED, not closed (Task 43, uncommitted) | D-59; `test_donation_rate_limit.py` |
 | `HA-3b` `matchScore`/`distanceKm` on `DonationOut` | FIXED (D-47) | `serialize._may_measure` |
 | `HA-4`/`HA-5` collinear, unit-blind size criteria | FIXED (D-42) | `matching.py`; `test_matching_scores.py` |
 | `HA-6` invented landing figures | FIXED | `Landing.test.tsx` |
@@ -296,7 +318,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 42 · P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup (D-58) |
+| uncommitted | Task 43 · P2-1: donation creation rate-limited per donor account (10/h) and per IP (30/h); admins exempt (D-59) |
+| `354874c` | Task 42 · P1-4: donor (pre-pickup) and admin cancellations are neutral to reliability; no donor cancel after pickup (D-58) |
 | `d34190c` | Task 41 · P1-1b: a courier reads a coarse pickup area until they claim (D-57) |
 | `692266b` | Task 40 · P1-5: donation photos resized and re-encoded in the browser (D-56) |
 | `3d6f8f8` | Task 39 · P1-3: every lifecycle status write is a conditional UPDATE (D-55) |

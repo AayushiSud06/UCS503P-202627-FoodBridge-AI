@@ -56,6 +56,18 @@ DEFAULT_LOGIN_RATE_WINDOW_SECONDS = 300  # 5 minutes
 DEFAULT_REGISTER_RATE_LIMIT = 10
 DEFAULT_REGISTER_RATE_WINDOW_SECONDS = 3600  # 1 hour
 
+#: Donation-creation rate-limit policy, decided as DQ-4 (D-59). It is an abuse
+#: rate, not a proof against probing: it stops the audit's run of 40 rapid posts
+#: and slows the 8 km matching-gate oracle, where every probe is a new donation.
+#: The per-address ceiling catches one person rotating several donor accounts,
+#: and is three times the account ceiling so that real donors sharing one
+#: network are not throttled by each other. Overridable for the same reason as
+#: the auth limits.
+DEFAULT_DONATION_ACCOUNT_RATE_LIMIT = 10
+DEFAULT_DONATION_ACCOUNT_RATE_WINDOW_SECONDS = 3600  # 1 hour
+DEFAULT_DONATION_IP_RATE_LIMIT = 30
+DEFAULT_DONATION_IP_RATE_WINDOW_SECONDS = 3600  # 1 hour
+
 _MISSING_KEY_MESSAGE = f"""\
 FOODLINK_SECRET_KEY is not set.
 
@@ -167,6 +179,22 @@ class Settings:
         )
         self.register_rate_window_seconds: int = _positive_int(
             "REGISTER_RATE_WINDOW_SECONDS", DEFAULT_REGISTER_RATE_WINDOW_SECONDS
+        )
+
+        # Rate limits for a donor posting `POST /api/donations`: one budget per
+        # donor account and one per client address, both sliding windows.
+        # Administrators are not counted — see `foodlink.ratelimit`.
+        self.donation_account_rate_limit: int = _positive_int(
+            "DONATION_ACCOUNT_RATE_LIMIT", DEFAULT_DONATION_ACCOUNT_RATE_LIMIT
+        )
+        self.donation_account_rate_window_seconds: int = _positive_int(
+            "DONATION_ACCOUNT_RATE_WINDOW_SECONDS", DEFAULT_DONATION_ACCOUNT_RATE_WINDOW_SECONDS
+        )
+        self.donation_ip_rate_limit: int = _positive_int(
+            "DONATION_IP_RATE_LIMIT", DEFAULT_DONATION_IP_RATE_LIMIT
+        )
+        self.donation_ip_rate_window_seconds: int = _positive_int(
+            "DONATION_IP_RATE_WINDOW_SECONDS", DEFAULT_DONATION_IP_RATE_WINDOW_SECONDS
         )
 
         # Browser origins allowed to call the API.
