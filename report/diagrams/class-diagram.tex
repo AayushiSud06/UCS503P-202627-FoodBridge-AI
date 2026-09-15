@@ -1,0 +1,263 @@
+% FoodLink -- Class Diagram (mid-term report copy)
+%
+% Six persistent entities and two enumerations, verbatim from
+% `code/foodlink/models.py`; the `matching` module and its two dataclasses from
+% `code/foodlink/matching.py`. Multiplicities follow the nullability of the real
+% foreign-key columns. Corrected, report-specific redraw of
+% `docs/uml/diagrams/03-class-domain-model.puml`, whose note that `Requirement`
+% is not read by matching predates D-52. Compile with: pdflatex class-diagram.tex
+\documentclass[border=3pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usetikzlibrary{shapes.multipart,arrows.meta,calc,positioning}
+
+\begin{document}
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\begin{tikzpicture}[
+    font=\scriptsize,
+    cls/.style={rectangle split, rectangle split parts=3, draw=black!85,
+      line width=0.5pt, text width=4.3cm, inner sep=2pt,
+      rectangle split part fill={black!9,white,white},
+      execute at begin node={\setlength{\baselineskip}{8.4pt}%
+        \hyphenpenalty=10000\exhyphenpenalty=10000\raggedright}},
+    cls2/.style={cls, rectangle split parts=2,
+      rectangle split part fill={black!9,white}},
+    enm/.style={cls2, rectangle split part fill={black!4,white}},
+    assoc/.style={draw=black!80, line width=0.5pt},
+    comp/.style={assoc, {Diamond[length=3.2mm, width=2.2mm]}-},
+    nav/.style={assoc, -{Stealth[length=2mm]}},
+    dep/.style={draw=black!70, line width=0.45pt, dash pattern=on 3pt off 2pt,
+      -{Stealth[length=2mm]}},
+    mult/.style={font=\scriptsize, inner sep=1pt},
+    role/.style={font=\scriptsize\itshape, inner sep=1pt, fill=white},
+  ]
+  % Class header: stereotype line, then the name, both centred.
+  \newcommand{\hdr}[2]{\makebox[\linewidth][c]{\tiny«#1»}\\%
+    \makebox[\linewidth][c]{\footnotesize\textbf{#2}}}
+  \def\colB{5.5}\def\colC{11.0}\def\gap{0.95}
+
+  % ======================= column A =======================================
+  \node[cls, anchor=north west] (user) at (0,0) {%
+    \hdr{entity}{User}
+    \nodepart{second}
+    + id : int \{PK\}\\
+    + name : str\\
+    + email : str \{unique\}\\
+    + password\_hash : str\\
+    + role : UserRole\\
+    + organization : str [0..1]\\
+    + phone : str [0..1]\\
+    + is\_active : bool = true\\
+    + created\_at : datetime
+    \nodepart{third}
+    + /initials : str\\
+    + /recipient\_id : int [0..1]\\
+    + /volunteer\_id : int [0..1]};
+
+  \node[cls, anchor=north west] (recipient) at ($(user.south west)+(0,-1.25)$) {%
+    \hdr{entity}{Recipient}
+    \nodepart{second}
+    + id : int \{PK\}\\
+    + user\_id : int [0..1] \{FK\}\\
+    + name : str\\
+    + type : str\\
+    + location : str\\
+    + latitude : float [0..1]\\
+    + longitude : float [0..1]\\
+    + capacity : int = 100\\
+    + contact\_person : str [0..1]\\
+    + phone : str [0..1]\\
+    + is\_verified : bool = false\\
+    + accepted\_donations : int = 0\\
+    + completed\_donations : int = 0
+    \nodepart{third}
+    + /reliability\_score : int};
+
+  % ======================= column B =======================================
+  \node[cls2, anchor=north west] (volunteer) at (\colB,0) {%
+    \hdr{entity}{Volunteer}
+    \nodepart{second}
+    + id : int \{PK\}\\
+    + user\_id : int \{FK, unique\}\\
+    + location : str\\
+    + latitude : float [0..1]\\
+    + longitude : float [0..1]\\
+    + is\_available : bool = true\\
+    + completed\_deliveries : int = 0\\
+    + rating : float = 5.0};
+
+  \node[cls, anchor=north west] (donation) at ($(volunteer.south west)+(0,-\gap)$) {%
+    \hdr{entity}{Donation}
+    \nodepart{second}
+    + id : int \{PK\}\\
+    + donor\_id : int \{FK\}\\
+    + food\_name : str\\
+    + category : str\\
+    + quantity : int\\
+    + unit : str = "Meals"\\
+    + storage\_type : str\\
+    + description : str\\
+    + image\_url : str [0..1]\\
+    + location : str\\
+    + latitude : float\\
+    + longitude : float\\
+    + prepared\_at : datetime [0..1]\\
+    + pickup\_deadline : datetime\\
+    + status : DonationStatus\\
+    + recipient\_id : int [0..1] \{FK\}\\
+    + volunteer\_id : int [0..1] \{FK\}\\
+    + match\_score : int [0..1]\\
+    + created\_at : datetime
+    \nodepart{third}
+    + timestamp\_of(status)\\
+    \hspace*{1em}: datetime [0..1]};
+
+  % ======================= column C =======================================
+  \node[cls2, anchor=north west] (event) at (\colC,0) {%
+    \hdr{entity}{StatusEvent}
+    \nodepart{second}
+    + id : int \{PK\}\\
+    + donation\_id : int \{FK\}\\
+    + from\_status : DonationStatus\\
+    \hspace*{1em}[0..1]\\
+    + to\_status : DonationStatus\\
+    + actor\_id : int [0..1] \{FK\}\\
+    + note : str [0..1]\\
+    + occurred\_at : datetime\\
+    \hspace*{1em}\{server-stamped\}};
+
+  \node[enm, anchor=north west] (status) at ($(event.south west)+(0,-1.35)$) {%
+    \hdr{enumeration}{DonationStatus}
+    \nodepart{second}
+    AVAILABLE\\ MATCHED\\ ACCEPTED\\ VOLUNTEER\_ASSIGNED\\ PICKED\_UP\\
+    DELIVERED\\ COMPLETED\\ CANCELLED\\ EXPIRED};
+
+  \node[enm, anchor=north west] (role) at ($(status.south west)+(0,-0.45)$) {%
+    \hdr{enumeration}{UserRole}
+    \nodepart{second}
+    donor\\ ngo\\ volunteer\\ admin};
+
+  % ======================= bottom row =====================================
+  \coordinate (bottom) at ($(donation.south)+(0,-1.2)$);
+
+  \node[cls2, anchor=north west] (requirement) at (0,0 |- bottom) {%
+    \hdr{entity}{Requirement}
+    \nodepart{second}
+    + id : int \{PK\}\\
+    + recipient\_id : int \{FK\}\\
+    + food\_type : str\\
+    + quantity\_needed : int\\
+    + unit : str = "Meals"\\
+    + beneficiary\_count : int = 0\\
+    + urgency : str = "Medium"\\
+    + daily\_recurring : bool = false\\
+    + notes : str\\
+    + is\_active : bool = true\\
+    + created\_at : datetime};
+
+  \node[cls, anchor=north west] (matching) at (\colB,0 |- bottom) {%
+    \hdr{utility}{matching {\normalfont\scriptsize(module)}}
+    \nodepart{second}
+    + WEIGHTS : dict[str, float]
+    \nodepart{third}
+    + score\_pair(donation, recipient)\\
+    \hspace*{1em}: MatchResult [0..1]\\
+    + rank\_recipients(donation,\\
+    \hspace*{1em}recipients) : list[MatchResult]\\
+    + best\_requirement\_fit(\\
+    \hspace*{1em}donation, requirements)\\
+    \hspace*{1em}: RequirementFit [0..1]\\
+    + haversine\_km(lat1, lon1,\\
+    \hspace*{1em}lat2, lon2) : float};
+
+  \node[cls2, anchor=north west] (result) at (\colC,0 |- bottom) {%
+    \hdr{dataclass}{MatchResult}
+    \nodepart{second}
+    + recipient\_id : int\\
+    + recipient\_name : str\\
+    + overall\_score : int\\
+    + distance\_km : float [0..1]\\
+    + distance\_score : int\\
+    + quantity\_score : int\\
+    + capacity\_score : int\\
+    + deadline\_score : int\\
+    + reliability\_score : int\\
+    + reasons : list[str]};
+
+  \node[cls2, anchor=north west] (fit) at ($(result.south west)+(0,-1.0)$) {%
+    \hdr{dataclass, frozen}{RequirementFit}
+    \nodepart{second}
+    + requirement\_id : int\\
+    + fit : int [0..1]\\
+    + urgency : str\\
+    + quantity\_needed : int\\
+    + unit : str};
+
+  % ======================= relationships ==================================
+  % User -- Volunteer
+  \coordinate (yVol) at ($(volunteer.north)!0.55!(volunteer.south)$);
+  \draw[assoc] (user.east |- yVol) -- (volunteer.west |- yVol)
+    node[mult, pos=0.1, above] {1} node[mult, pos=0.85, above] {0..1}
+    node[role, pos=0.5, below=1.5pt] {acts as};
+
+  % User -- Recipient
+  \draw[assoc] (user.south) -- (recipient.north)
+    node[mult, pos=0.15, right] {0..1} node[mult, pos=0.85, right] {0..1}
+    node[role, pos=0.5, left=2pt] {acts for};
+
+  % User -- Donation (the donor who posts it)
+  \coordinate (yPost) at ($(user.south)+(0,0.3)$);
+  \draw[assoc] (user.east |- yPost) -- (donation.west |- yPost)
+    node[mult, pos=0.1, above] {1} node[mult, pos=0.85, above] {0..*}
+    node[role, pos=0.5, below=1.5pt] {posts};
+
+  % Recipient -- Donation
+  \coordinate (yAcc) at ($(recipient.north)!0.5!(recipient.south)$);
+  \draw[assoc] (recipient.east |- yAcc) -- (donation.west |- yAcc)
+    node[mult, pos=0.12, above] {0..1} node[mult, pos=0.85, above] {0..*}
+    node[role, pos=0.5, below=1.5pt] {accepts};
+
+  % Volunteer -- Donation
+  \draw[assoc] (volunteer.south) -- (donation.north)
+    node[mult, pos=0.22, right] {0..1} node[mult, pos=0.8, right] {0..*}
+    node[role, pos=0.5, left=2pt] {carries};
+
+  % Donation <>-- StatusEvent (composition)
+  \coordinate (yRec) at ($(donation.north)+(0,-0.45)$);
+  \coordinate (xRec) at ($(event.south west)!0.5!(event.south east)$);
+  \draw[comp] (donation.east |- yRec) -- (xRec |- yRec) -- (event.south -| xRec);
+  \node[mult, anchor=south west] at ($(donation.east |- yRec)+(0.08,0.02)$) {1};
+  \node[mult, anchor=north west] at ($(event.south -| xRec)+(0.05,-0.05)$) {0..*};
+  \node[role, anchor=south] at ($(donation.east |- yRec)!0.55!(xRec |- yRec)+(0,0.06)$) {records};
+
+  % User -- StatusEvent (the actor who caused a transition)
+  \draw[assoc] (user.north) -- ++(0,0.5) -| (event.north);
+  \node[mult, anchor=south east] at ($(user.north)+(-0.05,0.05)$) {0..1};
+  \node[mult, anchor=south west] at ($(event.north)+(0.05,0.05)$) {0..*};
+  \node[role] at ($(volunteer.north)+(0,0.5)$) {actor};
+
+  % Recipient <>-- Requirement (composition)
+  \draw[comp] (recipient.south) -- (requirement.north)
+    node[mult, pos=0.85, right] {0..*} node[role, pos=0.5, left=2pt] {publishes};
+  \node[mult, anchor=north west] at ($(recipient.south)+(0.1,-0.05)$) {1};
+
+  % Donation / StatusEvent ..> DonationStatus  (User's role : UserRole is typed
+  % by attribute only; an edge to it would have to cross Donation)
+  \draw[dep] (donation.east |- status.west) -- (status.west);
+  \draw[dep] ($(event.south east)+(-0.6,0)$) -- ($(status.north east)+(-0.6,0)$);
+
+  % matching dependencies
+  \draw[dep] (matching.north) -- node[role, right=2pt, pos=0.5] {«use»} (donation.south);
+  \coordinate (yUse) at ($(matching.north)+(0,-0.9)$);
+  \draw[dep] (matching.west |- yUse) -- node[role, above=1.5pt] {«use»} (requirement.east |- yUse);
+  \draw[dep] (matching.north west) -- node[role, pos=0.5, sloped, above=0.5pt] {«use»} (recipient.south east);
+  \draw[dep] (matching.east |- yUse) -- node[role, above=1.5pt] {«create»} (result.west |- yUse);
+
+  % MatchResult --> RequirementFit
+  \draw[nav] (result.south) -- (fit.north)
+    node[mult, pos=0.18, right] {1} node[mult, pos=0.72, right] {0..1}
+    node[role, pos=0.5, left=2pt] {requirement\_fit};
+\end{tikzpicture}
+\end{document}

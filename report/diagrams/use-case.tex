@@ -1,0 +1,122 @@
+% FoodLink -- Use Case Diagram (mid-term report copy)
+%
+% Every actor is a value of `code/foodlink/models.py::UserRole`; every use case
+% is an implemented route in `code/foodlink/routers/`. Corrected, report-specific
+% redraw of `docs/uml/diagrams/01-use-case.puml`, which predates D-50, D-53,
+% D-57 and D-58. Compile with:  pdflatex use-case.tex
+%
+% Markers:  dagger  = implemented and tested in the API, not offered by the web
+%                     portal (cancel, release, user management);
+%           ddagger = API and the mobile camera screen only.
+\documentclass[border=3pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,calc}
+
+\begin{document}
+\begin{tikzpicture}[
+    font=\small,
+    nohyph/.style={execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
+    uc/.style={ellipse, draw=black!85, fill=black!4, line width=0.5pt, nohyph,
+      inner sep=0pt, text width=2.8cm, align=center, minimum height=0.85cm},
+    internal/.style={uc, fill=white, dash pattern=on 2.5pt off 1.5pt,
+      text width=2.3cm},
+    assoc/.style={draw=black!70, line width=0.45pt},
+    dep/.style={draw=black!75, line width=0.45pt, dash pattern=on 3pt off 2pt,
+      -{Stealth[length=2mm]}},
+    gen/.style={draw=black!75, line width=0.5pt,
+      -{Triangle[open, length=2.6mm, width=2.6mm]}},
+    stereo/.style={font=\scriptsize\itshape, fill=white, inner sep=0.5pt},
+  ]
+
+  % ---- stick-figure actor -------------------------------------------------
+  \newcommand{\actor}[4]{% name, x, y, label
+    \begin{scope}[shift={(#2,#3)}, line width=0.6pt]
+      \draw (0,0.93) circle (0.15);
+      \draw (0,0.78) -- (0,0.35);
+      \draw (-0.28,0.64) -- (0.28,0.64);
+      \draw (0,0.35) -- (-0.22,0) (0,0.35) -- (0.22,0);
+      \coordinate (#1) at (0,0.55);
+      \coordinate (#1-l) at (-0.28,0.64);
+      \coordinate (#1-r) at (0.28,0.64);
+      \node[font=\small\bfseries, align=center, text width=2.1cm, anchor=north]
+        at (0,-0.05) {#4};
+    \end{scope}}
+
+  \def\xL{3.2}\def\xR{9.3}\def\xM{6.25}
+
+  % ---- system boundary ----------------------------------------------------
+  \draw[line width=0.8pt, rounded corners=2pt, fill=white]
+    (1.05,0.95) rectangle (11.45,-16.1);
+  \node[font=\normalsize\bfseries, anchor=north west] at (1.15,0.9) {FoodLink};
+
+  % ---- actors ---------------------------------------------------------------
+  \actor{U}{\xM}{1.25}{}
+  \node[font=\small\bfseries, align=center, anchor=south] at (\xM,2.38)
+    {Platform User \mdseries\scriptsize (abstract: any signed-in role)};
+  \actor{D}{0}{-5.0}{Donor}
+  \actor{N}{0}{-12.3}{Recipient\\Organisation\\(NGO)}
+  \actor{C}{12.5}{-5.0}{Volunteer\\Courier}
+  \actor{A}{12.5}{-12.3}{Admin}
+
+  % ---- shared use cases -----------------------------------------------------
+  \node[uc] (reg)   at (\xL,-0.25) {Register Account};
+  \node[uc] (login) at (\xR,-0.25) {Sign In};
+  \node[uc] (acct)  at (\xM-2.15,-1.55) {Manage Own Account};
+  \node[uc] (track) at (\xM+2.15,-1.55) {Track Donation Status};
+
+  % ---- donor ----------------------------------------------------------------
+  \node[uc] (needs)  at (\xL,-3.2)  {Browse Needs Board};
+  \node[uc] (cancel) at (\xL,-4.35) {Cancel Donation$^{\dagger}$};
+  \node[uc] (rankv)  at (\xL,-5.5)  {View Ranked Matches$^{\ddagger}$};
+  \node[uc] (post)   at (\xL,-6.65) {Post Donation};
+
+  % ---- recipient organisation ----------------------------------------------
+  \node[uc] (browse)  at (\xL,-8.0)   {Browse Open Donations};
+  \node[uc] (explain) at (\xL,-9.5)   {Review Match Explanation};
+  \node[uc] (accept)  at (\xL,-10.65) {Accept Donation};
+  \node[uc] (confirm) at (\xL,-11.8)  {Confirm Receipt};
+  \node[uc] (release) at (\xL,-12.95) {Release Pickup$^{\dagger}$};
+  \node[uc] (req)     at (\xL,-14.1)  {Manage Standing Requirements};
+  \node[uc] (profile) at (\xL,-15.25) {Edit Organisation Profile};
+
+  % ---- courier --------------------------------------------------------------
+  \node[uc] (pool)     at (\xR,-3.2)  {Browse Unclaimed Pickups};
+  \node[uc] (claim)    at (\xR,-4.35) {Claim Pickup};
+  \node[uc] (pickup)   at (\xR,-5.5)  {Record Pickup};
+  \node[uc] (deliver)  at (\xR,-6.65) {Record Delivery};
+  \node[uc] (avail)    at (\xR,-7.8)  {Set Courier Availability};
+
+  % ---- internal (system) use case -----------------------------------------
+  \node[internal] (rank) at (7.75,-9.3) {Rank Recipient Organisations};
+
+  % ---- administrator -------------------------------------------------------
+  \node[uc] (verify)   at (\xR,-10.65) {Verify / Revoke Organisation};
+  \node[uc] (sweep)    at (\xR,-11.8)  {Run Expiry Sweep};
+  \node[uc] (users)    at (\xR,-12.95) {Manage User Accounts$^{\dagger}$};
+  \node[uc] (metrics)  at (\xR,-14.1)  {View Platform Metrics};
+  \node[uc] (override) at (\xR,-15.25) {Override Lifecycle Transition};
+
+  % ---- generalisation: every role is a platform user -----------------------
+  \draw[gen] (N-l) -| (-1.1,1.89) -- (U-l);
+  \draw[draw=black!75, line width=0.5pt] (D-l) -- (-1.1,-4.36);
+  \draw[gen] (A-r) -| (13.6,1.89) -- (U-r);
+  \draw[draw=black!75, line width=0.5pt] (C-r) -- (13.6,-4.36);
+
+  % ---- associations -----------------------------------------------------
+  \foreach \u in {reg, login, acct, track} \draw[assoc] (U) -- (\u);
+  \foreach \u in {post, rankv, cancel, needs} \draw[assoc] (D) -- (\u.west);
+  \foreach \u in {browse, accept, confirm, release, req, profile}
+    \draw[assoc] (N) -- (\u.west);
+  \foreach \u in {pool, claim, pickup, deliver, avail} \draw[assoc] (C) -- (\u.east);
+  \foreach \u in {verify, sweep, users, metrics, override} \draw[assoc] (A) -- (\u.east);
+
+  % ---- include / extend ---------------------------------------------------
+  \draw[dep] (rankv.east)  -- node[stereo, pos=0.50, sloped] {«include»} (rank.north);
+  \draw[dep] (post.east)   -- node[stereo, pos=0.50, sloped] {«include»} (rank.north west);
+  \draw[dep] (browse.east) -- node[stereo, pos=0.50, sloped] {«include»} (rank.west);
+  \draw[dep] (accept.east) -- node[stereo, pos=0.50, sloped] {«include»} (rank.south west);
+  \draw[dep] (explain.north) -- node[stereo, right=1pt, pos=0.5] {«extend»} (browse.south);
+\end{tikzpicture}
+\end{document}

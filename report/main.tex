@@ -1,0 +1,154 @@
+% Keep spaces inside \code{...} (e.g. "POST /api/donations"); the class loads
+% url through hyperref, so the options must be registered first.
+\PassOptionsToPackage{obeyspaces,spaces}{url}
+\documentclass{tietreport}
+
+% Import images
+\usepackage{graphicx}
+
+% Bibliography configuration
+\usepackage[
+  date=year,
+  style=alphabetic,
+  backend=biber,
+  sorting=nty,
+  maxnames=5,
+  minnames=3,
+  maxalphanames=4,
+  minalphanames=3,
+  backref=true,
+  doi=false,
+  isbn=false,
+  url=false,
+  eprint=false
+]{biblatex}
+\addbibresource{references.bib}
+
+%% --------------------------------------------------
+%% Report-specific additions (content helpers only;
+%% page layout, headers and headings come from
+%% tietreport.cls unchanged)
+%% --------------------------------------------------
+\usepackage{array}
+\usepackage[inline]{enumitem}
+
+% fancyhdr asks for at least 14.5pt with 12pt text; the class leaves 12pt.
+\setlength{\headheight}{14.5pt}
+
+% First-level bullet from the math font (Type 1 everywhere) rather than the
+% text-companion glyph, which needs cm-super to avoid a bitmap font locally.
+\renewcommand{\labelitemi}{$\bullet$}
+
+% Identifiers from the code base, set in typewriter and
+% allowed to break after an underscore, dot or slash.
+\DeclareUrlCommand\code{\urlstyle{tt}}
+\makeatletter
+\g@addto@macro{\UrlBreaks}{\do\_\do\.\do\/}
+\makeatother
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% Float placement: let medium tables sit in the text instead of on
+% near-empty float pages (placement only; no change to formatting).
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.75}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+
+% Let a page end short rather than stretch paragraph gaps to fill it.
+\raggedbottom
+\setlength{\emergencystretch}{2.5em}
+\renewcommand{\arraystretch}{1.18}
+
+%% ==================================================
+%% CUSTOMIZE THESE FIELDS FOR YOUR PROJECT
+%% ==================================================
+
+% Course/Lab header
+\TitlePageHeader{%
+  UCS503P - Software Engineering Project%
+}
+
+% Main project title
+\ProjectTitle{%
+  MID-TERM REPORT%
+}
+
+% Subtitle or project description
+\ProjectSubTitle{%
+  {\Large\bfseries FoodLink}\\[0.25cm]
+  A Coordination Platform for Surplus Food Redistribution%
+}
+
+% Student information (up to 4 students)
+\author{%
+  \texttt{1024030909} Rishi Garg \\
+  \texttt{1024030906} Aayushi Sud \\
+  \texttt{1024031166} Himanshi Singla \\
+  \texttt{1024030956} Yugam Heer \\[0.3cm]
+  {\normalsize
+  \texttt{rgarg8\_be24@thapar.edu} \quad
+  \texttt{asud\_be24@thapar.edu} \\
+  \texttt{hsingla1\_be24@thapar.edu} \quad
+  \texttt{yheer\_be24@thapar.edu}}%
+}
+
+% Group number, degree, year, program
+\TitlePageSubText{%
+  Group: \texttt{3C64} BE Third Year, CSE%
+}
+
+% Faculty advisor/guide name
+\AdvisorName{%
+  Reaya Grewal%
+}
+
+% Evaluation period and department info
+\TitlePageFooterText{{%
+    \large Mid-Semester Evaluation \\[0.2cm]
+    \bfseries Computer Science and Engineering
+    Department%
+  } \\[0.15cm]
+  Thapar Institute of Engineering and Technology,
+  Patiala%
+}
+
+%% ==================================================
+
+\begin{document}
+
+% Generate title page
+\maketitle
+
+% Table of contents (auto-generated from chapters)
+\tableofcontents
+
+\listoffigures
+\listoftables
+
+% ===== CHAPTER 1: INTRODUCTION =====
+\input{chapters/01-introduction}
+
+% ===== CHAPTER 2: METHODOLOGY & DESIGN =====
+\input{chapters/02-methodology-design}
+
+% ===== CHAPTER 3: RESULTS & EVALUATION =====
+\input{chapters/03-results-evaluation}
+
+% ===== CHAPTER 4: FEASIBILITY REPORT =====
+\input{chapters/04-feasibility}
+
+% ===== CHAPTER 5: CONCLUSION =====
+\input{chapters/05-conclusion}
+
+% ===== CHAPTER 6: UML DESIGN =====
+\input{chapters/06-uml-design}
+
+% ===== BIBLIOGRAPHY =====
+
+% Print bibliography with heading in TOC
+\printbibliography[heading=bibintoc]
+
+\end{document}

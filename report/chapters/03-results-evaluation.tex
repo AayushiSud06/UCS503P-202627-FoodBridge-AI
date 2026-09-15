@@ -1,0 +1,265 @@
+\chapter{Results and Evaluation}
+\label{ch:results}
+
+At the mid-term point, FoodLink has not been deployed or used by real
+donors, organisations or couriers. Its evaluation therefore rests on
+\emph{verification}: checking that the implemented behaviour matches the
+requirements, and that the security, privacy and integrity properties hold
+under adversarial and concurrent use. This chapter describes the testing
+strategy, reports the results actually obtained while preparing this report,
+and analyses what they show, including the system's current limitations.
+
+\section{Testing Methodology}
+\label{sec:testing}
+
+Testing follows the project's principle that a property which matters must be
+held by an automated test~\cite{pressman2015}. Every fix from the audits
+(Section~\ref{sec:analysis}) arrived with regression tests that fail against
+the code before the fix. The strategy has four parts:
+
+\begin{itemize}
+  \item \textbf{Unit Testing:} The ranking arithmetic is tested directly,
+    without HTTP or a database, in \code{test_matching_scores.py} and
+    \code{test_requirement_matching.py}. These cover each criterion's formula,
+    the eligibility gates, unit handling, the blurring of positions and the
+    requirement tie-break. Configuration validation and the sliding-window rate
+    limiter are also unit-tested (\code{test_config.py},
+    \code{test_rate_limit.py}). In the frontend, Vitest unit tests cover the
+    pure library modules: wire-to-domain adapters, time and urgency, distance
+    and location display, per-account impact, the HTTP client, and the photo
+    resizing pipeline, with its browser image functions injected because jsdom
+    has no canvas.
+  \item \textbf{Integration Testing:} Most backend tests exercise the complete
+    HTTP stack through FastAPI's test client against a fresh in-memory SQLite
+    database per test, with no mocks (D-17). A test registers or seeds real
+    accounts, signs in, and calls the API exactly as the frontend does. This
+    is how authorization boundaries are tested: every role is tried against
+    every scoped read and every transition. Concurrency tests use a
+    file-backed database and two genuine transactions interleaved by hand, so
+    that a lost-update race is actually reproduced and then shown to be
+    refused. Migration tests build a database from the Alembic revision
+    history and assert that it matches the models. Frontend component tests
+    render screens with Testing Library in jsdom to check what each screen
+    shows and, just as importantly, what it must not show.
+  \item \textbf{Performance Testing:} No load, stress or response-time testing
+    has been performed. Performance-related work so far consists of design
+    measures (eager loading, bounded payloads, a 500-row list cap) and one
+    browser measurement of the photo-resizing pipeline recorded during Task~40
+    (Section~\ref{sec:module-portals}).
+  \item \textbf{User Testing:} Not yet conducted. The proposal's pilot, with
+    campus donors, recipient organisations and student
+    volunteers~\cite{foodlinkProposal}, remains future work
+    (Chapter~\ref{ch:feasibility}).
+\end{itemize}
+
+\paragraph{Continuous integration.} A GitHub Actions workflow
+(\code{.github/workflows/ci.yml}) runs on every push to the main branch and on
+every pull request. It has two parallel jobs. The \emph{backend} job, on
+Python~3.13, runs \code{pytest code/tests}, then \code{alembic upgrade head}
+and \code{alembic check} on a throwaway database to catch a model change
+committed without a migration. The \emph{frontend} job, on Node.js~20, runs
+\code{npm ci}, \code{npm test} and \code{npm run build}; the build step
+includes the TypeScript compiler. The workflow deploys nothing and holds no
+secrets (D-25).
+
+Table~\ref{tab:testfiles} groups the 27 backend test files by the property
+they protect.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|L{3.0cm}|L{10.3cm}|}
+  \hline
+  \textbf{Area} & \textbf{Backend test files} (in \code{code/tests/}) \\
+  \hline
+  End-to-end paths, accounts, configuration & \code{test_api.py}, \code{test_auth_admin.py}, \code{test_config.py}, \code{test_rate_limit.py}, \code{test_donation_rate_limit.py}, \code{test_migrations.py}, \code{test_recipient_reverification.py} \\
+  \hline
+  Input validation & \code{test_donation_input_bounds.py}, \code{test_patch_null_semantics.py} \\
+  \hline
+  Read and disclosure scopes & \code{test_donation_reads.py}, \code{test_recipient_reads.py}, \code{test_volunteer_reads.py}, \code{test_requirement_reads.py}, \code{test_courier_pickup_disclosure.py} \\
+  \hline
+  Lifecycle and concurrency & \code{test_lifecycle_authorization.py}, \code{test_pickup_release.py}, \code{test_cancellation_reliability.py}, \code{test_courier_claim.py}, \code{test_lifecycle_concurrency.py}, \code{test_available_donations_deadline.py}, \code{test_volunteer_delivery_history.py}, \code{test_requirement_lifecycle.py} \\
+  \hline
+  Matching and location privacy & \code{test_matching_scores.py}, \code{test_match_score_consistency.py}, \code{test_match_distance_privacy.py}, \code{test_donation_privacy_scope.py}, \code{test_requirement_matching.py} \\
+  \hline
+\end{tabular}
+\caption{Backend test suite organised by the property under test}
+\label{tab:testfiles}
+\end{table}
+
+\section{Performance Metrics}
+\label{sec:metrics}
+
+All results in Table~\ref{tab:validation} were obtained by running the checks
+on the repository at commit \texttt{e588b35} on 15 September 2026 while
+preparing this report. The backend database was redirected to a temporary
+file so that no project file was changed.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|L{5.0cm}|L{3.1cm}|L{5.2cm}|}
+  \hline
+  \textbf{Metric} & \textbf{Target} & \textbf{Achieved} \\
+  \hline
+  Backend automated tests (\code{pytest code/tests}) & All pass & 495 passed, 0 failed, 1 library deprecation warning; 337\,s \\
+  \hline
+  Frontend automated tests (\code{npm test}) & All pass & 156 passed, 0 failed, in 18 files \\
+  \hline
+  Frontend type check (\code{tsc --noEmit}) & No errors & No errors \\
+  \hline
+  Migration drift (\code{alembic upgrade head}, \code{alembic check}) & No drift & Upgraded to \code{ae4636b1e6d4}; no new operations detected \\
+  \hline
+  Lifecycle states enforced & 9 & 9 \\
+  \hline
+  API routes implemented & All proposal workflows & 27 routes across 5 routers plus health \\
+  \hline
+  Role portals & 4 & 4 web portals, plus phone-layout screens \\
+  \hline
+  P1 findings of the 10 September 2026 audit & All fixed & 5 of 5 fixed, each with regression tests \\
+  \hline
+\end{tabular}
+\caption{Validation results at mid-term}
+\label{tab:validation}
+\end{table}
+
+The frontend production build (\code{npm run build}) was not re-run for this
+report, because it writes build output into the repository. It runs in CI on
+every push. No response-time or throughput figures are reported, because none
+have been measured.
+
+The proposal defined outcome metrics for a pilot~\cite{foodlinkProposal}.
+Table~\ref{tab:proposal-metrics} records how far each has progressed. The
+system can now \emph{compute} the ledger-based ones. None has been
+\emph{measured}, because no real usage has taken place.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|L{3.4cm}|L{3.4cm}|L{6.5cm}|}
+  \hline
+  \textbf{Proposal metric} & \textbf{Proposal target} & \textbf{Mid-term status} \\
+  \hline
+  Median time-to-claim & $\leq$ 45 minutes & Instrumented in \code{GET /api/metrics}; not measured \\
+  \hline
+  Rescue rate & $\geq$ 80\% & Instrumented; not measured \\
+  \hline
+  Expiry-loss rate & Counter-metric & Instrumented; depends on the manual sweep having run \\
+  \hline
+  Handover time & Tracked & Instrumented (median acceptance to delivery); not measured \\
+  \hline
+  User clarity (1--5 rating) & Tracked & Not instrumented; no feedback feature exists \\
+  \hline
+  Service availability & $\geq$ 99\% in pilot & Not applicable yet; nothing is deployed \\
+  \hline
+\end{tabular}
+\caption{Evaluation metrics from the proposal and their mid-term status}
+\label{tab:proposal-metrics}
+\end{table}
+
+\section{Analysis}
+\label{sec:analysis}
+
+\begin{itemize}
+  \item \textbf{Did the project meet its objectives?} Objectives~1 to~5 and~7
+    are met and verified (Table~\ref{tab:objectives}). Objective~6 is met as
+    instrumentation but cannot yet produce meaningful numbers without real use.
+    Objective~8 (deployment and pilot) has not started.
+  \item \textbf{Where did the work go beyond the proposal?} The proposal
+    described a first iteration of posting, acceptance, courier status updates
+    and a shared timeline, with ranking and requirements as later
+    deliverables~\cite{foodlinkProposal}. Both later deliverables are already
+    implemented. So is a set of properties the proposal did not name, which
+    emerged from the audits: requirement-aware tie-breaking, per-reader
+    disclosure scopes for donor and organisation locations, race-safe
+    conditional writes for every transition, abuse limits, and reliability
+    accounting that is not distorted by cancellations.
+  \item \textbf{What challenges were encountered?} The hardest problems were
+    not features but properties that only appear under adversarial or
+    concurrent use. Each was found by an audit and reproduced against the
+    running application before it was fixed. Table~\ref{tab:challenges}
+    summarises the most significant.
+  \item \textbf{How were they resolved?} Each fix was the smallest change that
+    made the property hold everywhere rather than only on the reported path.
+    It was recorded as a decision with its reasoning and protected by tests
+    that fail without it. None of the five P1 fixes required a database schema
+    change.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\begin{tabular}{|L{4.0cm}|L{5.4cm}|L{3.9cm}|}
+  \hline
+  \textbf{Challenge (audit finding)} & \textbf{Resolution} & \textbf{Evidence} \\
+  \hline
+  Newly self-registered organisation and courier accounts could read every open donation's exact pickup pin, address and donor name (P1-1) & Open pool restricted to verified organisations (D-53); couriers see a coarse area until they claim (D-57) & \code{test_donation_reads.py}, \code{test_courier_pickup_disclosure.py} \\
+  \hline
+  Verification survived an organisation renaming or moving itself (P1-2) & A real change to name or coordinates clears verification in the same commit (D-54) & \code{test_recipient_reverification.py} \\
+  \hline
+  Two organisations accepting at the same moment both succeeded, even on SQLite (P1-3) & Every status write made conditional on the expected state; the loser receives 409 and its side effects roll back (D-55) & \code{test_lifecycle_concurrency.py} \\
+  \hline
+  Donor cancellations lowered the organisation's reliability; donors could cancel collected food (P1-4) & Cancellation withdraws the counted acceptance; donors cannot cancel after pickup (D-58) & \code{test_cancellation_reliability.py} \\
+  \hline
+  Ordinary phone photos made donation posting fail against the image cap (P1-5) & Browser-side resize and JPEG re-encode before upload (D-56) & \code{lib/__tests__/image.test.ts} \\
+  \hline
+  Ranking results revealed exact distances, from which organisation addresses could be triangulated (HA-3) & Organisation positions blurred to a 0.01$^\circ$ grid for other readers; distances and frozen scores withheld (D-45, D-47) & \code{test_match_distance_privacy.py} \\
+  \hline
+  Unlimited donation posting allowed spam and probing of the radius gate (P2-1) & Per-account and per-address limits (D-59) & \code{test_donation_rate_limit.py} \\
+  \hline
+  Two quantity criteria were mathematically the same criterion counted twice, and ignored units (HA-4, HA-5) & Capacity headroom redefined in absolute meals; non-meal units not assessed (D-42) & \code{test_matching_scores.py} \\
+  \hline
+\end{tabular}
+\caption{Principal challenges found by audit and how they were resolved}
+\label{tab:challenges}
+\end{table}
+
+\subsection{Current Limitations}
+\label{sec:limitations}
+
+The following limitations are verified against the repository and are stated
+so that the system is not described as more complete than it is.
+
+\begin{enumerate}
+  \item \textbf{No deployment.} Nothing is hosted. There is no deployment
+    configuration, and PostgreSQL, although supported in principle, is untested
+    and has no driver pinned.
+  \item \textbf{No notifications.} Participants learn about new donations and
+    status changes only by opening the portal.
+  \item \textbf{Missing web controls.} Cancellation, pickup release and account
+    management work through the API but have no portal screen. Neither the
+    registration form nor the organisation profile screen collects map
+    coordinates. An organisation created through the portal therefore cannot be
+    ranked, since coordinates are an eligibility gate, until its pin is set
+    through \code{PATCH /api/recipients/me}. The same applies to organisations
+    created by an administrator. In practice, only organisations with
+    coordinates, such as the seeded demonstration organisations, appear in
+    rankings today.
+  \item \textbf{Manual expiry.} The expiry sweep must be triggered by an
+    administrator. Its bulk write does not use the conditional guard that every
+    other status write uses. An administrator's \code{ACCEPTED} $\to$
+    \code{EXPIRED} leaves the acceptance counted.
+  \item \textbf{Session security.} No token revocation, refresh token,
+    multi-factor authentication or content security policy. Rate-limit counters
+    are per process and reset on restart.
+  \item \textbf{No maps.} Distance is great-circle, and travel time is a flat
+    20\,km/h estimate; there is no road routing. The pickup pin is entered
+    through browser geolocation or typed coordinates, with no map picker.
+  \item \textbf{Heuristic weights.} The matching weights and the reliability
+    prior are reasoned judgements, not values tuned on outcome data.
+  \item \textbf{Inline photos.} Photos are stored in the donation row and
+    returned with every list, and every write re-downloads up to 500 donations.
+  \item \textbf{Scale.} Recipients are loaded and filtered in Python for each
+    ranking. Metrics are computed in Python over every donation. SQLite allows
+    a single writer.
+  \item \textbf{Validation gaps.} Account and organisation profile text is
+    unbounded. An unexpected server error returns an empty 500 response, which
+    the frontend presents as a connection problem.
+  \item \textbf{Demonstration residue.} The phone-layout camera screen
+    simulates reading a photo and submits a fixed address, and one mobile
+    profile screen shows a hard-coded email. The \code{/ngo/available/:id} deep
+    link does not select the donation.
+  \item \textbf{Metric caveats.} The completed-meals total adds quantities
+    across different units. The expiry-loss rate is accurate only after the
+    sweep has run.
+\end{enumerate}

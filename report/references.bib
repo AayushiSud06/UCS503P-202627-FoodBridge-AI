@@ -1,0 +1,234 @@
+% References for the FoodLink mid-term report.
+%
+% Two kinds of entry, kept apart on purpose:
+%  * project sources -- documents inside the FoodLink repository or published
+%    by the course; these are what implementation claims are verified against;
+%  * external sources -- standards, specifications, textbooks and official
+%    documentation for the technologies and methods the report discusses.
+% Every URL below is the official home of the resource named.
+
+% ---------------------------------------------------------------------------
+% Project sources
+% ---------------------------------------------------------------------------
+
+@misc{foodlinkProposal,
+  author       = {Garg, Rishi and Sud, Aayushi and Heer, Yugam and Singla, Himanshi},
+  title        = {{FoodLink}: A Coordination Platform for Surplus Food
+                  Redistribution --- Project Proposal for {UCS503P}},
+  howpublished = {Project proposal, \texttt{project-proposal/main.tex} in the
+                  FoodLink repository},
+  institution  = {Thapar Institute of Engineering and Technology},
+  year         = {2026},
+}
+
+@misc{foodlinkArchitecture,
+  author       = {{FoodLink Project Team}},
+  title        = {{FoodLink} Architecture, Decision and Task Records},
+  howpublished = {\texttt{ai/ARCHITECTURE.md}, \texttt{ai/DECISIONS.md}
+                  (D-01 to D-61), \texttt{ai/TASKS.md} and
+                  \texttt{ai/PROJECT\_STATE.md} in the FoodLink repository},
+  year         = {2026},
+}
+
+@misc{foodlinkRepo,
+  author       = {{FoodLink Project Team}},
+  title        = {{FoodLink} Source Repository},
+  howpublished = {Git repository, branch \texttt{master} at commit
+                  \texttt{e588b35}; backend in \texttt{code/foodlink/}, frontend
+                  in \texttt{frontend/src/}, tests in \texttt{code/tests/}},
+  year         = {2026},
+}
+
+@online{ucs503Project,
+  author       = {Venkataramaiyer, Raghav B.},
+  title        = {{UCS503} Semester Project: Deliverables and Evaluation Timeline},
+  organization = {Thapar Institute of Engineering and Technology},
+  url          = {https://tiet-ucs503.github.io/semester-project/},
+  year         = {2026},
+}
+
+@online{tietTemplate,
+  author       = {{Thapar Institute of Engineering and Technology}},
+  title        = {{TIET} Report Template (\texttt{tietreport.cls} v1.0.4)},
+  organization = {Overleaf},
+  url          = {https://www.overleaf.com/read/rjgcdqyqkxnd},
+  year         = {2026},
+}
+
+% ---------------------------------------------------------------------------
+% External sources: problem context and software engineering method
+% ---------------------------------------------------------------------------
+
+@report{unepFoodWaste2024,
+  author       = {{United Nations Environment Programme}},
+  title        = {Food Waste Index Report 2024},
+  type         = {Technical report},
+  institution  = {United Nations Environment Programme},
+  address      = {Nairobi},
+  year         = {2024},
+}
+
+@book{sommerville2016,
+  author       = {Sommerville, Ian},
+  title        = {Software Engineering},
+  edition      = {10},
+  publisher    = {Pearson},
+  address      = {Boston},
+  year         = {2016},
+}
+
+@book{pressman2015,
+  author       = {Pressman, Roger S. and Maxim, Bruce R.},
+  title        = {Software Engineering: A Practitioner's Approach},
+  edition      = {8},
+  publisher    = {McGraw-Hill Education},
+  address      = {New York},
+  year         = {2015},
+}
+
+@book{booch2005uml,
+  author       = {Booch, Grady and Rumbaugh, James and Jacobson, Ivar},
+  title        = {The Unified Modeling Language User Guide},
+  edition      = {2},
+  publisher    = {Addison-Wesley},
+  address      = {Boston},
+  year         = {2005},
+}
+
+@manual{omgUml251,
+  author       = {{Object Management Group}},
+  title        = {{OMG} Unified Modeling Language ({OMG UML}), Version 2.5.1},
+  number       = {formal/17-12-05},
+  organization = {Object Management Group},
+  year         = {2017},
+}
+
+@book{kleppmann2017,
+  author       = {Kleppmann, Martin},
+  title        = {Designing Data-Intensive Applications},
+  publisher    = {O'Reilly Media},
+  address      = {Sebastopol, CA},
+  year         = {2017},
+}
+
+% ---------------------------------------------------------------------------
+% External sources: security and algorithms
+% ---------------------------------------------------------------------------
+
+@techreport{rfc7519,
+  author       = {Jones, Michael B. and Bradley, John and Sakimura, Nat},
+  title        = {{JSON Web Token (JWT)}},
+  type         = {Request for Comments},
+  number       = {7519},
+  institution  = {Internet Engineering Task Force},
+  year         = {2015},
+}
+
+@techreport{rfc6749,
+  author       = {Hardt, Dick},
+  title        = {The {OAuth} 2.0 Authorization Framework},
+  type         = {Request for Comments},
+  number       = {6749},
+  institution  = {Internet Engineering Task Force},
+  year         = {2012},
+}
+
+@inproceedings{provos1999bcrypt,
+  author       = {Provos, Niels and Mazi{\`e}res, David},
+  title        = {A Future-Adaptable Password Scheme},
+  booktitle    = {Proceedings of the 1999 USENIX Annual Technical Conference,
+                  FREENIX Track},
+  pages        = {81--91},
+  year         = {1999},
+}
+
+@article{sinnott1984haversine,
+  author       = {Sinnott, Roger W.},
+  title        = {Virtues of the Haversine},
+  journaltitle = {Sky and Telescope},
+  volume       = {68},
+  number       = {2},
+  pages        = {159},
+  year         = {1984},
+}
+
+@misc{dpdpAct2023,
+  author       = {{Ministry of Law and Justice, Government of India}},
+  title        = {The Digital Personal Data Protection Act, 2023 (Act No.~22 of 2023)},
+  howpublished = {The Gazette of India, Extraordinary, Part II, Section 1},
+  year         = {2023},
+}
+
+@online{owaspTop10,
+  author       = {{OWASP Foundation}},
+  title        = {{OWASP} Top 10:2021},
+  url          = {https://owasp.org/Top10/},
+  year         = {2021},
+}
+
+% ---------------------------------------------------------------------------
+% External sources: official documentation of the technology stack
+% ---------------------------------------------------------------------------
+
+@online{fastapiDocs,
+  author       = {Ram{\'i}rez, Sebasti{\'a}n},
+  title        = {{FastAPI} Documentation},
+  url          = {https://fastapi.tiangolo.com/},
+  year         = {2026},
+}
+
+@online{sqlalchemyDocs,
+  author       = {{SQLAlchemy Authors}},
+  title        = {{SQLAlchemy} 2.0 Documentation},
+  url          = {https://docs.sqlalchemy.org/en/20/},
+  year         = {2026},
+}
+
+@online{alembicDocs,
+  author       = {{SQLAlchemy Authors}},
+  title        = {{Alembic} Documentation},
+  url          = {https://alembic.sqlalchemy.org/},
+  year         = {2026},
+}
+
+@online{pydanticDocs,
+  author       = {{Pydantic Services}},
+  title        = {{Pydantic} Documentation},
+  url          = {https://docs.pydantic.dev/},
+  year         = {2026},
+}
+
+@online{sqliteWhenToUse,
+  author       = {{SQLite Consortium}},
+  title        = {Appropriate Uses For {SQLite}},
+  url          = {https://www.sqlite.org/whentouse.html},
+  year         = {2026},
+}
+
+@online{reactDocs,
+  author       = {{Meta Open Source}},
+  title        = {{React} Documentation},
+  url          = {https://react.dev/},
+  year         = {2026},
+}
+
+@online{viteDocs,
+  author       = {{Vite Contributors}},
+  title        = {{Vite} Documentation},
+  url          = {https://vite.dev/},
+  year         = {2026},
+}
+
+@online{vitestDocs,
+  author       = {{Vitest Contributors}},
+  title        = {{Vitest} Documentation},
+  url          = {https://vitest.dev/},
+  year         = {2026},
+}
+
+@online{pytestDocs,
+  author       = {{pytest-dev}},
+  title        = {pytest Documentation},
+  url          = {https://docs.pytest.org/},
+  year         = {2026},
+}
