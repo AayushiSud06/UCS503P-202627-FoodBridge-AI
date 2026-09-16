@@ -1,0 +1,156 @@
+@startuml FoodLink-Activity-DonationLifecycle
+' ─────────────────────────────────────────────────────────────────────────────
+'  FoodLink AI — Activity Diagram: the food donation lifecycle
+'
+'  Every decision below is a branch the server actually takes. Sources:
+'    · models.ALLOWED_TRANSITIONS          — which moves are legal at all
+'    · routers/donations.TRANSITION_ROLES  — who may drive each move
+'    · routers/donations.update_status     — the side effects per transition
+'    · routers/donations._claim_pickup     — the conditional UPDATE race guard
+'    · matching.score_pair                 — the eligibility gate on ranking
+'    · routers/admin.expire_overdue        — the expiry sweep
+'
+'  Nothing is shown here that the implementation does not do: there are no
+'  notifications, no route planning, no automatic courier assignment and no
+'  scheduled job.
+' ─────────────────────────────────────────────────────────────────────────────
+
+title FoodLink AI — Activity Diagram: Food Donation Lifecycle
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #6E6257
+skinparam activity {
+  BackgroundColor #FDF7EE
+  BorderColor #B07D34
+  DiamondBackgroundColor #F5F0E6
+  DiamondBorderColor #B07D34
+  FontColor #3A322A
+}
+skinparam note {
+  BackgroundColor #F5F7F5
+  BorderColor #9FB3A5
+}
+
+|#F3F7F3|Donor|
+start
+:Compose donation
+(food, category, quantity, unit,
+storage type, pickup location,
+pickup deadline);
+:Submit donation;
+
+|#FAFAF8|FoodLink System|
+if (Pickup deadline still in the future?) then (no)
+  :Reject — 422
+  "Pickup deadline is already in the past";
+  stop
+else (yes)
+endif
+:Persist Donation with status = AVAILABLE;
+:Append StatusEvent → AVAILABLE
+(server-stamped, append-only);
+:Score the donation against every
+recipient organisation
+[verified · has coordinates · within
+the service radius];
+if (At least one eligible organisation?) then (yes)
+  :Freeze **match_score** of the leading candidate;
+  :Append StatusEvent → MATCHED;
+  note right
+    A match is a **suggestion**, not a claim.
+    The donation stays open to every
+    organisation until one accepts.
+  end note
+else (no)
+  :Leave the donation in the open pool;
+endif
+
+|#F2F5FA|Recipient Organisation|
+:Browse the open pool
+(AVAILABLE / MATCHED) with this
+organisation's own compatibility score;
+if (An organisation accepts before the deadline?) then (no)
+  |#FAFAF8|FoodLink System|
+  :Expiry sweep (administrator-triggered)
+  moves overdue donations to EXPIRED;
+  stop
+else (yes)
+endif
+
+|#F2F5FA|Recipient Organisation|
+:Request acceptance;
+
+|#FAFAF8|FoodLink System|
+if (Organisation verified by an administrator?) then (no)
+  :Refuse — 403
+  "awaiting verification";
+  stop
+else (yes)
+endif
+:Bind the recipient to the donation;
+:Increment **accepted_donations**
+and re-freeze **match_score**;
+:Append StatusEvent → ACCEPTED;
+
+repeat
+  |#FBF3F3|Volunteer Courier|
+  :See the pickup in the unclaimed queue
+  (status = ACCEPTED, no courier assigned);
+  :Claim the pickup;
+
+  |#FAFAF8|FoodLink System|
+  if (Conditional UPDATE won the claim?) then (no)
+    :Refuse — 409
+    "another courier has already
+    claimed this pickup";
+    |#FBF3F3|Volunteer Courier|
+    :Return to the task list;
+    stop
+  else (yes)
+  endif
+  |#FAFAF8|FoodLink System|
+  :Assign the courier;
+  :Append StatusEvent → VOLUNTEER_ASSIGNED;
+
+  |#F2F5FA|Recipient Organisation|
+backward :Release the pickup —
+clear the courier and return
+the donation to ACCEPTED;
+repeat while (Accepting organisation releases the pickup?) is (yes) not (no)
+
+|#FBF3F3|Volunteer Courier|
+:Collect the food from the donor;
+|#FAFAF8|FoodLink System|
+:Append StatusEvent → PICKED_UP;
+
+|#FBF3F3|Volunteer Courier|
+:Hand the food over at the kitchen;
+|#FAFAF8|FoodLink System|
+:Append StatusEvent → DELIVERED;
+
+|#F2F5FA|Recipient Organisation|
+:Confirm the donation was received;
+|#FAFAF8|FoodLink System|
+:Increment **completed_donations**
+and **completed_deliveries**;
+:Append StatusEvent → COMPLETED;
+stop
+
+legend right
+  **Alternative flow — cancellation (not drawn inline)**
+  The owning donor, or an administrator, may move a donation to
+  CANCELLED from AVAILABLE, MATCHED, ACCEPTED, VOLUNTEER_ASSIGNED
+  or PICKED_UP. CANCELLED is terminal. Implemented and tested in
+  the API; not yet offered by the web portal.
+
+  **Why the status history matters**
+  Every StatusEvent above is stamped by the server, never by the
+  client. GET /api/metrics derives median time-to-claim, median
+  handover time, rescue rate and expiry-loss rate from exactly
+  these rows.
+endlegend
+
+@enduml

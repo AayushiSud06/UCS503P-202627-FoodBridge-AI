@@ -1,0 +1,178 @@
+@startuml FoodLink-UseCase
+' ─────────────────────────────────────────────────────────────────────────────
+'  FoodLink AI — Use Case Diagram
+'
+'  Every actor corresponds to a value of `foodlink.models.UserRole` (or to an
+'  unauthenticated caller); every use case corresponds to an implemented route
+'  in `code/foodlink/routers/`. Nothing here is planned work.
+'  Traceability table: docs/uml/FoodLink-UML.md § 3.1.
+'
+'  Layout notes: actors are declared in the same order as the packages they
+'  drive, and each package has a single primary actor wherever the
+'  implementation allows, so association edges stay short and rarely cross.
+'  Conditions and guards live in the legend rather than in floating notes,
+'  whose connectors previously crossed the whole diagram.
+' ─────────────────────────────────────────────────────────────────────────────
+
+title FoodLink AI — Use Case Diagram
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam nodesep 20
+skinparam ranksep 60
+skinparam ArrowColor #6E6257
+skinparam usecase {
+  BackgroundColor #FDF7EE
+  BorderColor #B07D34
+  FontColor #3A322A
+}
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #4A6B57
+}
+skinparam rectangle {
+  BackgroundColor #FCFCFB
+  BorderColor #8A7F72
+  FontStyle bold
+}
+skinparam package {
+  BackgroundColor #FFFFFF
+  BorderColor #CFC7BA
+  FontColor #6E6257
+}
+
+' ── Actors, declared in the order of the packages they drive ─────────────────
+actor "Guest\n(unauthenticated)" as GUEST
+actor "Registered User" as USER
+actor "Donor" as DONOR
+actor "Recipient Organisation\n(NGO / community kitchen)" as NGO
+actor "Volunteer Courier" as COURIER
+actor "Platform Administrator" as ADMIN
+
+USER <|-- DONOR
+USER <|-- NGO
+USER <|-- COURIER
+USER <|-- ADMIN
+
+rectangle "FoodLink AI" {
+
+  package "Access" {
+    usecase "Register Account" as UC01
+    usecase "Provision Role Profile" as UC02
+    usecase "Sign In" as UC03
+  }
+
+  package "Donation Lifecycle" {
+    usecase "Post Donation" as UC05
+    usecase "Cancel Donation" as UC13
+    usecase "Browse Available\nDonations" as UC06
+    usecase "Accept Donation" as UC07
+    usecase "Confirm Completion" as UC11
+    usecase "Release Pickup" as UC12
+    usecase "Claim Pickup" as UC08
+    usecase "Record Collection" as UC09
+    usecase "Record Delivery" as UC10
+  }
+
+  package "Matching & Explainability" {
+    usecase "Rank Recipient\nOrganisations" as UC14
+    usecase "Show Compatibility\nScore" as UC15
+    usecase "Review Match\nExplanation" as UC16
+  }
+
+  package "Standing Demand" {
+    usecase "Browse Needs Board" as UC19
+    usecase "Post Standing\nRequirement" as UC17
+    usecase "Revise, Retire\nor Reopen Need" as UC18
+  }
+
+  package "Account & Monitoring" {
+    usecase "Manage Account\n& Password" as UC04
+    usecase "View Donations\n(role-scoped)" as UC22
+    usecase "View Platform\nMetrics" as UC23
+  }
+
+  package "Profiles" {
+    usecase "Maintain Organisation\nProfile" as UC20
+    usecase "Manage Courier\nAvailability" as UC21
+  }
+
+  package "Administration" {
+    usecase "Verify or Revoke\nOrganisation" as UC24
+    usecase "Run Expiry Sweep" as UC25
+    usecase "Manage User\nAccounts" as UC26
+    usecase "Override Lifecycle\nTransition" as UC27
+  }
+}
+
+' ── Actor associations ───────────────────────────────────────────────────────
+GUEST --> UC01
+GUEST --> UC03
+
+USER  --> UC04
+USER  --> UC22
+USER  --> UC23
+
+DONOR --> UC05
+DONOR --> UC13
+DONOR --> UC16
+DONOR --> UC19
+
+NGO   --> UC06
+NGO   --> UC07
+NGO   --> UC11
+NGO   --> UC12
+NGO   --> UC17
+NGO   --> UC18
+NGO   --> UC20
+
+COURIER --> UC08
+COURIER --> UC09
+COURIER --> UC10
+COURIER --> UC21
+
+ADMIN --> UC24
+ADMIN --> UC25
+ADMIN --> UC26
+ADMIN --> UC27
+
+' ── Include / extend ─────────────────────────────────────────────────────────
+'  Only relationships the implementation actually enforces. The administrator
+'  override (UC27) is stated in the legend rather than drawn as two extends
+'  spanning the diagram.
+UC01 ..> UC02 : <<include>>
+UC05 ..> UC14 : <<include>>
+UC07 ..> UC14 : <<include>>
+UC15 ..> UC06 : <<extend>>
+
+legend right
+  **Notation**
+  Unmarked use cases are realised in both the API and the web portal.
+  //API only// — implemented and tested in the API, not yet offered by
+  the web portal: UC12 Release Pickup, UC13 Cancel Donation,
+  UC26 Manage User Accounts.
+  ....
+  **Include and extend conditions**
+  UC01 <<include>> UC02 — signing up as an NGO always creates a Recipient;
+  as a courier, a Volunteer. The role admin is refused by SELF_SIGNUP_ROLES.
+  UC05, UC07 <<include>> UC14 — ranking always runs when a donation is
+  posted, and again when it is first accepted, to freeze the score the
+  decision was made on.
+  UC15 <<extend>> UC06 — condition: the donation is still AVAILABLE or
+  MATCHED and the caller's account is bound to a recipient organisation.
+  ....
+  **Guards and overrides not drawn as relationships**
+  UC07 — the accepting organisation must already be verified by an
+  administrator, otherwise acceptance is refused with 403.
+  UC27 — an administrator is admitted by every entry of TRANSITION_ROLES
+  and so may drive UC07 and UC12 on another party's behalf.
+  The first administrator exists only via the command line
+  (python -m foodlink.cli create-admin); every later one via UC26.
+endlegend
+
+@enduml
