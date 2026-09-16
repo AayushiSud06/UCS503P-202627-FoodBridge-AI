@@ -13,6 +13,7 @@ os.environ.setdefault(
     "FOODLINK_SECRET_KEY", "test-only-signing-key-not-used-outside-the-suite"
 )
 
+import bcrypt  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
@@ -22,6 +23,27 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 from foodlink.database import Base, get_db  # noqa: E402
 from foodlink.main import app  # noqa: E402
 from foodlink.ratelimit import reset_rate_limits  # noqa: E402
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _cheap_password_hashing():
+    """Hash at bcrypt cost 4 for the suite instead of the library default of 12.
+
+    Nearly every test registers or logs in, and at cost 12 each hash and each
+    check takes ~0.2 s, which was over 90% of the suite's run time.
+    `foodlink.security.hash_password` calls `bcrypt.gensalt()` with no
+    arguments, so changing only that default leaves the production code and
+    its cost untouched. `checkpw` reads the cost from the stored hash, so
+    verification gets cheaper too. The hashes are still real bcrypt.
+    """
+    real_gensalt = bcrypt.gensalt
+
+    def gensalt(rounds: int = 4, prefix: bytes = b"2b") -> bytes:
+        return real_gensalt(rounds=rounds, prefix=prefix)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(bcrypt, "gensalt", gensalt)
+        yield
 
 
 @pytest.fixture(autouse=True)
