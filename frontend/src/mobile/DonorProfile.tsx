@@ -23,11 +23,11 @@ export default function DonorProfile() {
     <>
       <section className="flex items-center gap-4 px-5 py-5 bg-white border-b border-gray-200">
         <span className="w-14 h-14 shrink-0 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-lg font-bold">
-          AS
+          {user.avatarInitials}
         </span>
         <div className="min-w-0">
           <h2 className="font-display font-semibold text-lg text-gray-900 truncate">{user.name}</h2>
-          <p className="text-sm text-gray-500 truncate">aayushi@thapar.edu</p>
+          <p className="text-sm text-gray-500 truncate">{user.email}</p>
           <span className="mt-1.5 m-chip bg-gray-100 text-gray-600">
             <Building2 size={12} />
             Donor account

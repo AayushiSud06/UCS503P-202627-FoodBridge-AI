@@ -59,14 +59,14 @@ separate, undecided work.
 |---|---|
 | Backend API | ✅ 5 routers, 6 tables, full 9-state lifecycle, role/ownership/lifecycle/trust gates. A donor cancels only before `PICKED_UP`; donor and admin cancellations are neutral to reliability (D-58). Submitted donation, status-note and requirement text bounded at the schema; `beneficiaryCount` ≥ 0 (D-60). An explicit PATCH `null` clears a nullable column and leaves a NOT NULL one alone, never a 500 (D-61). ⚠️ an admin `ACCEPTED → EXPIRED` still leaves the acceptance counted (P3); account/organisation profile text still unbounded (P2-2); no exception handler, so any other unhandled 500 is bodiless and reads as an outage (P2-3) |
 | Matching | ✅ 5-criterion weighted sum (D-05, D-42); requirements break ties and add a reason, never move a score (D-52); non-owners get blurred distances (D-45, D-47). ⚠️ `HA-3a` membership oracle is rate-limited, not closed (D-59) |
-| Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48); the audit's residual P2-4 copy removed (Task 46, uncommitted) |
-| Frontend mobile | ✅ `/m/*` screens exist; the header names the signed-in account, not a seeded org (Task 46). ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20); the camera create flow scripts a photo "read" and submits a fixed seeded pickup address, and the donor profile prints a seeded email (P2-4 residue) |
+| Frontend web | ✅ 4 role portals on the live API; interface-honesty pass complete (D-31…D-40, D-48); the audit's residual P2-4 copy removed (Task 46, `e588b35`) |
+| Frontend mobile | ✅ `/m/*` screens exist; the header names the signed-in account, not a seeded org (Task 46). The camera create flow submits only donor-entered values, the photo an optional attachment that is not read; the donor profile shows the signed-in account (Task 47, uncommitted). ⚠️ reachable only by typing the URL (`useIsMobile` unused, D-20) |
 | Auth | ✅ JWT HS256 (12 h, `localStorage`), user row re-read every request, fail-closed signing key, login/register rate-limited per IP; a donor's donation creation limited to 10/h per account and 30/h per IP, with admins exempt (D-59). All limits are process-local. No revocation, no CSP. An `ngo` reads the open pool only when verified (D-53); a real name/coordinate edit clears verification (D-54) |
 | Concurrency | ✅ every lifecycle status write is a conditional UPDATE — the courier claim (D-28) and every other transition (D-55). ⚠️ the expiry sweep writes `EXPIRED` unguarded (P3) |
 | Donation photos | ✅ resized to 1280 px and re-encoded as JPEG in the browser before the data URL is built (D-56); the server keeps the 256 KiB cap and now also checks the shape. ⚠️ still stored inline in the row — object storage is unbuilt |
 | Donor privacy | ✅ a courier browses every unclaimed pickup but reads a coarse `pickupArea` rather than the pin, address or donor until they claim it (D-57); `matchScore`/`distanceKm` already reader-scoped (D-47). ⚠️ `description`, `imageUrl` and event notes are bounded (D-56, D-60) but not scoped |
 | Backend tests | ✅ **495 passed** (~7 min, bcrypt-bound), 27 files |
-| Frontend tests | ✅ **156 passed** over 18 files (~4 s); `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
+| Frontend tests | ✅ **164 passed** over 20 files; `tsc --noEmit` and `vite build` clean. ⚠️ `npm run lint` is dead (no eslint installed) |
 | CI | ✅ backend `pytest` + `alembic upgrade head && alembic check`; frontend `npm test` + `npm run build` |
 | Migrations | ✅ Alembic, one revision `ae4636b1e6d4`; `alembic check` clean; applied in the app lifespan |
 | Deployment | ❌ none of any kind |
@@ -79,7 +79,8 @@ separate, undecided work.
 
 | Commit | Work | Decision |
 |---|---|---|
-| uncommitted | Task 46 — P2-4: mobile header's seeded org names, donor create page's "Future Intelligence" note, "AI matching" subtitle and Thapar demo preset, and "AI-assisted" in `index.html`/README removed | D-31 |
+| uncommitted | Task 47 — P2-4 mobile residue: phone create flow's scripted photo "read" and fixed submitted values replaced by a donor-entered form; phone donor profile's seeded email and initials replaced by the account's | D-31 |
+| `e588b35` | Task 46 — P2-4: mobile header's seeded org names, donor create page's "Future Intelligence" note, "AI matching" subtitle and Thapar demo preset, and "AI-assisted" in `index.html`/README removed | D-31 |
 | `c043051` | Task 45 — P2-3 (null half): an explicit PATCH `null` no longer 500s; it clears a nullable column and leaves a NOT NULL one alone | D-61 |
 | `7764e06` | Task 44 — P2-2 (donation/requirement half): submitted text bounded at the schema; `beneficiaryCount` ≥ 0 | D-60 |
 | `b583213` | Task 43 — P2-1: donation creation rate-limited per donor account and per IP; admins exempt | D-59 |
@@ -123,10 +124,9 @@ recipient read scope (`16497ea`), auth rate limiting (`91544e3`), atomic courier
 
 Every P1 from the 2026-09-10 audit is fixed and committed; the current focus is P2. P2-1,
 P2-2's donation half and P2-3's null half are committed (`b583213`, `7764e06`, `c043051`).
-Review Task 46 (P2-4, uncommitted): copy and the donor demo preset only, held by absence tests.
-After it: P2-2's profile half (mirrors the columns, no decision needed), P2-3's
-exception-handler half, P2-5, P2-6, and P2-4's mobile residue (the camera flow's scripted read
-and fixed pickup address change what is submitted, so they need their own task).
+Task 46 (P2-4 copy) is committed (`e588b35`). Review Task 47 (P2-4 mobile residue,
+uncommitted): frontend only, held by submission and identity tests. After it: P2-2's profile
+half (mirrors the columns, no decision needed), P2-3's exception-handler half, P2-5, P2-6.
 
 ## Conventions worth preserving
 

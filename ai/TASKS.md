@@ -18,11 +18,11 @@
 
 ## Current
 
-**Task 46 · P2-4 — implemented, uncommitted, awaiting review.** The audit's residual
-misleading copy is gone: the mobile header's seeded organisation names, the donor create
-page's "Future Intelligence" note, "AI matching" subtitle and Thapar demo preset, and
-"AI-assisted" in `index.html` and `frontend/README.md`. See P2-4 below. Next: the P2-2
-profile half, P2-3's exception-handler half, then P2-5, P2-6 and P2-4's mobile residue.
+**Task 47 · P2-4 mobile residue — implemented, uncommitted, awaiting review.** The phone
+create flow no longer scripts a photo "read" or submits fixed values; it submits only what
+the donor enters, with the photo as an optional attachment. The phone donor profile shows
+the signed-in account's email and initials. See P2-4 below. Task 46 (the rest of P2-4) is
+committed (`e588b35`). Next: the P2-2 profile half, P2-3's exception-handler half, P2-5, P2-6.
 
 Every P1 is fixed; P2-1, P2-2's donation half and P2-3's null half are committed
 (`b583213`, `7764e06`, `c043051`).
@@ -238,7 +238,7 @@ Every P1 is fixed; P2-1, P2-2's donation half and P2-3's null half are committed
   naming "Thapar University" (lines 58-74, button line ~172); `index.html` meta and
   `frontend/README.md` still say "AI-assisted" (I-10). Scope: copy only, plus absence tests
   in the Landing-test style. **S**
-  ✅ **FIXED by Task 46 (uncommitted, awaiting review).** Copy and one demo control only; no
+  ✅ **FIXED by Task 46 (`e588b35`).** Copy and one demo control only; no
   API, routing, validation or submission change.
   - Mobile: `RoleConfig.kicker` is optional. The donor and NGO portals have none, so
     `MobileShell` prints the signed-in account's `organization`, or its `name` when that is
@@ -254,12 +254,20 @@ Every P1 is fixed; P2-1, P2-2's donation half and P2-3's null half are committed
   `pages/donor/__tests__/CreateDonation.test.tsx` (5), plus one `Landing.test.tsx` test that
   reads `index.html?raw`. 12 of the 16 fail against the pre-fix source; the other 4 guard what
   must survive (role labels, the form's fields). README checked by search only.
-- ⚠️ **Still open (mobile residue, found during Task 46, not in the audit):**
-  `mobile/CreateDonationCamera.tsx` scripts a "vision read" (a timer and fixed `READINGS`),
-  and submits every donation with the description "Read from photo: …" and the location
-  "College Central Mess, Thapar University". Fixing it changes what is submitted, so it was
-  kept out of a copy-only task. `mobile/DonorProfile.tsx:30` prints `aayushi@thapar.edu` for
-  every donor. Low: `Login.tsx` registration placeholders use seeded organisation names.
+- ✅ **Mobile residue (found during Task 46, not in the audit) FIXED by Task 47 (uncommitted).**
+  Frontend only; no API, auth or lifecycle change.
+  - `mobile/CreateDonationCamera.tsx` scripted a "vision read" (timer, fixed `READINGS`,
+    "96% confident") and submitted every donation as "Vegetarian Meals", "Read from photo: …",
+    "College Central Mess, Thapar University", 50 meals, 20:00. Now two steps: an optional
+    photo (resized and attached, stated as not read) then a donor-entered form with the
+    desktop form's fields, rules and option lists (exported from `CreateDonation.tsx`).
+    "Enter details by hand" no longer detours to the desktop `/donor/create`; it is
+    "Continue without a photo". The pin is editable, with "Use my location".
+  - `mobile/DonorProfile.tsx` printed `aayushi@thapar.edu` and "AS" for every donor; it now
+    reads `user.email` and `user.avatarInitials`.
+  - **Evidence:** new `mobile/__tests__/CreateDonationCamera.test.tsx` (5) and
+    `DonorProfile.test.tsx` (3); all 8 fail against the pre-fix source.
+- ⚠️ **Still open (low):** `Login.tsx` registration placeholders use seeded organisation names.
 - **P2-5 · `/ngo/available/:id` opens nothing.** CONFIRMED BUG. The route
   (`App.tsx:83`) renders `NGOAvailableDonations`, which never reads the param, so the
   dashboard's deep link lands on an unselected list. `[QA-8]` **S**
@@ -370,8 +378,8 @@ donations (`R-35`); PostGIS (§16.3).
 | Courier claim race | FIXED | `_claim_pickup` |
 | Other transitions' races | STILL PRESENT, **worse than documented** | P1-3 |
 | QA I-1…I-9 interface claims | FIXED | D-32…D-40 |
-| I-10 `index.html` "AI-assisted", I-11 donor "Future Intelligence" note | FIXED (Task 46, uncommitted) | `Landing.test.tsx`, `CreateDonation.test.tsx` |
-| Hard-coded seeded identities (I-1) | PARTIALLY FIXED | desktop and mobile kicker fixed (Task 46, uncommitted); mobile camera flow and donor profile → P2-4 residue |
+| I-10 `index.html` "AI-assisted", I-11 donor "Future Intelligence" note | FIXED (Task 46, `e588b35`) | `Landing.test.tsx`, `CreateDonation.test.tsx` |
+| Hard-coded seeded identities (I-1) | FIXED except `Login.tsx` placeholders (low) | kicker (Task 46, `e588b35`); mobile camera flow and donor profile (Task 47, uncommitted) |
 | Explicit-null PATCH → 500 | FIXED (Task 45, `c043051`) | D-61; `test_patch_null_semantics.py` |
 | `/ngo/available/:id` deep link | STILL PRESENT | P2-5 |
 | `MATCHED` activity line uses current score | STILL PRESENT, narrowed | P3 |
@@ -391,7 +399,8 @@ Detail lives in `DECISIONS.md` and in each commit.
 
 | Commit(s) | Work |
 |---|---|
-| uncommitted | Task 46 · P2-4: seeded organisation names, the "Future Intelligence" note, the Thapar demo preset and "AI-assisted"/"AI matching" copy removed (D-31) |
+| uncommitted | Task 47 · P2-4 mobile residue: phone create flow submits only donor-entered values (no scripted photo read); phone donor profile shows the signed-in account (D-31) |
+| `e588b35` | Task 46 · P2-4: seeded organisation names, the "Future Intelligence" note, the Thapar demo preset and "AI-assisted"/"AI matching" copy removed (D-31) |
 | `c043051` | Task 45 · P2-3 (null half): an explicit PATCH `null` clears a nullable column and leaves a NOT NULL one alone, instead of a 500 (D-61) |
 | `7764e06` | Task 44 · P2-2 (donation/requirement half): text bounded at the schema, `beneficiaryCount` ≥ 0 (D-60) |
 | `b583213` | Task 43 · P2-1: donation creation rate-limited per donor account (10/h) and per IP (30/h); admins exempt (D-59) |

@@ -8,9 +8,9 @@ import { MAX_IMAGE_EDGE_PX, prepareDonationImage } from '../../lib/image';
 import { DEFAULT_COORDS, isValidCoords, requestCoords } from '../../lib/geo';
 import type { FoodCategory, FoodUnit, StorageType } from '../../types';
 
-const CATEGORIES: FoodCategory[] = ['Vegetarian', 'Non-Vegetarian', 'Bakery', 'Fruits & Vegetables', 'Packaged Food', 'Other'];
-const UNITS: FoodUnit[] = ['Meals', 'Kg', 'Boxes', 'Pieces'];
-const STORAGE_TYPES: StorageType[] = ['Room Temperature', 'Refrigerated', 'Frozen', 'Other'];
+export const CATEGORIES: FoodCategory[] = ['Vegetarian', 'Non-Vegetarian', 'Bakery', 'Fruits & Vegetables', 'Packaged Food', 'Other'];
+export const UNITS: FoodUnit[] = ['Meals', 'Kg', 'Boxes', 'Pieces'];
+export const STORAGE_TYPES: StorageType[] = ['Room Temperature', 'Refrigerated', 'Frozen', 'Other'];
 
 function FormField({ label, required, children, hint }: {
   label: string; required?: boolean; children: React.ReactNode; hint?: string;

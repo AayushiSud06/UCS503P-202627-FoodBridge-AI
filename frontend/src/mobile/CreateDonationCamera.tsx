@@ -1,26 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Camera, Check, Loader, MapPin, Pencil, Sparkles } from 'lucide-react';
+import { AlertCircle, ArrowRight, Camera, ImagePlus, Loader, MapPin, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { errorMessage } from '../context/AuthContext';
 import { useAction, useMatchAnalysis } from '../lib/hooks';
 import { prepareDonationImage } from '../lib/image';
-import { DEFAULT_COORDS, requestCoords, type Coords } from '../lib/geo';
+import { DEFAULT_COORDS, isValidCoords, requestCoords } from '../lib/geo';
 import { formatClock, toFutureIso } from '../lib/time';
-import type { Donation } from '../types';
-import { MSection, MDetail, MMeter } from './parts';
+import { CATEGORIES, STORAGE_TYPES, UNITS } from '../pages/donor/CreateDonation';
+import type { Donation, FoodCategory, FoodUnit, StorageType } from '../types';
+import { MSection, MMeter } from './parts';
 
-/** The collection deadline this flow assumes, matching the label it shows. */
-const DEADLINE_TIME = '20:00';
-const PICKUP_LOCATION = 'College Central Mess, Thapar University';
+type Step = 'photo' | 'details' | 'done';
 
-type Step = 'shoot' | 'read' | 'confirm' | 'done';
+/**
+ * What the donor fills in. Nothing here is read from the photo: FoodLink has no
+ * image recognition, and the photo is only resized and attached (D-56). The
+ * selects and the pin start where the desktop form's do; every text field, the
+ * quantity and the deadline start empty.
+ */
+const EMPTY_FORM = {
+  foodName: '',
+  category: 'Vegetarian' as FoodCategory,
+  quantity: '',
+  unit: 'Meals' as FoodUnit,
+  storageType: 'Room Temperature' as StorageType,
+  pickupDeadline: '',
+  location: '',
+  description: '',
+  latitude: String(DEFAULT_COORDS.latitude),
+  longitude: String(DEFAULT_COORDS.longitude),
+};
 
-const READINGS = [
-  'Dish class · Vegetarian, mixed thali',
-  'Portion estimate · 48–52 meals',
-  'Container · insulated trays, room temp',
-];
+type Form = typeof EMPTY_FORM;
+type Errors = Partial<Record<keyof Form | 'coords', string>>;
+
+/** The desktop form's rules (`pages/donor/CreateDonation.tsx`), so both screens refuse the same drafts. */
+function validate(form: Form): Errors {
+  const errors: Errors = {};
+  if (!form.foodName.trim()) errors.foodName = 'Food name is required';
+  if (!form.quantity || Number(form.quantity) <= 0) errors.quantity = 'Enter a valid quantity';
+  if (!form.pickupDeadline) errors.pickupDeadline = 'Pickup deadline is required';
+  else if (!toFutureIso(form.pickupDeadline)) errors.pickupDeadline = 'Enter a valid pickup time';
+  if (!form.location.trim()) errors.location = 'Location is required';
+  if (!isValidCoords(Number(form.latitude), Number(form.longitude))) {
+    errors.coords = 'Enter a valid latitude and longitude';
+  }
+  return errors;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+      <AlertCircle size={12} /> {message}
+    </p>
+  );
+}
+
+function Field({ label, error, hint, children }: {
+  label: string; error?: string; hint?: string; children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {children}
+      {hint && !error && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+      <FieldError message={error} />
+    </label>
+  );
+}
 
 export default function CreateDonationCamera() {
   const navigate = useNavigate();
@@ -28,73 +77,92 @@ export default function CreateDonationCamera() {
   const { run, isBusy } = useAction();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<Step>('shoot');
+  const [step, setStep] = useState<Step>('photo');
   const [photo, setPhoto] = useState<string | undefined>();
-  const [qty, setQty] = useState(50);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [form, setForm] = useState<Form>(EMPTY_FORM);
+  const [errors, setErrors] = useState<Errors>({});
+  const [isLocating, setIsLocating] = useState(false);
   const [created, setCreated] = useState<Donation | null>(null);
-  const [coords, setCoords] = useState<Coords>(DEFAULT_COORDS);
-  const [gpsFixed, setGpsFixed] = useState(false);
 
   // Once published, show the reasoning the server actually used rather than
   // four decorative bars.
   const { analysis, recipientName: analysisRecipient } = useMatchAnalysis(created?.id ?? null);
 
-  // The scripted "vision read". Swap this timer for the real endpoint later.
-  // The pin, though, is fetched for real while it runs — by the time the
-  // confirm step claims GPS, it either has one or says it is using the default.
-  useEffect(() => {
-    if (step !== 'read') return;
-    let cancelled = false;
-
-    void requestCoords().then(found => {
-      if (cancelled || !found) return;
-      setCoords(found);
-      setGpsFixed(true);
+  const update = (field: keyof Form, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+    const key = field === 'latitude' || field === 'longitude' ? 'coords' : field;
+    setErrors(prev => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
     });
+  };
 
-    const t = setTimeout(() => setStep('confirm'), 1800);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [step]);
+  const clearFileInput = () => {
+    if (fileRef.current) fileRef.current.value = '';
+  };
 
   // Resized and re-encoded before it is held, for the reason in `lib/image.ts`:
-  // a camera capture is several times the size the donation row accepts, and
-  // this flow is the one that always has a photo (D-56). The scripted read step
-  // starts straight away, so the work happens behind it rather than in front.
+  // a camera capture is several times the size the donation row accepts (D-56).
+  // That is all that happens to it — the details are the donor's to enter.
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setStep('read');
+    setIsPreparing(true);
     try {
       setPhoto(await prepareDonationImage(file));
+      setStep('details');
     } catch (caught) {
       setPhoto(undefined);
-      if (fileRef.current) fileRef.current.value = '';
-      setStep('shoot');
+      clearFileInput();
       showToast('error', 'Could not use that photo', errorMessage(caught));
+    } finally {
+      setIsPreparing(false);
     }
   };
 
-  const publish = async () => {
-    const deadline = toFutureIso(DEADLINE_TIME);
-    if (!deadline) return;
+  const removePhoto = () => {
+    setPhoto(undefined);
+    clearFileInput();
+  };
 
+  const useMyLocation = async () => {
+    setIsLocating(true);
+    const found = await requestCoords();
+    setIsLocating(false);
+    if (!found) {
+      showToast('info', 'Location unavailable', 'Enter the pickup coordinates by hand instead.');
+      return;
+    }
+    update('latitude', String(found.latitude));
+    update('longitude', String(found.longitude));
+  };
+
+  const publish = async (e: FormEvent) => {
+    e.preventDefault();
+    const found = validate(form);
+    setErrors(found);
+    const deadline = toFutureIso(form.pickupDeadline);
+    if (Object.keys(found).length > 0 || !deadline) return;
+
+    // The server owns everything not asked for here: who the donor is, the
+    // match score, and the first entries in the status history.
     const donation = await run(
       'publish',
       () =>
         createDonation({
-          foodName: 'Vegetarian Meals',
-          category: 'Vegetarian',
-          quantity: qty,
-          unit: 'Meals',
-          storageType: 'Room Temperature',
-          description: 'Read from photo: dal makhani, paneer bhurji, rice. Insulated trays.',
-          location: PICKUP_LOCATION,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
+          foodName: form.foodName.trim(),
+          category: form.category,
+          quantity: Number(form.quantity),
+          unit: form.unit,
+          storageType: form.storageType,
+          description: form.description.trim(),
+          location: form.location.trim(),
+          latitude: Number(form.latitude),
+          longitude: Number(form.longitude),
           preparedAt: null,
           pickupDeadline: deadline,
           imageUrl: photo ?? null,
@@ -107,15 +175,35 @@ export default function CreateDonationCamera() {
     setStep('done');
   };
 
+  const startOver = () => {
+    setStep('photo');
+    setPhoto(undefined);
+    clearFileInput();
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setCreated(null);
+  };
+
   return (
     <>
+      {/* Mounted on every step, so a photo can be added from the details form too. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={onFile}
+        className="hidden"
+        id="m-food-image"
+      />
+
       {step !== 'done' && (
         <div className="px-5 py-3 bg-white border-b border-gray-200 flex items-center justify-between">
           <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
-            Step {step === 'shoot' ? 1 : step === 'read' ? 2 : 3} of 3
+            Step {step === 'photo' ? 1 : 2} of 2
           </span>
           <div className="flex gap-1.5">
-            {(['shoot', 'read', 'confirm'] as Step[]).map(s => (
+            {(['photo', 'details'] as Step[]).map(s => (
               <span
                 key={s}
                 className={`w-6 h-1 rounded-full ${
@@ -127,143 +215,229 @@ export default function CreateDonationCamera() {
         </div>
       )}
 
-      {step === 'shoot' && (
+      {step === 'photo' && (
         <>
           <div className="mx-5 mt-5 rounded-2xl border border-dashed border-gray-300 bg-gray-100 h-64 flex flex-col items-center justify-center text-center px-6">
-            <Camera size={28} className="text-gray-400" />
-            <p className="mt-2 text-sm text-gray-500">Point the camera at the tray</p>
+            {isPreparing ? (
+              <Loader size={28} className="text-gray-400 animate-spin" />
+            ) : (
+              <Camera size={28} className="text-gray-400" />
+            )}
+            <p className="mt-2 text-sm text-gray-500">
+              {isPreparing ? 'Preparing photo…' : 'Photograph the food (optional)'}
+            </p>
           </div>
           <div className="p-5 space-y-2.5">
             <p className="text-sm text-gray-600 leading-relaxed">
-              One photo is the whole form. The reader estimates the dish, the portion count and the
-              storage type — you only correct what it gets wrong.
+              A photo is shown to kitchens with your listing. FoodLink does not read or analyse it —
+              you enter the food, quantity and pickup details yourself on the next step.
             </p>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={onFile}
-              className="hidden"
-            />
-            <button type="button" className="m-btn-primary" onClick={() => fileRef.current?.click()}>
-              <Camera size={18} />
-              Capture food
-            </button>
-            <button type="button" className="m-btn-secondary" onClick={() => navigate('/donor/create')}>
-              <Pencil size={16} />
-              Enter details by hand
-            </button>
-          </div>
-        </>
-      )}
-
-      {step === 'read' && (
-        <>
-          {photo ? (
-            <img src={photo} alt="" className="w-full h-56 object-cover" />
-          ) : (
-            <div className="w-full h-56 bg-gray-200" />
-          )}
-          <div className="p-5 space-y-3.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-              Reading photo
-            </p>
-            <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
-              <div className="h-full w-8/12 rounded-full bg-emerald-600 transition-all duration-700" />
-            </div>
-            <div className="space-y-2.5 text-sm text-gray-700">
-              {READINGS.map(r => (
-                <p key={r} className="flex items-center gap-2">
-                  <Check size={15} className="text-emerald-600 shrink-0" />
-                  {r}
-                </p>
-              ))}
-              <p className="flex items-center gap-2 text-gray-400">
-                <Loader size={15} className="shrink-0 animate-spin" />
-                Freshness window…
-              </p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {step === 'confirm' && (
-        <>
-          <div className="flex gap-4 p-5 bg-white border-b border-gray-200">
-            {photo ? (
-              <img src={photo} alt="" className="w-24 h-24 rounded-xl object-cover shrink-0" />
-            ) : (
-              <div className="w-24 h-24 rounded-xl bg-gray-200 shrink-0" />
-            )}
-            <div className="min-w-0">
-              <span className="m-chip bg-emerald-50 text-emerald-700">
-                <Sparkles size={11} />
-                96% confident
-              </span>
-              <p className="mt-1.5 font-display font-semibold text-lg text-gray-900 leading-snug">
-                {qty} Vegetarian Meals
-              </p>
-              <p className="text-xs text-gray-500">Dal makhani · paneer bhurji · rice</p>
-            </div>
-          </div>
-
-          <MSection title="Correct anything" />
-
-          <div className="flex items-center justify-between gap-4 px-5 py-3 bg-white border-b border-gray-100">
-            <span className="text-sm text-gray-500">Quantity</span>
-            <div className="flex items-center shrink-0">
-              <button
-                type="button"
-                onClick={() => setQty(q => Math.max(5, q - 5))}
-                className="w-11 h-11 rounded-l-xl border border-gray-300 text-lg font-semibold text-gray-700 active:bg-gray-100"
-                aria-label="Decrease quantity"
-              >
-                –
-              </button>
-              <span className="w-24 h-11 flex items-center justify-center border-y border-gray-300 text-sm font-semibold text-gray-900">
-                {qty} meals
-              </span>
-              <button
-                type="button"
-                onClick={() => setQty(q => q + 5)}
-                className="w-11 h-11 rounded-r-xl border border-gray-300 text-lg font-semibold text-gray-700 active:bg-gray-100"
-                aria-label="Increase quantity"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <MDetail label="Category" value="Vegetarian" />
-          <MDetail label="Storage" value="Room temperature" />
-          <MDetail
-            label="Pickup before"
-            value={
-              <span className="text-clay-700 font-semibold">
-                {formatClock(toFutureIso(DEADLINE_TIME) ?? '')}
-              </span>
-            }
-          />
-
-          <div className="m-5 rounded-2xl bg-gray-100 p-4 flex gap-3">
-            <MapPin size={16} className="text-gray-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">{PICKUP_LOCATION}</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {gpsFixed
-                  ? `GPS fix · ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`
-                  : `Saved default · ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`}
-              </p>
-            </div>
-          </div>
-
-          <div className="px-5 pb-6">
             <button
               type="button"
+              className="m-btn-primary"
+              onClick={() => fileRef.current?.click()}
+              disabled={isPreparing}
+            >
+              <Camera size={18} />
+              Take a photo
+            </button>
+            <button
+              type="button"
+              className="m-btn-secondary"
+              onClick={() => setStep('details')}
+              disabled={isPreparing}
+            >
+              Continue without a photo
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === 'details' && (
+        <form onSubmit={publish} noValidate>
+          <div className="flex items-center gap-4 px-5 py-4 bg-white border-b border-gray-200">
+            {photo ? (
+              <img src={photo} alt="Attached food photo" className="w-16 h-16 rounded-xl object-cover shrink-0" />
+            ) : (
+              <div className="w-16 h-16 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center shrink-0">
+                {isPreparing ? <Loader size={20} className="animate-spin" /> : <Camera size={20} />}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-900">
+                {photo ? 'Photo attached' : 'No photo attached'}
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {photo
+                  ? 'Shown with the listing. The details below are what kitchens read.'
+                  : 'Optional. Kitchens see the details below either way.'}
+              </p>
+            </div>
+            {photo ? (
+              <button type="button" className="m-btn-icon" onClick={removePhoto} aria-label="Remove photo">
+                <X size={16} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="m-btn-icon"
+                onClick={() => fileRef.current?.click()}
+                disabled={isPreparing}
+                aria-label="Add a photo"
+              >
+                <ImagePlus size={16} />
+              </button>
+            )}
+          </div>
+
+          <MSection title="Food" />
+          <div className="px-5 space-y-4">
+            <Field label="Food name" error={errors.foodName}>
+              <input
+                id="m-food-name"
+                className="m-input"
+                value={form.foodName}
+                onChange={e => update('foodName', e.target.value)}
+                placeholder="e.g. Vegetable biryani"
+              />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Category">
+                <select
+                  id="m-category"
+                  className="m-input"
+                  value={form.category}
+                  onChange={e => update('category', e.target.value)}
+                >
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </Field>
+              <Field label="Storage">
+                <select
+                  id="m-storage-type"
+                  className="m-input"
+                  value={form.storageType}
+                  onChange={e => update('storageType', e.target.value)}
+                >
+                  {STORAGE_TYPES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Quantity" error={errors.quantity}>
+                <input
+                  id="m-quantity"
+                  className="m-input"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={form.quantity}
+                  onChange={e => update('quantity', e.target.value)}
+                  placeholder="40"
+                />
+              </Field>
+              <Field label="Unit">
+                <select
+                  id="m-unit"
+                  className="m-input"
+                  value={form.unit}
+                  onChange={e => update('unit', e.target.value)}
+                >
+                  {UNITS.map(u => <option key={u}>{u}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <Field
+              label="Pickup before"
+              error={errors.pickupDeadline}
+              hint="A time already past today means tomorrow."
+            >
+              <input
+                id="m-pickup-deadline"
+                className="m-input"
+                type="time"
+                value={form.pickupDeadline}
+                onChange={e => update('pickupDeadline', e.target.value)}
+              />
+            </Field>
+
+            <Field label="Description (optional)">
+              <textarea
+                id="m-description"
+                className="m-input py-2.5"
+                rows={3}
+                value={form.description}
+                onChange={e => update('description', e.target.value)}
+                placeholder="Dishes, allergens, gate instructions for the courier."
+              />
+            </Field>
+          </div>
+
+          <MSection title="Pickup" />
+          <div className="px-5 space-y-4">
+            <Field label="Pickup address" error={errors.location}>
+              <input
+                id="m-location"
+                className="m-input"
+                value={form.location}
+                onChange={e => update('location', e.target.value)}
+                placeholder="Building, street and area"
+              />
+            </Field>
+
+            <div>
+              <span className="label">Pickup pin</span>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  id="m-latitude"
+                  className="m-input"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.000001"
+                  value={form.latitude}
+                  onChange={e => update('latitude', e.target.value)}
+                  aria-label="Latitude"
+                  placeholder="Latitude"
+                />
+                <input
+                  id="m-longitude"
+                  className="m-input"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.000001"
+                  value={form.longitude}
+                  onChange={e => update('longitude', e.target.value)}
+                  aria-label="Longitude"
+                  placeholder="Longitude"
+                />
+              </div>
+              {errors.coords ? (
+                <FieldError message={errors.coords} />
+              ) : (
+                <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+                  Kitchens are ranked by straight-line distance from this pin, so it has to be right.
+                </p>
+              )}
+              <button
+                type="button"
+                className="m-btn-secondary mt-2.5"
+                onClick={useMyLocation}
+                disabled={isLocating}
+              >
+                {isLocating ? <Loader size={16} className="animate-spin" /> : <MapPin size={16} />}
+                {isLocating ? 'Locating…' : 'Use my location'}
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5 pb-6">
+            <button
+              type="submit"
               className="m-btn-primary disabled:opacity-60"
-              onClick={publish}
-              disabled={isBusy}
+              disabled={isBusy || isPreparing}
             >
               {isBusy ? 'Publishing…' : 'Publish donation'}
               {!isBusy && <ArrowRight size={17} />}
@@ -273,7 +447,7 @@ export default function CreateDonationCamera() {
               every kitchen within 8 km.
             </p>
           </div>
-        </>
+        </form>
       )}
 
       {step === 'done' && (
@@ -283,7 +457,7 @@ export default function CreateDonationCamera() {
               {created?.matchScore ? 'Top match' : 'Listed'}
             </p>
             <p className="mt-1.5 font-display font-semibold text-5xl leading-none">
-              {created?.matchScore ? `${created.matchScore}%` : `${created?.quantity ?? qty}`}
+              {created?.matchScore ? `${created.matchScore}%` : `${created?.quantity ?? ''}`}
             </p>
             <p className="mt-3 font-medium">
               {analysis ? analysisRecipient : 'Open to every kitchen in range'}
@@ -333,15 +507,7 @@ export default function CreateDonationCamera() {
             <button type="button" className="m-btn-primary" onClick={() => navigate('/m/donor')}>
               Back to home
             </button>
-            <button
-              type="button"
-              className="m-btn-secondary"
-              onClick={() => {
-                setStep('shoot');
-                setPhoto(undefined);
-                setCreated(null);
-              }}
-            >
+            <button type="button" className="m-btn-secondary" onClick={startOver}>
               List another
             </button>
           </div>
