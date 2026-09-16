@@ -284,3 +284,17 @@ On push to `master`/`main` and every PR. **backend** (Python 3.13): `pytest code
 `alembic upgrade head` + `alembic check` on a throwaway SQLite file with a placeholder key.
 **frontend** (Node 20): `npm ci` → `npm test` → `npm run build` (`tsc && vite build`). No
 lint, no dependency audit, no deployment. `mkdocs.yml` deploys documentation separately.
+
+## Claude Code tooling — `.claude/`
+
+Development aids only; nothing here ships or runs in CI.
+- **Hooks** (`settings.json`, scripts in `hooks/`). PreToolUse `guard.mjs` blocks Edit/Write
+  on an Alembic revision already in HEAD and on `frontend/package-lock.json`. PostToolUse
+  `alembic-drift.sh` runs CI's `upgrade head` + `check` on a throwaway SQLite file after any
+  `code/foodlink/models.py` edit (~2 s). Both need `node`; Bash edits are not covered.
+- **Skills**: `finish-task` (validation matrix, ai/ doc rules, §18 report), `prove-fix`
+  (user-only: new tests fail with the fix stashed, pass with it).
+- **Agents**: `authz-reviewer` (read-scope/disclosure invariants), `docs-verifier`
+  (ai/ claims against the repo, §15A-aware). Both read-only.
+- **`launch.json`**: `foodlink-frontend` (:5173) and `foodlink-backend` (:8000, dev key), so
+  the in-app browser can exercise the live API through Vite's `/api` proxy.

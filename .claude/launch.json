@@ -8,6 +8,14 @@
       "cwd": "frontend",
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "foodlink-backend",
+      "runtimeExecutable": "../.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "foodlink.main:app", "--port", "8000"],
+      "cwd": "code",
+      "port": 8000,
+      "env": { "FOODLINK_DEV_INSECURE_SECRET": "1" }
     }
   ]
 }
