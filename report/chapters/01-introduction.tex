@@ -4,328 +4,154 @@
 \section{Background and Context}
 \label{sec:background}
 
-Institutional kitchens routinely finish a service with edible food left over.
-College messes, hostel canteens, bakeries and banquet halls are typical
-sources. At the same time, shelters, community kitchens and non-governmental
-organisations (NGOs) a few kilometres away are short of meals. Food waste is
-a recognised problem at every scale~\cite{unepFoodWaste2024}. For a single
-campus or a tier-2/3 Indian city, however, the binding constraint is rarely
-the \emph{supply} of surplus food or the \emph{existence} of organisations
-willing to serve it. It is \emph{coordination under a deadline}. Cooked food
-is safe to serve for only a few hours, and the phone calls and informal
-messages that currently connect a donor to a recipient often outlast that
-window.
+Institutional kitchens such as college messes, hostel canteens, bakeries and
+banquet halls routinely finish a service with edible food left over. At the same
+time, shelters and community kitchens nearby are short of meals. Food waste is a
+recognised problem at every scale~\cite{unepFoodWaste2024}. For a campus or a
+tier-2/3 city, however, the binding constraint is rarely supply. It is
+\emph{coordination under a deadline}: cooked food is safe for only a few hours,
+and informal phone calls often outlast that window.
 
-FoodLink is the software system this project builds to close that gap. It is
-a web platform that brings four kinds of participant into one shared,
-tracked workflow:
-\begin{itemize}
-  \item a \textbf{donor}, who posts surplus food with a pickup location and an
-    absolute pickup deadline;
-  \item a \textbf{recipient organisation} (an NGO or community kitchen),
-    which is verified by an administrator before it can take custody of food;
-  \item a \textbf{volunteer courier}, who collects the food and delivers it;
-  \item a \textbf{platform administrator}, who vouches for organisations,
-    maintains the platform and can act on behalf of any party.
-\end{itemize}
+FoodLink is a web platform that brings every party to a handover into one tracked
+workflow. A \textbf{donor} posts surplus food. An administrator verifies each
+\textbf{recipient organisation} (an NGO or community kitchen) before it can
+receive food. A \textbf{volunteer courier} collects and delivers it, and a
+\textbf{platform administrator} maintains the platform. The project is developed
+for UCS503P (2026--27 odd semester), which requires a proposal in week~4, this
+prototype-stage (mid-term) report in week~7 and a final report in
+week~17~\cite{ucs503Project}. The report describes what has been built against
+the proposal~\cite{foodlinkProposal}, how it was verified, and what remains.
 
-The project is being developed for the course UCS503P (Software Engineering
-Project), 2026--27 odd semester, at Thapar Institute of Engineering and
-Technology. The course asks for three reports: a proposal in week~4, a
-prototype-stage progress report before the mid-semester examinations in
-week~7, and a final report in week~17~\cite{ucs503Project}. This document is
-the mid-term (prototype-stage) report. The proposal committed to a
-web-based, workflow-centred platform with a transparent ranking
-heuristic~\cite{foodlinkProposal}. This report describes the system that has
-actually been built against that proposal, how it was verified, and what
-remains.
-
-\paragraph{A note on terminology.} The repository is named
-\emph{FoodBridge-AI}, and the product was at one point labelled
-``FoodLink AI''. FoodLink contains \textbf{no machine learning, deep learning
-or computer vision}. Recipient organisations are ranked by a transparent
-weighted sum of five published criteria, which a reader can recompute by hand
-(Section~\ref{sec:module-matching}). This is a deliberate design decision
-recorded in the project's decision log as D-05~\cite{foodlinkArchitecture}.
-Every technical statement in this report was checked against the source code
-at commit \texttt{e588b35}~\cite{foodlinkRepo}. Where the code and the
-project's own documentation disagree, the code was followed.
+Although the repository is named \emph{FoodBridge-AI}, FoodLink contains
+\textbf{no machine learning or computer vision}. Organisations are ranked by a
+transparent weighted sum of five published criteria that can be recomputed by
+hand. This choice is recorded as decision D-05 in the project's decision
+log~\cite{foodlinkArchitecture}. All technical statements were checked against
+the source code at commit \texttt{e588b35}~\cite{foodlinkRepo}.
 
 \subsection{Problem Statement}
 \label{sec:problem}
 
-Surplus food is lost less for lack of food or willing recipients than for
-lack of a reliable, timely and trustworthy way to connect them. Five
-concrete problems follow from informal coordination:
-
-\begin{enumerate}
-  \item \textbf{A hard perishability deadline.} Food has a window after which
-    it must be discarded. Coordination that is not deadline-aware routinely
-    misses it.
-  \item \textbf{Fragmentation.} A donor contacts whichever organisation it
-    happens to know. There is no shared pool, so availability is invisible to
-    everyone else, and the nearest suitable organisation may never hear of the
-    food.
-  \item \textbf{No accountability or evidence.} Nobody can say afterwards how
-    long it took for food to be claimed, whether it was actually delivered, or
-    how much was lost. Without records, the process cannot be measured or
-    improved.
-  \item \textbf{Last-mile coordination.} Food must be physically moved.
-    Volunteer availability is informal and untracked, so a willing donor and a
-    willing recipient can still fail to complete a handover.
-  \item \textbf{Trust and privacy.} A donor handing food to a stranger needs
-    assurance that a real organisation stands behind the request. A donor who
-    may be an individual at home should not have their exact location
-    broadcast to anyone who signs up.
-\end{enumerate}
-
-The problem addressed by this project is therefore to \emph{design and
-implement a web-based platform that lets a donor post surplus food with a
-hard pickup deadline, directs it to nearby verified organisations through an
-explainable ranking, coordinates a volunteer courier through pickup and
-delivery, and records every step as server-stamped evidence, while ensuring
-that each participant can see and do only what its role and its relationship
-to a donation permit.}
+Informal coordination causes five problems. The first is
+\textbf{perishability}: the hard deadline is routinely missed. The second is
+\textbf{fragmentation}: donors call whoever they know, so availability is
+invisible to others. The third is \textbf{lack of evidence}: nobody knows how
+long claiming took, whether food arrived, or how much was lost. The fourth is
+\textbf{the last mile}: courier availability is untracked. The fifth is
+\textbf{trust and privacy}: donors need assurance that a real organisation is
+receiving the food, and a home location should not be broadcast to anyone who
+signs up. The problem is therefore to \emph{build a web platform that lets a
+donor post surplus food with a hard deadline, directs it to nearby verified
+organisations through an explainable ranking, coordinates a courier through
+pickup and delivery, and records every step as server-stamped evidence, while
+each participant sees and does only what its role and relationship to the
+donation permit.}
 
 \subsection{Motivation}
 \label{sec:motivation}
 
-Four observations motivate the design.
-
-\textbf{Coordination, not supply, is the bottleneck.} Surplus food and
-recipient organisations already exist. A modest reduction in the delay
-between posting and acceptance directly converts food that would have been
-discarded into served meals. This is why the proposal's primary evaluation
-metric is \emph{time-to-claim}~\cite{foodlinkProposal}, and why the system
-treats the pickup deadline as an absolute timestamp rather than a display
-string.
-
-\textbf{Trust must be earned, not asserted.} Anyone can register as an
-organisation. If self-registration were enough to receive food, the platform
-would hand food, and donors' addresses, to unvetted accounts. FoodLink
-therefore separates \emph{holding a role} from \emph{being trusted}. An
-administrator verifies each organisation, and that verification gates
-ranking, acceptance and access to the open donation pool.
-
-\textbf{Decisions should be explainable.} A recipient deciding whether to
-accept, a donor wondering why an organisation was suggested, and an
-evaluator checking the system should all be able to see \emph{why} a ranking
-came out as it did. A published weighted sum with per-criterion scores and
-plain-language reasons meets that requirement. An opaque learned model
-would not, and would in any case need outcome data the project does not yet
-have.
-
-\textbf{Evidence should not be self-reported.} Metrics such as
-time-to-claim and rescue rate are only credible if their timestamps come from
-the server at the moment of each transition. FoodLink records every lifecycle
-change in an append-only ledger (\code{status_events}) and derives its metrics
-from it.
-
-As a software engineering course project, the work also aims to demonstrate
-sound engineering practice: explicit requirements, a documented architecture
-and decision log, automated tests for every security and integrity property,
-and continuous integration.
+Coordination, not supply, is the bottleneck. Shortening the delay between
+posting and acceptance converts waste into meals, which is why the proposal's
+primary metric is \emph{time-to-claim}~\cite{foodlinkProposal}. Trust must be
+earned: anyone can register as an organisation, so FoodLink separates holding a
+role from being trusted, and administrator verification gates who may receive
+food. Decisions should be explainable, and a published weighted sum lets
+organisations, donors and evaluators see \emph{why} a ranking came out as it
+did, which an opaque model trained without outcome data would not. Finally,
+evidence should not be self-reported. Metrics are credible only if the server
+stamps their timestamps, so every transition is appended to a ledger.
 
 \subsection{Existing System}
 \label{sec:existing}
 
-In the setting the proposal describes, redistribution happens through
-personal phone calls, messaging groups and ad-hoc arrangements between a
-kitchen and an organisation it already knows~\cite{foodlinkProposal}. There is
-no shared software system. Table~\ref{tab:existing} summarises the
-limitations of this informal practice and how FoodLink responds to each. The
-comparison is with informal coordination as a practice; this report makes no
-claims about specific third-party products.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{3.0cm}|L{5.3cm}|L{5.3cm}|}
-  \hline
-  \textbf{Aspect} & \textbf{Informal coordination} & \textbf{FoodLink (implemented)} \\
-  \hline
-  Visibility of surplus & Known only to the contacts the donor calls &
-    One open pool visible to every verified organisation \\
-  \hline
-  Choice of recipient & Whoever answers first & Ranked list of verified,
-    nearby organisations, with reasons \\
-  \hline
-  Deadline & Mentioned verbally, not enforced & Absolute timestamp; overdue
-    food leaves the pool and cannot be accepted \\
-  \hline
-  Trust & Personal familiarity & Administrator verification gates ranking,
-    pool access and acceptance \\
-  \hline
-  Courier & Arranged separately, untracked & Claimable pickup task bound to one
-    courier by a conditional database write \\
-  \hline
-  Status & Unknown after handover & Nine-state lifecycle visible to every party \\
-  \hline
-  Records & None & Append-only, server-stamped event ledger; derived metrics \\
-  \hline
-  Privacy & Addresses shared freely & Exact pickup pin withheld from a courier
-    until the courier claims the run \\
-  \hline
-\end{tabular}
-\caption{Informal coordination compared with the implemented FoodLink system}
-\label{tab:existing}
-\end{table}
+In the proposal's setting, redistribution relies on personal calls, messaging
+groups and ad-hoc arrangements, and no shared software system
+exists~\cite{foodlinkProposal}. Surplus is therefore visible only to the
+contacts a donor happens to call. The recipient is whoever answers first rather
+than the best-placed organisation. Deadlines are mentioned but not enforced,
+and trust rests on familiarity rather than vetting. Couriers are arranged
+separately and not tracked, nothing is recorded after handover, and addresses
+are shared freely. The comparison is with informal practice in general, not
+with specific third-party products.
 
 \subsection{Proposed System}
 \label{sec:proposed}
 
-FoodLink is a three-tier web application. A React single-page application
-talks to a REST API written in Python with FastAPI, which persists data
-through SQLAlchemy to a relational database (SQLite by default). The API
-is the single authority for every rule. The browser renders what the API
-permits and never decides access or lifecycle legality itself.
-
-The end-to-end flow, as implemented, is:
-\begin{enumerate}
-  \item A \textbf{donor posts} a donation: food name, category, quantity and
-    unit, storage type, description, an optional photograph, the pickup
-    address and map coordinates, an optional preparation time and an absolute
-    pickup deadline. The server rejects a deadline that has already passed.
-  \item The server stores the donation as \code{AVAILABLE}, stamps an
-    \code{AVAILABLE} event, and immediately \textbf{ranks} every recipient
-    organisation. An organisation is eligible only if it is verified, has map
-    coordinates and lies within an 8\,km service radius. If any is eligible,
-    the donation moves to \code{MATCHED}, and the leading score is frozen on
-    the donation. A match is a suggestion: nothing is assigned.
-  \item Every \textbf{verified organisation} sees the donation in its open
-    pool while the deadline has not passed, together with its own live
-    match score and explanation. One organisation \textbf{accepts}, and the
-    donation becomes \code{ACCEPTED}.
-  \item The donation appears in the unclaimed queue of every
-    \textbf{volunteer courier}. There the pickup location is shown only as a
-    coarse area of roughly one square kilometre. One courier
-    \textbf{claims} it (\code{VOLUNTEER_ASSIGNED}) and only then sees the exact
-    pin, address and donor name.
-  \item The courier \textbf{collects} the food (\code{PICKED_UP}) and
-    \textbf{delivers} it (\code{DELIVERED}).
-  \item The accepting organisation \textbf{confirms receipt}
-    (\code{COMPLETED}). The organisation's completion count and the courier's
-    delivery count are incremented, which in turn feeds the reliability
-    criterion of future rankings.
-  \item Along the way, the donor (before pickup) or an administrator may
-    \textbf{cancel}, the accepting organisation may \textbf{release} a claimed
-    pickup back to the courier queue, and an administrator may run the
-    \textbf{expiry sweep} that closes overdue, unaccepted donations as
-    \code{EXPIRED}. Every transition appends a server-stamped event.
-\end{enumerate}
-
-Six principles run through the implementation and recur throughout this
-report: the server is the only authority; lifecycle rules are data rather
-than scattered conditionals; rankings are explainable; trust comes from
-administrator verification; each reader is told only what its relationship
-to a record justifies; and history is append-only.
+FoodLink is a three-tier web application: a React client, a REST API in Python
+(FastAPI), and a relational database (SQLite by default). The API is the only
+authority for every rule. A donation moves through the following flow:
+\begin{enumerate*}[label=(\arabic*)]
+  \item a donor posts food details, a pickup pin and an absolute deadline;
+  \item the server stores the donation as \code{AVAILABLE}, ranks eligible
+    organisations and, if any exist, records \code{MATCHED}, which is only a
+    suggestion;
+  \item a verified organisation, shown its own match explanation, accepts it
+    (\code{ACCEPTED});
+  \item a courier, who until then sees only a coarse area of about 1\,km, claims
+    the pickup (\code{VOLUNTEER_ASSIGNED}) and only then sees the exact pin;
+  \item the courier records \code{PICKED_UP} and \code{DELIVERED};
+  \item the organisation confirms receipt (\code{COMPLETED}), which updates the
+    reliability used in future rankings.
+\end{enumerate*}
+A donor (before pickup) or an administrator may also cancel. The organisation
+may release a claimed pickup, and an administrator's expiry sweep closes
+overdue, unaccepted donations. Every transition appends a server-stamped event.
 
 \subsection{Scope}
 \label{sec:scope}
 
-\textbf{In scope and implemented at mid-term.} Account registration and
-sign-in for the donor, organisation and courier roles, and command-line and
-administrator-only creation of administrators. Role-, ownership-, lifecycle-
-and verification-based authorization. Donation posting with a
-browser-resized photograph. Explainable recipient ranking. The full
-nine-state donation lifecycle, with conditional (race-safe) status writes and
-an append-only event ledger. Courier claim, pickup and delivery. Receipt
-confirmation. Standing requirements posted by organisations, and a donor
-needs board. Organisation verification. The manual expiry sweep. Platform
-metrics. Four role-specific web portals. Rate limiting of sign-in,
-registration and donation posting. Automated backend and frontend test
-suites run in continuous integration.
+\textbf{Implemented:} registration and sign-in, with the first administrator
+created from the command line; role, ownership, lifecycle and verification
+checks; donation posting with photo resizing; explainable ranking; the
+nine-state lifecycle with race-safe writes and an event ledger; standing
+requirements and a donor needs board; verification, the expiry sweep and
+metrics; four web portals; rate limiting; and automated tests in continuous
+integration.
 
-\textbf{Partially implemented.} Cancellation, pickup release and
-administrator account management are implemented and tested in the API but
-are not yet offered in the web portal. The same applies to an organisation
-setting its map coordinates, which it needs in order to be ranked. Phone-layout
-screens exist under the \code{/m/*} routes but are reachable only by typing
-the address.
+\textbf{Partially implemented:} cancellation, pickup release, account
+management and setting an organisation's map coordinates work only through the
+API. Phone-layout screens at \code{/m/*} can be reached only by typing their
+address.
 
-\textbf{Out of scope, or not yet built.} Email, SMS or push notifications;
-maps, road distances or route planning; object storage for photographs (they
-are stored inline in the database row); a scheduler for the expiry sweep; any
-deployment or hosting; a real-world pilot with users; machine learning or
-computer vision; and any certification of food safety. As the proposal
-states, the platform coordinates handovers and records the information a
-recipient needs; it does not vouch for the food~\cite{foodlinkProposal}.
+\textbf{Not built:} notifications, maps and routing; object storage for photos;
+scheduling of the expiry sweep; any deployment or real-user pilot; machine
+learning or computer vision; and certification of food safety. The platform
+records what a recipient needs in order to decide, but does not vouch for the
+food~\cite{foodlinkProposal}.
 
 \section{Project Objectives}
 \label{sec:objectives}
 
+Each objective states a measurable criterion and its verified mid-term status.
 \begin{enumerate}
-  \item \textbf{Objective 1:} Allow a donor to post surplus food with an
-    absolute pickup deadline, validated and stored by the server, within a
-    single short form.
-  \item \textbf{Objective 2:} Rank eligible recipient organisations for each
-    donation with a transparent, published weighted heuristic whose
-    per-criterion scores and reasons are returned with every result.
-  \item \textbf{Objective 3:} Enforce a complete donation lifecycle, from
-    posting to completion, cancellation or expiry, in which illegal
-    transitions and concurrent conflicting transitions are refused, and every
-    transition is recorded as a server-stamped event.
-  \item \textbf{Objective 4:} Restrict every read and write by role,
-    ownership, lifecycle state and administrator-granted trust, and withhold
-    sensitive data (such as a donor's exact pickup location) from readers who
-    do not need it.
-  \item \textbf{Objective 5:} Make demand visible before supply by letting
-    organisations post standing requirements that donors can browse.
-  \item \textbf{Objective 6:} Derive the proposal's evaluation metrics
-    (median time-to-claim, rescue rate, expiry-loss rate and median handover
-    time) from the event ledger rather than from self-reported data.
-  \item \textbf{Objective 7:} Protect the implementation with automated tests
-    and continuous integration, so that every security and integrity property
-    is exercised on each change.
-  \item \textbf{Objective 8:} Prepare the system for deployment and a pilot
-    with real donors, organisations and couriers.
+  \item \textbf{Objective 1:} Donors post surplus food with an absolute,
+    server-validated deadline. \emph{Met.}
+  \item \textbf{Objective 2:} Eligible organisations are ranked by a published
+    weighted heuristic that returns per-criterion scores and reasons.
+    \emph{Met.}
+  \item \textbf{Objective 3:} The lifecycle refuses illegal and conflicting
+    transitions and records one event per transition. \emph{Met; covered by
+    lifecycle and concurrency tests.}
+  \item \textbf{Objective 4:} Every read and write is restricted by role,
+    ownership, state and verification, and sensitive data is withheld from
+    readers who do not need it. \emph{Met; covered by scope tests.}
+  \item \textbf{Objective 5:} Organisations publish standing requirements that
+    donors can browse. \emph{Met.}
+  \item \textbf{Objective 6:} Time-to-claim, rescue rate, expiry-loss rate and
+    handover time are derived from the event ledger. \emph{Instrumented; not yet
+    measured on real use.}
+  \item \textbf{Objective 7:} Automated tests run in CI on every push.
+    \emph{Met: 495 backend and 156 frontend tests pass.}
+  \item \textbf{Objective 8:} A staging deployment and pilot before week~17.
+    \emph{Not started.}
 \end{enumerate}
-
-To make the objectives SMART (Specific, Measurable, Achievable, Relevant and
-Time-bound) for evaluators, Table~\ref{tab:objectives} attaches a measurable
-criterion to each and records its verified status at the mid-term point.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|c|L{6.7cm}|L{5.6cm}|}
-  \hline
-  \textbf{No.} & \textbf{Measurable criterion} & \textbf{Status at mid-term} \\
-  \hline
-  1 & \code{POST /api/donations} stores a donation and refuses a past deadline & Met (Section~\ref{sec:module-lifecycle}) \\
-  \hline
-  2 & Five weighted criteria, gates and reasons returned by \code{/matches} and \code{viewerMatch} & Met (Section~\ref{sec:module-matching}) \\
-  \hline
-  3 & Nine states; 409 on illegal or lost transitions; one event per transition & Met; covered by lifecycle and concurrency tests \\
-  \hline
-  4 & Role, ownership, lifecycle and verification checks on every route; scoped reads & Met; covered by read-scope and authorization tests \\
-  \hline
-  5 & Organisations create, revise, retire and reopen needs; donors read the verified board & Met (Section~\ref{sec:module-requirements}) \\
-  \hline
-  6 & \code{GET /api/metrics} computes all four figures from \code{status_events} & Instrumented; not yet measured on real use \\
-  \hline
-  7 & Backend and frontend suites pass in CI on every push & Met: 495 backend and 156 frontend tests pass (Chapter~\ref{ch:results}) \\
-  \hline
-  8 & A staging deployment and a pilot by the final evaluation (week~17) & Not started (Chapter~\ref{ch:feasibility}) \\
-  \hline
-\end{tabular}
-\caption{Project objectives, measurable criteria and verified mid-term status}
-\label{tab:objectives}
-\end{table}
 
 \section{Organisation of the Report}
 \label{sec:organisation}
 
-The report follows the chapter structure of the TIET report
-template~\cite{tietTemplate} and adds two chapters that this evaluation
-requires.
-Chapter~\ref{ch:methodology} presents the methodology, architecture,
-requirements, database, API and frontend design, and then documents the
-implementation module by module. Chapter~\ref{ch:results} describes how the
-system was tested and what the results show, including its current
-limitations. Chapter~\ref{ch:feasibility} is the separate Feasibility Report,
-covering technical, operational, economic, schedule, and legal, security and
-privacy feasibility. Chapter~\ref{ch:conclusion} summarises the work, the key
-findings and future work. Chapter~\ref{ch:uml} closes the report with the UML
-design artefacts: the use case diagram with detailed use case scenarios, the
-class diagram and the activity diagram.
+The report follows the TIET report template~\cite{tietTemplate}.
+Chapter~\ref{ch:methodology} covers the methodology, architecture, requirements,
+design and implementation modules. Chapter~\ref{ch:results} presents testing,
+results and limitations, and Chapter~\ref{ch:feasibility} is the Feasibility
+Report. Chapter~\ref{ch:conclusion} concludes, and Chapter~\ref{ch:uml} contains
+the use case diagram and scenarios, the class diagram and the activity diagram.

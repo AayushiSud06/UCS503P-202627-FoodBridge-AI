@@ -28,4 +28,7 @@ The same sources compile on Overleaf.
   MiKTeX (LaTeX 2025-11-01) reports "Infinite glue shrinkage found in box being split" at
   every page break, so no long tables are used.
 - Local compilation needed the MiKTeX packages `titlesec`, `fancyhdr`, `logreq` and `grfext`.
+- The List of Figures and List of Tables are commented out of `main.tex` to keep the
+  report near its page budget; restore `\listoffigures` / `\listoftables` after
+  `\tableofcontents` if the evaluation requires them (costs about two pages).
 - Facts about the system were verified against the repository at commit `e588b35`.

@@ -1,19 +1,12 @@
 \chapter{Methodology and Design}
 \label{ch:methodology}
 
-FoodLink was built incrementally, in the iterative style the proposal
-committed to~\cite{foodlinkProposal,sommerville2016}. Work was organised as
-numbered tasks, the most recent being Task~46. Each task was small enough to
-review on its own and carried its own regression tests. Every
-non-trivial technical choice was recorded with its reasoning and constraints
-in a decision log. That log currently holds entries D-01 to D-61, and
-this chapter cites entries by number where they explain a design
-choice~\cite{foodlinkArchitecture}. Three audits were run against the working
-system: a quality audit on 2 September 2026, and health audits on 5 and 10
-September 2026. Their findings were prioritised from P0 (stop everything) to
-P3 (backlog) and fixed in that order. The five P1 findings of the latest audit
-are all fixed (Section~\ref{sec:analysis}). Continuous integration runs the
-complete backend and frontend test suites on every push.
+FoodLink was built iteratively~\cite{foodlinkProposal,sommerville2016}, as small
+numbered tasks (the latest is Task~46), each with its own regression tests, and
+every non-trivial choice was recorded in a decision log cited below by number
+(D-01 to D-61)~\cite{foodlinkArchitecture}. Three audits of the running system
+(2, 5 and 10 September 2026) ranked findings from P0 to P3; all five P1 findings
+are fixed.
 
 \section{System Architecture}
 \label{sec:architecture}
@@ -21,1177 +14,402 @@ complete backend and frontend test suites on every push.
 \subsection{High-Level Design}
 \label{sec:hld}
 
-FoodLink follows a classic three-tier architecture, shown in
-Table~\ref{tab:layers}. The \emph{presentation tier} is a React single-page
-application running in the browser. The \emph{application tier} is a stateless
-REST API implemented with FastAPI and served by uvicorn. The \emph{data tier}
-is a relational database reached only through the SQLAlchemy object-relational
-mapper; no hand-written SQL appears in the application code.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{2.3cm}|L{5.4cm}|L{5.6cm}|}
-  \hline
-  \textbf{Tier} & \textbf{Responsibility} & \textbf{Principal source files} \\
-  \hline
-  Presentation (browser) & Role portals, forms, route guards, photo
-    resizing, rendering what the API returns & \code{frontend/src/App.tsx},
-    \code{context/}, \code{pages/}, \code{mobile/}, \code{lib/api.ts} \\
-  \hline
-  Application (API) & Authentication, authorization scopes, validation,
-    lifecycle rules, ranking, rate limiting, metrics & \code{code/foodlink/main.py},
-    \code{routers/}, \code{security.py}, \code{matching.py},
-    \code{serialize.py}, \code{ratelimit.py} \\
-  \hline
-  Data & Six tables, schema migrations, UTC time handling &
-    \code{models.py}, \code{database.py}, \code{migrate.py},
-    \code{code/migrations/} \\
-  \hline
-\end{tabular}
-\caption{Architectural tiers of FoodLink and where each is implemented}
-\label{tab:layers}
-\end{table}
-
-\paragraph{Backend layering.} Inside the API, dependencies point one way:
-\emph{routers} call \emph{shared pure modules}, and both use the \emph{ORM}.
-The five routers are \code{auth}, \code{donations}, \code{organisations},
-\code{admin} and \code{metrics}. The shared modules are \code{matching},
-\code{serialize}, \code{security} and \code{ratelimit}. The project
-deliberately has no separate service or repository layer (D-07). Logic that is
-genuinely reusable and independent of HTTP (the ranking arithmetic, the
-serializer that applies disclosure rules, token handling and rate limiting)
-was extracted into modules, while request orchestration stays in the router
-functions. The matcher in particular holds no database session, which is why
-it can be unit-tested directly.
-
-\paragraph{Read path.} When a signed-in user opens a page, the frontend's
-single HTTP client (\code{lib/api.ts}) attaches the stored bearer token and
-calls, for example, \code{GET /api/donations}. FastAPI resolves the dependency
-chain before the handler runs:
-\begin{enumerate*}[label=(\roman*)]
-  \item \code{get_db} opens a database session;
-  \item \code{get_current_user} verifies the token's signature and expiry,
-    then re-reads the user row, refusing a deleted or suspended account;
-  \item where a route is role-restricted, \code{require_roles} checks the role
-    held in that row.
-\end{enumerate*}
-The handler then asks a scope helper (\code{_readable_by}) for a SQL
-\code{WHERE} clause describing exactly which donations this caller may read,
-and applies it inside the query. Related rows are loaded with
-\code{selectinload}, so a page of donations costs a fixed number of queries
-rather than one per row. Finally \code{serialize.donation_out} converts each
-row into the camelCase JSON shape, withholding any field the caller's
-relationship to the donation does not justify. The frontend's
-\code{lib/adapters.ts} translates that JSON into the domain types the
-components render.
-
-\paragraph{Write path.} A button such as \emph{Accept} calls a mutation in
-\code{AppContext}, which posts to the API. The handler validates the body
-against a Pydantic schema. It then checks, in order, the lifecycle transition
-table, the caller's role, the caller's ownership of the donation and any
-target-specific rules. It applies side effects, performs a
-\emph{conditional} status write, appends a \code{StatusEvent}, and commits
-everything in a single transaction. The client then reloads its data from the
-server rather than patching its local copy (D-11), so the browser can never
-disagree with the server about the lifecycle state.
-
-\paragraph{External dependencies and background work.} The backend makes no
-outbound network requests. It has no email, SMS, push, map, payment or
-object-storage integration, and no scheduler, queue or worker process. In
-development, Vite's server proxies \code{/api} to the backend on port 8000, so
-the browser talks to a single origin. In any other arrangement, a CORS
-allowlist (by default \code{http://localhost:5173} and
-\code{http://127.0.0.1:5173}) decides which origins the browser may call from.
+FoodLink has three tiers: a React single-page application, a stateless REST API
+built with FastAPI, and a relational database (SQLite by default) reached only
+through the SQLAlchemy ORM. The API is the sole authority for every rule, makes
+no outbound requests (no email, SMS, maps or object storage) and runs no
+background workers. Five routers (\code{auth}, \code{donations},
+\code{organisations}, \code{admin}, \code{metrics}) call shared modules with no
+HTTP logic (\code{matching}, \code{serialize}, \code{security},
+\code{ratelimit}); there is deliberately no service layer (D-07).
 
 \subsection{Technical Stack}
 \label{sec:stack}
 
-\begin{itemize}
-  \item \textbf{Framework/Language:} Python~3 with FastAPI for the REST
-    API~\cite{fastapiDocs} (developed on Python~3.13; version~3.10 or later is
-    required). TypeScript with React~18 for the web
-    client~\cite{reactDocs}, built with Vite~\cite{viteDocs}.
-  \item \textbf{Database:} SQLite by default, through SQLAlchemy~2.0 with
-    typed mappings~\cite{sqlalchemyDocs,sqliteWhenToUse}. Schema changes are
-    managed by Alembic~\cite{alembicDocs}. The code is written to run on
-    PostgreSQL through the \code{DATABASE_URL} setting, but that configuration
-    is untested and no PostgreSQL driver is pinned.
-  \item \textbf{Tools:} pytest with FastAPI's test client for the
-    backend~\cite{pytestDocs}; Vitest with Testing Library and jsdom for the
-    frontend~\cite{vitestDocs}; GitHub Actions for continuous integration;
-    Git for version control.
-  \item \textbf{Libraries:} Pydantic~2 for validation and
-    serialization~\cite{pydanticDocs}; PyJWT for signed tokens; bcrypt for
-    password hashing; uvicorn as the ASGI server; React Router~6 for routing;
-    Tailwind CSS~3 for styling; lucide-react for icons.
-\end{itemize}
-
-Table~\ref{tab:stack} lists the exact version constraints declared in
-\code{code/requirements.txt} and \code{frontend/package.json}.
-
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|L{3.2cm}|L{2.4cm}|L{7.7cm}|}
+\begin{tabular}{|L{2.6cm}|L{10.7cm}|}
   \hline
-  \textbf{Component} & \textbf{Constraint} & \textbf{Role in FoodLink} \\
+  \textbf{Layer} & \textbf{Technologies} \\
   \hline
-  FastAPI & $\geq$ 0.115 & Routing, dependency injection, OpenAPI docs at \code{/docs} \\
+  Backend & Python 3.13 (3.10 or later required); FastAPI $\geq$\,0.115~\cite{fastapiDocs}, uvicorn, Pydantic~2, PyJWT, bcrypt \\
   \hline
-  uvicorn[standard] & $\geq$ 0.30 & ASGI server \\
+  Data & SQLAlchemy 2.0~\cite{sqlalchemyDocs}; Alembic $\geq$\,1.13; SQLite by default~\cite{sqliteWhenToUse} \\
   \hline
-  SQLAlchemy & $\geq$ 2.0 & ORM with typed \code{Mapped} columns \\
+  Frontend & React 18.3~\cite{reactDocs}, TypeScript 5.5, Vite 5.4, React Router 6, Tailwind CSS 3.4 \\
   \hline
-  Alembic & $\geq$ 1.13 & Migrations; one revision, \code{ae4636b1e6d4} \\
-  \hline
-  Pydantic[email] & $\geq$ 2.9 & Request/response schemas, field bounds, email validation \\
-  \hline
-  PyJWT & $\geq$ 2.9 & HS256 access tokens \\
-  \hline
-  bcrypt & $\geq$ 4.2 & Password hashing \\
-  \hline
-  python-multipart & $\geq$ 0.0.9 & Form-encoded login body \\
-  \hline
-  React / React DOM & \textasciicircum 18.3.1 & User interface \\
-  \hline
-  React Router DOM & \textasciicircum 6.26.0 & Client-side routes and portal guards \\
-  \hline
-  TypeScript & \textasciicircum 5.5.3 & Static typing (\code{tsc} in the build) \\
-  \hline
-  Vite & \textasciicircum 5.4.2 & Development server, proxy and production bundle \\
-  \hline
-  Tailwind CSS & \textasciicircum 3.4.10 & Utility-first styling \\
-  \hline
-  Vitest / Testing Library & \textasciicircum 3.2.7 / \textasciicircum 16.3.3 & Frontend unit and component tests \\
+  Testing and CI & pytest with FastAPI's test client; Vitest 3.2 with Testing Library; GitHub Actions \\
   \hline
 \end{tabular}
-\caption{Technology stack with the versions declared in the repository}
+\caption{Technology stack, from the dependency manifests}
 \label{tab:stack}
 \end{table}
 
 \subsection{System Requirements}
 \label{sec:sysreq}
 
-\paragraph{Software requirements.} To run FoodLink locally:
-\begin{itemize}
-  \item Python 3.10 or later (3.13 is used in development and CI), with the
-    packages in \code{code/requirements.txt};
-  \item Node.js with npm (CI uses Node.js 20), with the packages in
-    \code{frontend/package.json};
-  \item no separate database server, since SQLite is used by default and the
-    schema is migrated automatically when the API starts;
-  \item a signing key in \code{FOODLINK_SECRET_KEY} (at least 32 characters).
-    For local development only, \code{FOODLINK_DEV_INSECURE_SECRET=1} selects a
-    known development key and makes the server print a warning. Without one of
-    the two, the backend, the command-line tool and Alembic all refuse to start
-    (D-22);
-  \item a current web browser for the portals.
-\end{itemize}
-
-\paragraph{Hardware requirements.} The repository defines no minimum hardware
-specification, and none has been measured. The system has so far been
-developed and tested on ordinary developer laptops and on GitHub-hosted
-Ubuntu CI runners. Constraints relevant to future hosting are discussed in the
-Feasibility Report (Section~\ref{sec:feas-technical}).
+FoodLink needs Python 3.10 or later, Node.js with npm (CI uses Node.js~20) and a
+web browser; no database server is needed, because migrations run at start-up. A
+signing key of at least 32 characters must be set in \code{FOODLINK_SECRET_KEY},
+or the backend, CLI and Alembic refuse to start (D-22); no hardware
+specification has been defined or measured.
 
 \subsection{Functional Requirements}
 \label{sec:fr}
 
-Tables~\ref{tab:fr} and~\ref{tab:fr2} list the functional requirements that
-the implementation satisfies, derived from the proposal and verified against the routes and
-portals. ``API'' in the status column means the behaviour is implemented and
-tested in the API but has no control in the web portal yet.
+Table~\ref{tab:fr} lists the implemented functional requirements. \emph{[API]}
+marks behaviour that is implemented and tested in the API but not yet offered in
+the portal.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|c|L{9.4cm}|L{2.5cm}|}
+\begin{tabular}{|c|L{12.1cm}|}
   \hline
-  \textbf{ID} & \textbf{Requirement} & \textbf{Status} \\
+  \textbf{ID} & \textbf{Requirement (status)} \\
   \hline
-  FR-01 & A visitor can register as a donor, a recipient organisation or a
-    courier; registering as an administrator is refused. An organisation or
-    courier profile is created with the account. & Implemented \\
+  FR-01 & Self-registration as donor, organisation or courier; sign-in; own profile and password \\
   \hline
-  FR-02 & A user signs in with email and password and receives a bearer token;
-    a suspended account is refused with an explanatory message. & Implemented \\
+  FR-02 & A donor posts food details, an optional photo, a pickup pin and a future deadline \\
   \hline
-  FR-03 & A user can edit their name, organisation and phone number and change
-    their password. & Implemented \\
+  FR-03 & Posting ranks eligible organisations and records \code{MATCHED} if any exist \\
   \hline
-  FR-04 & A donor posts a donation with food name, category, quantity, unit,
-    storage type, description, optional photo, pickup address and coordinates,
-    optional preparation time and a future pickup deadline. & Implemented \\
+  FR-04 & Verified organisations browse open donations with a live match explanation; readers can fetch the ranked list \emph{[list: API, mobile]} \\
   \hline
-  FR-05 & On posting, the system ranks eligible organisations and records
-    \code{MATCHED} if at least one is eligible, freezing the leading score. & Implemented \\
+  FR-05 & A verified organisation accepts an open donation; overdue donations are refused \\
   \hline
-  FR-06 & A verified organisation browses the open pool (not yet accepted and
-    not past its deadline), with its own live match score and reasons. & Implemented \\
+  FR-06 & A courier sets availability, claims a pickup (single winner) and records pickup and delivery \\
   \hline
-  FR-07 & A reader of a donation can retrieve the ranked list of eligible
-    organisations with per-criterion scores and reasons. & Implemented (API; mobile) \\
+  FR-07 & The accepting organisation confirms receipt \\
   \hline
-  FR-08 & A verified organisation accepts an open donation on its own behalf;
-    an overdue donation cannot be accepted. & Implemented \\
+  FR-08 & A donor cancels before pickup; the accepting organisation releases a claimed pickup \emph{[API]} \\
   \hline
-  FR-09 & A courier browses unclaimed accepted pickups (coarse location only)
-    and claims one; only one courier can win a claim. & Implemented \\
+  FR-09 & Organisations manage standing requirements; donors browse the needs of verified organisations \\
   \hline
-  FR-10 & The assigned courier records collection and delivery. & Implemented \\
+  FR-10 & Organisations edit their profile; a name or map-pin change voids verification \emph{[pin: API]} \\
   \hline
-  FR-11 & The accepting organisation confirms receipt, completing the
-    donation and updating completion counters. & Implemented \\
+  FR-11 & Administrators verify or revoke organisations, run the expiry sweep, export donations as CSV, and manage accounts \emph{[accounts: API]} \\
+  \hline
+  FR-12 & Every transition is recorded with actor and server time; metrics derive from these records \\
   \hline
 \end{tabular}
-\caption{Functional requirements FR-01 to FR-11 and implementation status}
+\caption{Functional requirements}
 \label{tab:fr}
-\end{table}
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|c|L{9.4cm}|L{2.5cm}|}
-  \hline
-  \textbf{ID} & \textbf{Requirement} & \textbf{Status} \\
-  \hline
-  FR-12 & The donor cancels their donation before collection; an
-    administrator can also cancel after collection. & Implemented (API) \\
-  \hline
-  FR-13 & The accepting organisation releases a claimed pickup back to the
-    courier queue. & Implemented (API) \\
-  \hline
-  FR-14 & An organisation posts, revises, retires and reopens standing
-    requirements; donors browse active needs of verified organisations. & Implemented \\
-  \hline
-  FR-15 & An organisation maintains its profile (name, type, address, map pin,
-    capacity, contact); changing its name or pin voids its verification. & Implemented (pin: API only) \\
-  \hline
-  FR-16 & A courier sets availability and base location. & Implemented \\
-  \hline
-  FR-17 & An administrator verifies or revokes organisations. & Implemented \\
-  \hline
-  FR-18 & An administrator runs the expiry sweep, closing overdue unaccepted
-    donations. & Implemented \\
-  \hline
-  FR-19 & An administrator creates accounts of any role and suspends, restores,
-    renames or re-roles accounts, without locking out the last administrator. & Implemented (API) \\
-  \hline
-  FR-20 & Every lifecycle transition is recorded with previous state, new state,
-    actor, note and server time, and is shown as a timeline. & Implemented \\
-  \hline
-  FR-21 & Platform metrics (volumes, median time-to-claim, median handover time,
-    rescue rate, expiry-loss rate) are computed from the event ledger. & Implemented \\
-  \hline
-  FR-22 & An administrator exports the filtered donation list as CSV. & Implemented \\
-  \hline
-\end{tabular}
-\caption{Functional requirements FR-12 to FR-22 and implementation status}
-\label{tab:fr2}
 \end{table}
 
 \subsection{Non-Functional Requirements}
 \label{sec:nfr}
 
-Table~\ref{tab:nfr} lists the quality attributes the design targets, the
-concrete mechanism that addresses each, and any known gap.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{2.9cm}|L{6.9cm}|L{3.5cm}|}
-  \hline
-  \textbf{Attribute} & \textbf{How it is addressed} & \textbf{Known gap} \\
-  \hline
-  Security & bcrypt password hashes; signed, expiring JWTs; user row re-read on
-    every request; role, ownership, lifecycle and trust checks on the
-    server; fail-closed signing key & No token revocation, refresh or MFA \\
-  \hline
-  Privacy & Read scopes applied in SQL; exact pickup pin, address and donor name
-    withheld from unclaimed couriers; organisation distances blurred for
-    other readers & Description, photo and notes are bounded but not scoped \\
-  \hline
-  Data integrity & Transition table; every status write conditional on the
-    expected current state; single commit per request; UTC-normalised
-    timestamps & Expiry sweep writes without the guard; SQLite foreign keys
-    not enforced \\
-  \hline
-  Explainability & Published weights; per-criterion scores and plain-language
-    reasons with every match & Weights are judgement, not tuned on data \\
-  \hline
-  Auditability & Append-only, server-stamped \code{status_events} ledger with actor
-    & No admin audit log for account changes \\
-  \hline
-  Abuse resistance & Sliding-window rate limits on login, registration and
-    donation posting; bounded text and image sizes & Limits are per process \\
-  \hline
-  Usability & Short forms; browser-side photo resizing; human-readable error
-    sentences shown verbatim; role-specific portals & No notifications; phone
-    layout reachable only by URL \\
-  \hline
-  Maintainability & Typed models and schemas; rules expressed as data; decision
-    log; 651 automated tests & Frontend lint script inactive (no ESLint) \\
-  \hline
-  Portability & SQLite by default; all data access through SQLAlchemy &
-    PostgreSQL untested \\
-  \hline
-  Performance & Eager loading avoids per-row queries; list size capped at 500;
-    input and image caps & Every write re-downloads all lists; recipients
-    filtered in Python \\
-  \hline
-\end{tabular}
-\caption{Non-functional requirements, mechanisms and known gaps}
-\label{tab:nfr}
-\end{table}
+\textbf{Security}, \textbf{privacy} and \textbf{integrity} dominate: every
+request is authenticated and checked server-side for role, ownership, state and
+trust; reads are scoped in SQL and pickup locations and distances are withheld
+from readers who do not need them; and status changes are conditional writes
+recorded in an append-only, UTC-stamped ledger. The system must also be
+\textbf{explainable} (published weights, per-criterion reasons),
+\textbf{abuse-resistant} (rate limits, bounded inputs), \textbf{usable} (short
+forms, photo resizing, readable errors) and \textbf{maintainable} (typed
+schemas, rules expressed as data, a decision log and 651 automated tests).
 
 \subsection{Database Design}
 \label{sec:database}
 
-The schema has six tables, created by a single Alembic revision
-(\code{ae4636b1e6d4}) and defined in \code{code/foodlink/models.py}.
-Table~\ref{tab:entities} summarises them. The class diagram in
-Figure~\ref{fig:class} shows every attribute and multiplicity.
+Six tables, created by one Alembic revision (\code{ae4636b1e6d4}), carry the
+workflow (Table~\ref{tab:entities}). Attributes and multiplicities appear in the
+class diagram (Figure~\ref{fig:class}).
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|L{2.7cm}|L{6.1cm}|L{4.5cm}|}
+\begin{tabular}{|L{2.6cm}|L{10.7cm}|}
   \hline
-  \textbf{Table} & \textbf{Purpose and key columns} & \textbf{Relationships} \\
+  \textbf{Table} & \textbf{Role in the workflow} \\
   \hline
-  \code{users} & One table for every account: \code{name}, unique
-    \code{email}, \code{password_hash}, \code{role} (enumeration
-    \code{UserRole}), optional \code{organization} and \code{phone},
-    \code{is_active}, \code{created_at} & Has at most one recipient profile and
-    at most one courier profile; posts donations; acts in status events \\
+  \code{users} & Every account, with \code{role} as an enumeration; at most one recipient profile and one courier profile each \\
   \hline
-  \code{recipients} & A kitchen, shelter or NGO: \code{name}, \code{type},
-    \code{location}, optional \code{latitude}/\allowbreak\code{longitude},
-    \code{capacity} (meals), contact person and phone, \code{is_verified},
-    counters \code{accepted_donations} and \code{completed_donations} &
-    Optionally owned by a user; receives donations; owns requirements
-    (cascade delete) \\
+  \code{recipients} & Organisation profile: optional coordinates, capacity in meals, \code{is_verified}, acceptance and completion counters \\
   \hline
-  \code{volunteers} & A courier profile: base \code{location}, optional
-    coordinates, \code{is_available}, \code{completed_deliveries},
-    \code{rating} & Owned by exactly one user (unique foreign key); carries
-    donations \\
+  \code{volunteers} & Courier profile: base location, availability, completed deliveries \\
   \hline
-  \code{donations} & The core record: food details, optional inline
-    \code{image_url}, pickup \code{location} with exact coordinates,
-    \code{prepared_at}, absolute \code{pickup_deadline}, \code{status}
-    (enumeration \code{DonationStatus}), frozen \code{match_score},
-    \code{created_at} & Belongs to its donor; \code{recipient_id} is null until
-    accepted; \code{volunteer_id} is null until claimed; owns its events
-    (cascade delete) \\
+  \code{donations} & Food details, exact pickup pin, absolute deadline, \code{status}, frozen \code{match_score}; recipient and courier are null until accepted and claimed \\
   \hline
-  \code{status_events} & Append-only history: \code{from_status},
-    \code{to_status}, \code{actor_id}, \code{note}, and \code{occurred_at}
-    stamped by the server & Belongs to one donation; actor is a user, or null
-    for the expiry sweep \\
+  \code{status_events} & Append-only history: previous and new state, actor, note and server time \\
   \hline
-  \code{requirements} & A standing need: \code{food_type},
-    \code{quantity_needed}, \code{unit}, \code{beneficiary_count},
-    \code{urgency}, \code{daily_recurring}, \code{notes}, \code{is_active},
-    \code{created_at} & Belongs to one recipient organisation \\
+  \code{requirements} & An organisation's standing needs; \code{is_active} is their whole lifecycle \\
   \hline
 \end{tabular}
-\caption{Database tables, purpose and relationships}
+\caption{Database tables and their role}
 \label{tab:entities}
 \end{table}
 
-Several design choices shape this schema.
-\begin{itemize}
-  \item \textbf{Single user table, satellite profiles.} Roles are an enumerated
-    column, not a class hierarchy. Registering as an organisation creates a
-    \code{recipients} row, and registering as a courier creates a
-    \code{volunteers} row, so each account is ready to act immediately.
-  \item \textbf{Events instead of timestamp columns (D-01).} A column such as
-    \code{accepted_at} could record neither who acted nor a state entered twice
-    (a released pickup re-enters \code{ACCEPTED}). The ledger records both,
-    and adding a state needs no migration. \code{occurred_at} is never
-    accepted from a client, which is what makes the metrics attributable.
-  \item \textbf{Derived values stay derived (D-15).} An organisation's
-    reliability score is a computed property. It is 85 until the organisation
-    has three accepted donations, then $100 \times \text{completed} /
-    \text{accepted}$. Distance is computed from two coordinate pairs, never
-    stored. The one deliberate exception is \code{match_score}, frozen so
-    that the number shown later is the one a decision was actually made on
-    (D-30).
-  \item \textbf{Counters maintained by the lifecycle.} The acceptance and
-    completion counters are updated inside the same transaction as the
-    transition that justifies them. A cancellation takes a counted acceptance
-    back out (D-58), so a donor's or administrator's cancellation never lowers
-    an organisation's reliability.
-  \item \textbf{Time zones.} A custom column type, \code{UtcDateTime},
-    normalises every timestamp to timezone-aware UTC on write and re-attaches
-    UTC on read. SQLite has no timezone type, and a zoneless deadline would
-    otherwise be read by browsers as local time (D-09).
-  \item \textbf{Invariants in application code.} The state machine, coordinate
-    ranges and counters are enforced by the application, not by database
-    constraints, and SQLite does not enforce foreign keys by default. The
-    lifecycle's own writes nevertheless carry their preconditions in SQL
-    (Section~\ref{sec:module-lifecycle}).
-\end{itemize}
+Events replace timestamp columns because they record who acted and allow a
+state to be entered more than once (D-01). Reliability is computed, not stored:
+85 until three acceptances, then completed divided by accepted (D-15); the frozen
+\code{match_score} is the deliberate stored exception (D-30). Counters change in
+the same transaction as their transition. Invariants live in application code,
+since SQLite does not enforce foreign keys by default.
 
 \subsection{API and Backend Design}
 \label{sec:api}
 
-The API is a JSON REST interface under the \code{/api} prefix. Python code
-uses snake\_case, while wire fields are camelCase through a Pydantic alias
-generator; for example, \code{food_name} travels as \code{foodName}.
-Interactive OpenAPI documentation is served at \code{/docs}.
-Tables~\ref{tab:api} and~\ref{tab:api2} list all 27 routes.
+The API exposes 27 JSON routes under \code{/api}, with camelCase fields and
+OpenAPI documentation at \code{/docs}; Table~\ref{tab:api} summarises the
+resource groups.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|L{1.75cm}|L{5.0cm}|L{2.3cm}|L{4.25cm}|}
+\begin{tabular}{|L{2.3cm}|L{6.8cm}|L{4.2cm}|}
   \hline
-  \textbf{Method} & \textbf{Path} & \textbf{Who} & \textbf{Purpose} \\
+  \textbf{Group} & \textbf{Representative routes} & \textbf{Callers} \\
   \hline
-  POST & \code{/api/auth/register} & Anonymous & Create donor, organisation or courier account (10/hour per IP) \\
+  Auth & \code{POST /auth/register}, \code{POST /auth/login}, \code{/auth/me}, \code{POST /auth/password} & Anonymous (rate-limited); any signed-in user \\
   \hline
-  POST & \code{/api/auth/login} & Anonymous & Form-encoded email and password $\to$ token (30 per 5 min per IP) \\
+  Donations & \code{POST /donations}, \code{GET /donations}, \code{/donations/{id}}, \code{/donations/{id}/matches} and \code{/status} & Donor or admin to post; scoped readers; roles per target state \\
   \hline
-  GET, PATCH & \code{/api/auth/me} & Any signed-in & Read or edit own account \\
+  Organisations & \code{/recipients}, \code{/recipients/me}, \code{/requirements}, \code{/requirements/{id}}, \code{/volunteers}, \code{/volunteers/me} & Scoped by role and ownership \\
   \hline
-  POST & \code{/api/auth/password} & Any signed-in & Change password (current one required) \\
-  \hline
-  POST & \code{/api/donations} & Donor, admin & Post and rank a donation (donors: 10/hour per account, 30/hour per IP) \\
-  \hline
-  GET & \code{/api/donations} & Any signed-in & Scoped list; \code{status}, \code{mine}, \code{limit} $\leq$ 500 \\
-  \hline
-  GET & \code{/api/donations/{id}} & Any signed-in & One donation, same scope (404 outside it) \\
-  \hline
-  GET & \code{/api/donations/{id}/matches} & Readers of the donation & Ranked organisations, \code{limit} $\leq$ 25 \\
-  \hline
-  POST & \code{/api/donations/{id}/status} & Per target state & Drive a lifecycle transition (optional note) \\
-  \hline
-  GET & \code{/api/recipients} & Any signed-in & Scoped organisation directory \\
-  \hline
-  GET, PATCH & \code{/api/recipients/me} & Organisation & Read or edit own organisation \\
-  \hline
-  GET & \code{/api/requirements} & Any signed-in & Scoped needs; \code{includeInactive} \\
-  \hline
-  POST & \code{/api/requirements} & Organisation, admin & Post a standing need for own organisation \\
-  \hline
-  PATCH & \code{/api/requirements/{id}} & Owning organisation & Revise, retire or reopen \\
-  \hline
-  GET & \code{/api/volunteers} & Admin, organisation & Scoped courier roster \\
-  \hline
-  GET, PATCH & \code{/api/volunteers/me} & Courier & Read or edit own courier profile \\
+  Metrics, Admin & \code{GET /metrics}; \code{/admin/users}, \code{/admin/recipients/{id}/verify}, \code{/admin/maintenance/expire} & Any signed-in user; administrators only \\
   \hline
 \end{tabular}
-\caption{REST API routes, part 1: authentication, donations and organisations}
+\caption{API resource groups (paths relative to \texttt{/api}; plus \texttt{/api/health})}
 \label{tab:api}
 \end{table}
 
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{1.75cm}|L{5.0cm}|L{2.3cm}|L{4.25cm}|}
-  \hline
-  \textbf{Method} & \textbf{Path} & \textbf{Who} & \textbf{Purpose} \\
-  \hline
-  GET & \code{/api/metrics} & Any signed-in & Ledger-derived platform metrics \\
-  \hline
-  GET, POST & \code{/api/admin/users} & Admin & List accounts; create an account of any role \\
-  \hline
-  PATCH & \code{/api/admin/users/{id}} & Admin & Suspend, restore, rename, re-role \\
-  \hline
-  POST, DELETE & \code{/api/admin/recipients/{id}/verify} & Admin & Verify or revoke an organisation \\
-  \hline
-  POST & \code{/api/admin/maintenance/expire} & Admin & Expiry sweep \\
-  \hline
-  GET & \code{/api/health} & Anonymous & Liveness (no database access) \\
-  \hline
-\end{tabular}
-\caption[REST API routes, part 2: metrics, administration and health]{REST API routes, part 2: metrics, administration and health (27 routes in total; paired methods share a row)}
-\label{tab:api2}
-\end{table}
-
-\paragraph{Conventions.} The API answers consistently, and the frontend relies
-on that consistency.
-\begin{itemize}
-  \item \textbf{Errors are sentences.} Every refusal carries a human-readable
-    \code{detail}, which the frontend shows verbatim (D-18). Sign-in uses one
-    message for both an unknown email and a wrong password, so the response
-    does not reveal which addresses have accounts.
-  \item \textbf{Status codes carry meaning.} 401 means the token is invalid or
-    the account is unusable. 403 means the role or trust level is
-    insufficient. 404 means not found \emph{or not visible to you}. 409 means
-    the donation is not in a state that allows the request. 422 means the
-    input is invalid. 429 means a rate limit was hit, and carries a
-    \code{Retry-After} header.
-  \item \textbf{Denial never confirms existence.} A donation outside the
-    caller's scope returns the same 404 as one that does not exist (D-24), and
-    a directory the caller may not read returns an empty list (D-26).
-  \item \textbf{PATCH has three states per field (D-61).} An omitted field is
-    untouched. An explicit \code{null} clears a nullable column, such as a pin
-    or phone number, and leaves a mandatory column unchanged rather than
-    causing a server error.
-  \item \textbf{Privileged fields are absent from self-service schemas (D-16).}
-    For example, \code{RecipientUpdate} has no \code{is_verified} field, and
-    \code{ProfileUpdate} has no \code{role}.
-\end{itemize}
-
-\paragraph{Backend modules.} \code{main.py} creates the application, installs
-CORS and the routers, and runs \code{ensure_schema_current()} at start-up,
-which applies any outstanding Alembic revision. A database that predates
-migrations is reported rather than rewritten (D-23). \code{config.py} reads
-settings from the environment; the most important is the fail-closed signing
-key. \code{cli.py} provides \code{create-admin}, \code{promote},
-\code{reset-password} and \code{list-admins}. The first administrator can only
-be created this way, because the API has no route to one (D-04). \code{seed.py}
-loads demonstration data.
+Every error carries a human-readable sentence that the frontend shows verbatim
+(D-18). Status codes are consistent: 401 means an invalid token, 403 an
+insufficient role or trust, 404 not found \emph{or not visible}, 409 a state
+conflict, 422 invalid input and 429 a rate limit, and a denied read never
+confirms that a record exists (D-24, D-26). In a PATCH an omitted field is
+untouched and \code{null} clears only nullable columns (D-61), and role and
+verification are absent from self-service schemas (D-16).
 
 \subsection{Frontend Architecture}
 \label{sec:frontend}
 
-The web client is a React single-page application with a small, deliberate
-set of seams.
-\begin{itemize}
-  \item \textbf{One HTTP boundary (D-12).} \code{lib/api.ts} is the only module
-    that calls \code{fetch}. It attaches the token, turns error responses into
-    an \code{ApiError} carrying the server's sentence, and signals a 401 to the
-    whole application at once. \code{lib/adapters.ts} maps wire types to the
-    domain types the components use.
-  \item \textbf{Two context providers.} \code{AuthContext} keeps the token in
-    \code{localStorage} and re-fetches the account from \code{/api/auth/me} on
-    start-up, so a suspended or re-roled account cannot act on a stale copy of
-    its own permissions (D-13). \code{AppContext} loads the donation list (up to
-    500 rows) and the role-appropriate slices (requirements, organisations,
-    couriers, metrics) once per sign-in. It reloads them after every write
-    (D-11). A \code{useAction} hook tracks in-flight state and shows success or
-    error toasts.
-  \item \textbf{Routing and guards.} React Router mounts four portals:
-    \code{/donor}, \code{/ngo}, \code{/volunteer} and \code{/admin}.
-    Each sits behind a \code{ProtectedRoute} that redirects users away from
-    portals their role does not use; administrators may enter every portal.
-    These guards are a user-experience convenience, not security. The API
-    independently refuses anything the role may not do (D-14).
-  \item \textbf{Utilities.} \code{lib/geo.ts} chooses which distance or
-    location text to display, including the coarse pickup area shown to
-    couriers. \code{lib/time.ts} computes urgency from the absolute deadline.
-    \code{lib/impact.ts} computes each account's own impact figures from its
-    own donations (D-32). \code{lib/image.ts} decodes a chosen photo, scales its
-    long edge to at most 1280\,px and re-encodes it as JPEG at decreasing
-    quality until it fits the server's 256\,KiB cap (D-56).
-  \item \textbf{Styling.} Tailwind CSS with a customised warm palette and
-    typefaces (D-10), and lucide-react icons.
-  \item \textbf{Phone layouts.} A parallel set of phone-layout screens under
-    \code{src/mobile/} is mounted at \code{/m/*}. Nothing links to them yet, so they are reached by
-    typing the address (D-20).
-\end{itemize}
+\code{lib/api.ts} is the only network module; it attaches the token, surfaces
+the server's error sentence and signs the user out on a 401 (D-12).
+\code{AuthContext} keeps the token in \code{localStorage}, and \code{AppContext}
+loads up to 500 donations plus role-specific data, reloading after every write.
+Four portals (\code{/donor}, \code{/ngo}, \code{/volunteer}, \code{/admin}) sit
+behind route guards that are a convenience only, because the API enforces access
+(D-14), and phone-layout screens under \code{/m/*} exist but nothing links to
+them (D-20).
 
 \section{Implementation Details}
 \label{sec:implementation}
 
-This section documents the implementation module by module. Modules~1 to~3
-form the core functionality: the lifecycle, the matching and the access
-model. Modules~4 to~6 are the secondary features built on them.
-
 \subsection{Module 1: Core Functionality --- Donation Lifecycle}
 \label{sec:module-lifecycle}
 
-The donation lifecycle is the core of FoodLink. It lives in
-\code{routers/donations.py}, with the state graph in \code{models.py}. It has
-nine states (Table~\ref{tab:states}) and is governed by two tables that are
-plain data rather than scattered conditionals (D-02).
-\code{ALLOWED_TRANSITIONS} says which moves are legal at all; any other move is
-answered with 409. \code{TRANSITION_ROLES} says which roles may cause each target
-state; any other role is answered with 403.
+A donation passes through nine states: \code{AVAILABLE}, \code{MATCHED},
+\code{ACCEPTED}, \code{VOLUNTEER_ASSIGNED}, \code{PICKED_UP}, \code{DELIVERED},
+\code{COMPLETED}, \code{CANCELLED} and \code{EXPIRED}. The rules are data
+(D-02): \code{ALLOWED_TRANSITIONS} lists the legal moves, and anything else
+returns 409, while \code{TRANSITION_ROLES} lists who may cause each target state,
+and anyone else receives 403. Pickup, delivery, completion, cancellation and
+release also re-read the donation through the caller's own read scope, so a
+non-party receives 404 (D-34, D-35); Table~\ref{tab:transitions} summarises them.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|L{3.3cm}|L{10.0cm}|}
+\begin{tabular}{|L{4.3cm}|L{3.3cm}|L{5.7cm}|}
   \hline
-  \textbf{State} & \textbf{Meaning} \\
+  \textbf{Transition} & \textbf{Who} & \textbf{Key rules and side effects} \\
   \hline
-  \code{AVAILABLE} & Posted; no eligible organisation was ranked at posting. Open to verified organisations until the deadline. \\
+  (new) $\to$ \code{AVAILABLE} & Donor, admin & Future deadline; donor rate limits; bounded input \\
   \hline
-  \code{MATCHED} & Posted and at least one eligible organisation was ranked. Still open: a match is a suggestion, not a claim. \\
+  $\to$ \code{MATCHED} & Automatic at posting & At least one eligible organisation; top score frozen \\
   \hline
-  \code{ACCEPTED} & Bound to one organisation; waiting for a courier to claim the pickup. \\
+  \code{AVAILABLE}/\allowbreak\code{MATCHED} $\to$ \code{ACCEPTED} & Verified organisation (for itself), admin & Refused if overdue (409); counts an acceptance; freezes its score \\
   \hline
-  \code{VOLUNTEER_ASSIGNED} & Bound to one courier, who can now see the exact pickup location. \\
+  \code{ACCEPTED} $\to$ \code{VOLUNTEER_ASSIGNED} & Courier & Conditional claim; the loser receives 409 \\
   \hline
-  \code{PICKED_UP} & The courier has collected the food. \\
+  \code{VOLUNTEER_ASSIGNED} $\to$ \code{ACCEPTED} & Accepting organisation, admin & Release: courier cleared; not a new acceptance (D-41) \\
   \hline
-  \code{DELIVERED} & The courier has handed the food over. \\
+  $\to$ \code{PICKED_UP} $\to$ \code{DELIVERED} & Assigned courier, admin & Owned by the courier bound to the run \\
   \hline
-  \code{COMPLETED} & The organisation has confirmed receipt. Terminal. \\
+  \code{DELIVERED} $\to$ \code{COMPLETED} & Accepting organisation, admin & Increments completion counters \\
   \hline
-  \code{CANCELLED} & Withdrawn by the donor or an administrator. Terminal. \\
+  $\to$ \code{CANCELLED} & Owning donor before pickup; admin also after & Withdraws a counted acceptance (D-58) \\
   \hline
-  \code{EXPIRED} & Closed after the deadline passed without acceptance. Terminal. \\
-  \hline
-\end{tabular}
-\caption{Donation lifecycle states}
-\label{tab:states}
-\end{table}
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{3.4cm}|L{2.6cm}|L{7.3cm}|}
-  \hline
-  \textbf{Transition} & \textbf{Allowed roles} & \textbf{Conditions and side effects} \\
-  \hline
-  (new) $\to$ \code{AVAILABLE} & Donor, admin & Deadline in the future; donor rate limits; valid, bounded input. Appends the first event. \\
-  \hline
-  \code{AVAILABLE} $\to$ \code{MATCHED} & Automatic at posting; admin & Recorded when ranking finds an eligible organisation; freezes the leading score; the event note names the top match. \\
-  \hline
-  \code{AVAILABLE}/\allowbreak\code{MATCHED} $\to$ \code{ACCEPTED} & Organisation, admin & Deadline not passed (else 409). An organisation accepts only for itself; an administrator names one. The organisation must be verified (else 403). Binds it, adds one counted acceptance, freezes its score. \\
-  \hline
-  \code{ACCEPTED} $\to$ \code{VOLUNTEER_ASSIGNED} & Courier & Caller needs a courier profile (else 422); a conditional claim binds the courier (loser gets 409). Administrators are listed but have no courier profile, so always receive 422. \\
-  \hline
-  \code{VOLUNTEER_ASSIGNED} $\to$ \code{ACCEPTED} (release) & Accepting organisation, admin & Owned; the organisation must still be verified; clears the courier; not counted as a new acceptance and does not re-freeze the score (D-41). \\
-  \hline
-  \code{VOLUNTEER_ASSIGNED} $\to$ \code{PICKED_UP} & Assigned courier, admin & Owned by the courier bound to the run. \\
-  \hline
-  \code{PICKED_UP} $\to$ \code{DELIVERED} & Assigned courier, admin & Owned by the courier bound to the run. \\
-  \hline
-  \code{DELIVERED} $\to$ \code{COMPLETED} & Accepting organisation, admin & Owned; increments the organisation's completed donations and the courier's completed deliveries. \\
-  \hline
-  Any of the first four states $\to$ \code{CANCELLED} & Owning donor, admin & Owned; if an organisation was bound, its counted acceptance is withdrawn in the same transaction (D-58). \\
-  \hline
-  \code{PICKED_UP} $\to$ \code{CANCELLED} & Admin only & A donor receives 409 once the food is collected; the acceptance is withdrawn. \\
-  \hline
-  \code{AVAILABLE}/\allowbreak\code{MATCHED}/\allowbreak\code{ACCEPTED} $\to$ \code{EXPIRED} & Admin & Through the status route, or in bulk through the expiry sweep, which covers only overdue \code{AVAILABLE} and \code{MATCHED} donations. \\
+  $\to$ \code{EXPIRED} & Admin & Status route, or the sweep over overdue \code{AVAILABLE}/\allowbreak\code{MATCHED} donations \\
   \hline
 \end{tabular}
-\caption{Lifecycle transitions, permitted roles and enforced conditions}
+\caption{Lifecycle transitions and enforced rules}
 \label{tab:transitions}
 \end{table}
 
-\code{ALLOWED_TRANSITIONS} also permits \code{MATCHED} $\to$ \code{AVAILABLE},
-but no role is listed for it, so it cannot currently be performed.
+Donors may post 10 donations per hour per account and 30 per client address,
+with administrators exempt (D-59); free text is capped at 2{,}000 characters, and
+\code{imageUrl} must be an image data URL of at most 262{,}144 characters or an
+http(s) link (D-56, D-60).
 
-\subsubsection{Donation creation}
-\code{POST /api/donations} is open to donors and administrators. Before the
-handler runs, a dependency applies two sliding-window rate limits to donors:
-10 posts per hour per account and 30 per hour per client address, each with
-its own 429 sentence. Administrators are exempt (D-59). The Pydantic schema
-bounds every field to its column size. Free text such as the description is
-capped at 2{,}000 characters (D-60). The quantity must be positive, the
-coordinates must be valid, and \code{imageUrl} must be either a base64 image
-data URL of at most 262{,}144 characters or an \code{http(s)} link (D-56). The
-handler then refuses a deadline that is not in the future, stores the donation
-as \code{AVAILABLE} and appends the first event. It loads every recipient
-organisation with its active requirements, ranks them
-(Section~\ref{sec:module-matching}), and if any is eligible freezes the
-leading score and records \code{MATCHED} with the note ``Top match: \emph{name}''.
-Everything commits once, and the response is serialized under the caller's
-scopes.
+A read-check-write sequence once let two organisations both accept the same
+donation; this lost update was reproduced on SQLite before being
+fixed~\cite{kleppmann2017}. Every status change is now one statement,
+\code{UPDATE donations SET status = :to WHERE id = :id AND status = :from}. A row
+count other than one returns 409 and rolls back all side effects (D-55), and the
+courier claim binds the courier the same way (D-28).
+\code{SELECT ... FOR UPDATE} was rejected because SQLite ignores it.
 
-\subsubsection{The transition algorithm}
-Every other transition goes through one endpoint,
-\code{POST /api/donations/{id}/status}, whose handler \code{update_status} applies
-the checks in a fixed order:
-\begin{enumerate}
-  \item load the donation (404 if the id does not exist);
-  \item refuse a move absent from \code{ALLOWED_TRANSITIONS} (409);
-  \item refuse a caller whose role is not in \code{TRANSITION_ROLES} for the
-    target (403);
-  \item for \emph{owned} transitions (\code{PICKED_UP}, \code{DELIVERED},
-    \code{COMPLETED}, \code{CANCELLED}, and \code{ACCEPTED} when it is a
-    release), re-load the donation through the caller's own read scope. A
-    caller who is not this donation's donor, courier or accepting organisation
-    therefore receives the same 404 a read would give (D-34, D-35);
-  \item apply the target-specific rules and side effects described in
-    Table~\ref{tab:transitions};
-  \item perform the conditional status write and append the event, or refuse
-    with 409;
-  \item for a cancellation, withdraw the counted acceptance;
-  \item commit once and return the donation as the caller is allowed to see it.
-\end{enumerate}
-
-\subsubsection{Concurrency: conditional writes}
-A lifecycle system that reads a row, checks it in Python and then writes it is
-vulnerable to \emph{lost updates}. Two organisations can both read
-\code{AVAILABLE}, both conclude they may accept, and both succeed, which
-really happened before this was fixed~\cite{kleppmann2017}. FoodLink closes
-this by making the check and the write the same database statement. The
-helper \code{_record} advances the status with
-\begin{center}
-\code{UPDATE donations SET status = :to WHERE id = :id AND status = :from}
-\end{center}
-and treats a row count other than one as a conflict. It returns 409 with the
-state the row is now in, and appends no event. Because the write runs last
-before the single commit, a refused transition also rolls back its side
-effects, such as a counter increment or a frozen score (D-55). The courier
-claim uses a second conditional statement. It sets \code{volunteer_id} only
-if the status is still the expected one and the pickup is unclaimed (or
-already this courier's), so exactly one of several simultaneous claims wins
-(D-28). The alternative, \code{SELECT ... FOR UPDATE}, was rejected because
-SQLite silently ignores it. The fix would then have been untestable on the
-engine the project uses.
-
-\subsubsection{Acceptance, claim and release}
-An organisation always accepts as itself. If it names another organisation's
-id, it receives 403. Only an administrator may accept on an organisation's
-behalf. Verification is re-checked at acceptance, so an unverified
-organisation cannot take custody even if it obtains a donation's id (D-06). An
-overdue donation in the open pool cannot be accepted (409). This keeps
-behaviour identical whether or not the expiry sweep has run (D-50).
-Acceptance from \code{VOLUNTEER_ASSIGNED} is a \emph{release}, not an
-acceptance: the courier is removed so that other couriers can claim the pickup,
-and neither the acceptance counter nor the frozen score changes (D-41). In
-the current web portal there is no release control; it is available through
-the API.
-
-\subsubsection{Cancellation and expiry}
-A donor may cancel their own donation in \code{AVAILABLE}, \code{MATCHED},
-\code{ACCEPTED} or \code{VOLUNTEER_ASSIGNED}. Once the food is in a courier's
-hands (\code{PICKED_UP}), only an administrator may cancel. If an organisation
-was bound, the cancellation decrements its acceptance counter with a single
-conditional SQL statement floored at zero. As a result, a cancellation it
-did not cause cannot lower its reliability score (D-58). The expiry sweep
-(\code{POST /api/admin/maintenance/expire}) closes every \code{AVAILABLE} or
-\code{MATCHED} donation whose deadline has passed. It appends an event with no
-actor and the note ``Deadline passed with no recipient'', and returns the
-number expired. Nothing schedules it; an administrator triggers it from the
-donations page.
-
-\subsubsection{The event ledger and metrics}
-Each \code{StatusEvent} records the previous and new state, the acting user,
-an optional note (bounded to 2{,}000 characters) and a server timestamp. The
-donation detail screens render these rows as a timeline. \code{GET
-/api/metrics} computes the proposal's evaluation figures from the same rows
-(Section~\ref{sec:module-admin}).
+The expiry sweep is triggered manually and closes overdue \code{AVAILABLE} and
+\code{MATCHED} donations with actor-less events. Each \code{StatusEvent} records
+the previous and new state, actor, optional note and server time, and drives both
+user timelines and platform metrics.
 
 \subsection{Module 2: Core Functionality --- Recipient Matching and Explainability}
 \label{sec:module-matching}
 
-\code{matching.py} ranks recipient organisations for a donation. It is a
-transparent weighted-sum heuristic and deliberately \emph{not} a learned
-model: the proposal committed to an explainable ranking that a recipient can
-read and a marker can verify by hand (D-05). The module is pure Python with
-no database access; the routers load the rows and pass them in.
-
-\subsubsection{Eligibility gates}
-Before any score is computed, \code{score_pair} excludes an organisation
-entirely (returns nothing) if any of three gates fails (D-06):
-\begin{enumerate*}[label=(\roman*)]
-  \item it is not verified by an administrator;
-  \item it has no map coordinates;
-  \item its great-circle distance from the pickup pin exceeds the service
-    radius $R$, which is 8\,km by default (\code{MAX_MATCH_RADIUS_KM}).
-\end{enumerate*}
-Gating rather than scoring low is intentional. A suggestion the organisation
-is not allowed to act on would be a false promise to the donor.
-
-\subsubsection{Scoring criteria}
-Let $d$ be the haversine distance in kilometres between the pickup pin and
-the organisation~\cite{sinnott1984haversine}, $q$ the donation's quantity,
-$c$ the organisation's capacity in meals, $a$ and $k$ its accepted and
-completed donation counts, and $m$ the minutes remaining until the pickup
-deadline. Each criterion yields an integer from 0 to 100 (``round'' denotes
-Python's \code{round}, which sends exact halves to the nearest even integer).
-
-\emph{Distance} decays linearly to zero at the radius:
+\code{matching.py} ranks organisations with a transparent weighted-sum
+heuristic; it is \emph{not} a learned model (D-05). An organisation is
+excluded entirely, rather than scored low, if it is
+unverified, has no coordinates, or lies beyond the radius $R$ (8\,km by default)
+(D-06). Let $d$ be the haversine distance in km~\cite{sinnott1984haversine}, $q$
+the quantity, $c$ the capacity in meals, $r=q/c$, $m$ the minutes to the
+deadline, and $a$ and $k$ the organisation's accepted and completed counts. Each
+criterion in Table~\ref{tab:criteria} scores 0--100, and
 \begin{equation}
-  S_D = \begin{cases} \operatorname{round}\!\left(100\left(1 - d/R\right)\right) & d < R\\ 0 & d \geq R \end{cases}
-\end{equation}
-
-\emph{Quantity fit} is assessed only when the donation's unit is ``Meals'',
-because capacity is counted in meals and the repository holds no conversion
-rule (D-42). With $r = q/c$, overfilling is penalised twice as steeply as
-underfilling:
-\begin{equation}
-  S_Q = \begin{cases} \operatorname{round}(40 + 60r) & r \leq 1\\ \max\left(0, \operatorname{round}(100 - 120(r-1))\right) & r > 1 \end{cases}
-\end{equation}
-
-\emph{Capacity headroom} measures how much room the organisation keeps
-afterwards, in absolute meals, saturating at 100 spare meals:
-\begin{equation}
-  S_C = \begin{cases} \operatorname{round}\!\left(100 \min\left(1, (c-q)/100\right)\right) & c - q > 0\\ 0 & c - q \leq 0 \end{cases}
-\end{equation}
-For any other unit (Kg, Boxes, Pieces), $S_Q = S_C = 50$, which is identical for
-every candidate and so cannot reorder them, and the explanation says the size
-was not assessed.
-
-\emph{Deadline comfort} subtracts a rough travel estimate
-$t = 60d/20$ minutes (a flat 20\,km/h, never shown to users as an arrival time)
-and treats two hours of slack as fully comfortable:
-\begin{equation}
-  S_T = \begin{cases} \operatorname{round}\!\left(100\min\left(1, (m - t)/120\right)\right) & m - t > 0\\ 0 & m - t \leq 0 \end{cases}
-\end{equation}
-
-\emph{Reliability} starts optimistic so that a new organisation is not
-permanently outranked by one with a single lucky completion:
-\begin{equation}
-  S_R = \begin{cases} 85 & a < 3\\ \operatorname{round}(100k/a) & a \geq 3 \end{cases}
-\end{equation}
-
-The overall score is the weighted sum, with the weights published in the
-\code{WEIGHTS} constant (Table~\ref{tab:weights}):
-\begin{equation}
-  S = \operatorname{round}\left(0.25\,S_D + 0.25\,S_Q + 0.20\,S_C + 0.15\,S_T + 0.15\,S_R\right)
+  S = \operatorname{round}\left(0.25\,S_D + 0.25\,S_Q + 0.20\,S_C + 0.15\,S_T + 0.15\,S_R\right).
   \label{eq:overall}
 \end{equation}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|l|r|L{8.8cm}|}
+\begin{tabular}{|L{3.3cm}|c|L{8.3cm}|}
   \hline
-  \textbf{Criterion} & \textbf{Weight} & \textbf{Question it answers} \\
+  \textbf{Criterion} & \textbf{Weight} & \textbf{Score} \\
   \hline
-  Distance & 0.25 & How close is the organisation to the pickup? \\
+  Distance $S_D$ & 0.25 & $100(1-d/R)$; 0 at or beyond $R$ \\
   \hline
-  Quantity fit & 0.25 & Does the donation's size suit the organisation's capacity? \\
+  Quantity fit $S_Q$ & 0.25 & Meals only: $40+60r$ if $r\le1$, else $\max(0,\,100-120(r-1))$ \\
   \hline
-  Capacity headroom & 0.20 & How much room will the organisation still have afterwards? \\
+  Capacity headroom $S_C$ & 0.20 & Meals only: $100\min(1,(c-q)/100)$; 0 if no room remains \\
   \hline
-  Deadline comfort & 0.15 & Can a collection fit comfortably before the food expires? \\
+  Deadline comfort $S_T$ & 0.15 & $100\min(1,(m-t)/120)$ with travel time $t=60d/20$ minutes \\
   \hline
-  Reliability & 0.15 & How often has the organisation seen accepted donations through? \\
-  \hline
-\end{tabular}
-\caption{Published weights of the five matching criteria (sum 1.00)}
-\label{tab:weights}
-\end{table}
-
-\subsubsection{Ordering and the role of requirements}
-Candidates are sorted by a total order: overall score first, then a
-\emph{requirement tier}, then requirement fit, then the urgency of that
-requirement, and finally the organisation id. An organisation's active
-standing requirements therefore break ties but never change a score (D-52).
-The best requirement for a donation is the one whose unit matches the
-donation's unit (no conversion) with the highest fit, where fit is 100 when
-the donation covers the stated quantity $n$ and $\operatorname{round}(40 + 60q/n)$
-otherwise. A kitchen whose need can be measured ranks above one whose need
-cannot, which ranks above one with no posted need. Requirements are kept out of
-the score because the frozen \code{match_score} is visible to readers who may
-not read requirements. A score derived from them would leak private demand.
-
-\subsubsection{Explanations}
-Every result carries the five sub-scores and a list of reasons generated from
-fixed thresholds (Table~\ref{tab:reasons}). Distances are printed only when
-the reader is entitled to the true figure.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{4.4cm}|L{8.9cm}|}
-  \hline
-  \textbf{Condition} & \textbf{Reason text (as returned by the API)} \\
-  \hline
-  $S_D \geq 70$ & ``\emph{d} km away in a straight line --- well inside the collection radius'' (or, with a blurred position, ``Well inside the collection radius'') \\
-  \hline
-  Unit is not Meals & ``Donation size not assessed: \emph{q unit} cannot be compared with a capacity stated in meals'' \\
-  \hline
-  $S_Q \geq 80$ (else $q > c$) & ``\emph{q} meals fits the \emph{c}-meal daily capacity closely'' (else ``Donation exceeds stated capacity by \ldots'') \\
-  \hline
-  $S_C \geq 70$ & ``\emph{c}$-$\emph{q} meals of capacity still free afterwards'' \\
-  \hline
-  Requirement assessed & ``Matches a standing need this kitchen posted for \ldots'' or ``Covers part of a standing need \ldots'' \\
-  \hline
-  $S_T \geq 70$ / $S_T = 0$ & ``Comfortable margin before the pickup deadline'' / ``Deadline is too close for the estimated collection time'' \\
-  \hline
-  $S_R \geq 85$ & ``\emph{S\textsubscript{R}}\% completion record on accepted donations'' \\
+  Reliability $S_R$ & 0.15 & 85 below three acceptances, else $100k/a$ \\
   \hline
 \end{tabular}
-\caption{Threshold rules that generate the plain-language match explanation}
-\label{tab:reasons}
+\caption{Matching criteria and published weights}
+\label{tab:criteria}
 \end{table}
 
-\subsubsection{Worked example}
-Table~\ref{tab:example} shows the matcher's actual output for a sample
-donation, obtained by calling \code{score_pair} from the repository on
-in-memory objects. The donation is 60 meals, room temperature, with a deadline
-three hours away. Kitchen~A is new, 2\,km away, with capacity 100. Kitchen~B
-is 5\,km away, with capacity 250 and 9 completions out of 10 acceptances. Kitchen~C
-is 1\,km away but unverified. Kitchen~E is verified but 9\,km away.
+For units other than meals, $S_Q=S_C=50$ for every candidate, so size cannot
+reorder the ranking, and the explanation says size was not assessed (D-42).
+Candidates are ordered by $S$, then by how well one of their active standing
+requirements fits the donation (same unit only), then by urgency, and finally by
+id (D-52). Requirements break ties but never change a score, which is visible to
+readers who may not read requirements. Every result carries
+the five sub-scores and reasons from fixed thresholds, such as ``2.0 km away in a
+straight line --- well inside the collection radius''.
 
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|l|r|r|r|r|r|r|r|}
-  \hline
-  \textbf{Organisation} & $d$ (km) & $S_D$ & $S_Q$ & $S_C$ & $S_T$ & $S_R$ & $S$ \\
-  \hline
-  Kitchen A & 2.0 & 75 & 76 & 40 & 100 & 85 & \textbf{74} \\
-  \hline
-  Kitchen B & 5.0 & 38 & 54 & 100 & 100 & 90 & \textbf{72} \\
-  \hline
-  Kitchen C (unverified) & \multicolumn{7}{c|}{excluded by the verification gate} \\
-  \hline
-  Kitchen E (9 km) & \multicolumn{7}{c|}{excluded by the radius gate} \\
-  \hline
-\end{tabular}
-\caption{Matcher output for a 60-meal donation (computed with \texttt{score\_pair})}
-\label{tab:example}
-\end{table}
+As a worked example, for 60 meals due in three hours the repository's
+\code{score_pair} scores a new kitchen 2\,km away with capacity 100 as
+$0.25(75)+0.25(76)+0.20(40)+0.15(100)+0.15(85)=73.5$, rounded to 74; a kitchen
+5\,km away with capacity 250 and 9 of 10 completions scores 72, and unverified or
+9\,km-distant kitchens are excluded.
 
-For Kitchen~A, Equation~\ref{eq:overall} gives
-$0.25(75) + 0.25(76) + 0.20(40) + 0.15(100) + 0.15(85) = 73.5$, which rounds to 74.
-Its reasons were ``2.0 km away in a straight line --- well inside the collection
-radius'', ``Comfortable margin before the pickup deadline'' and ``85\% completion
-record on accepted donations''. Kitchen~B ranks second despite a perfect
-headroom score, because distance and quantity fit carry more weight. The
-same donation posted in kilograms scores Kitchen~A at 69: both size criteria
-fall to 50, and the explanation states that the size was not assessed.
-
-\subsubsection{Two scores and location privacy}
-A donation carries two different figures that must not be confused (D-30).
-\code{matchScore} is \emph{frozen}. It is written at posting (the top
-candidate's score) and replaced at the first acceptance by the accepting
-organisation's own score. \code{viewerMatch} is \emph{live}. It is the reading
-organisation's own ranking, computed on each request while the donation is
-still open, and it is what the organisation's \emph{Available Donations} screen
-shows with its breakdown. Location-derived figures are restricted because
-scores and distances read back from pins of a donor's choosing could otherwise
-be used to triangulate an organisation's private address (D-45, D-47). When
-anyone other than the organisation itself (or an administrator) reads a
-ranking, the organisation's coordinates are first snapped to a 0.01$^\circ$ grid
-(roughly one kilometre), and \code{distanceKm} is returned as null. The frozen
-\code{matchScore} and \code{distanceKm} on a donation are visible only to
-administrators and to the organisation the figure describes. Eligibility
-itself is always decided on the true position, so the set of ranked
-organisations never depends on who is asking.
-
-\subsubsection{Design for future replacement}
-The router and the response shape depend only on \code{score_pair} and
-\code{rank_recipients}. If outcome data later justified a learned ranker, it
-could replace \code{score_pair} without changing the rest of the system. That
-is a design property, not an implemented capability.
+The frozen \code{matchScore} records the decision: it is written at posting and
+replaced at first acceptance, whereas \code{viewerMatch} is an organisation's own
+live score for an open donation (D-30). For readers other than that organisation
+or an administrator, positions are snapped to a 0.01$^\circ$ grid and
+\code{distanceKm} and the frozen score are withheld, which prevents triangulating
+private addresses (D-45, D-47); eligibility is still decided on the true
+position.
 
 \subsection{Module 3: Core Functionality --- Authentication, Authorization and Trust}
 \label{sec:module-auth}
 
-\subsubsection{Accounts and authentication}
-Registration (\code{POST /api/auth/register}) accepts a name, an email, a
-password of 8 to 128 characters and a role. The schema itself refuses the
-\code{admin} role, so the restriction is visible in the published API
-documentation (D-04). Registering as an organisation creates an
-\emph{unverified} recipient row, optionally with type, address, coordinates
-and capacity. Registering as a courier creates a courier row. Passwords are
-stored as bcrypt hashes~\cite{provos1999bcrypt}. Sign-in uses the OAuth~2.0
-password form, with the email in the \code{username} field~\cite{rfc6749}. It
-returns a JSON Web Token signed with HMAC-SHA256~\cite{rfc7519}, carrying the
-user id, role and an expiry 720 minutes ahead. The browser keeps the token in
-\code{localStorage} and sends it as a bearer header. On every request,
-\code{get_current_user} verifies the token and \emph{re-reads the user row},
-ignoring the role claim. A suspension or role change therefore takes effect on
-the very next request (D-03). There is no refresh token, revocation list or
-multi-factor authentication. The signing key must be configured and at least
-32 characters long; the service will not start with a missing or known-public
-key (D-22).
+Self-registration refuses the administrator role at the schema level (D-04), and
+an organisation account starts \emph{unverified}. Passwords of 8--128 characters
+are stored as bcrypt hashes~\cite{provos1999bcrypt}, and
+sign-in returns an HS256 JSON Web Token valid for 720
+minutes~\cite{rfc7519}. Every request re-reads the user row and ignores the
+token's role claim, so a suspension takes effect immediately (D-03). Lockout
+guards stop administrators from demoting themselves or the last active
+administrator.
 
-\subsubsection{Administrators}
-The first administrator can only be created from the command line
-(\texttt{python -m foodlink.cli create-admin}), because the API offers no
-anonymous path to that role. Later administrators are created by an existing
-administrator through \code{POST /api/admin/users}. Two lockout guards
-refuse an administrator suspending or demoting their own account, and refuse
-suspending or demoting the last active administrator.
+Every operation passes four authorization layers: \textbf{role} (403);
+\textbf{ownership}, as a SQL clause (404 or an empty list); \textbf{lifecycle
+legality} (409); and \textbf{trust}, meaning administrator verification. FoodLink
+also controls \emph{what} a record reveals to each reader
+(Table~\ref{tab:scopes}).
 
-\subsubsection{Four layers of authorization}
-Every operation passes through up to four independent checks:
-\begin{enumerate}
-  \item \textbf{Role}: \code{require_roles} or \code{TRANSITION_ROLES} (403).
-  \item \textbf{Ownership}: expressed as a SQL \code{WHERE} clause returned by a
-    scope helper, so the database never returns rows the caller may not see
-    (404 or an empty list).
-  \item \textbf{Lifecycle legality}: \code{ALLOWED_TRANSITIONS}, the donor
-    cancellation window and the deadline rule (409).
-  \item \textbf{Trust}: \code{Recipient.is_verified}, set only by an
-    administrator, and read by ranking, acceptance and the organisation's
-    access to the open pool (D-37, D-53).
-\end{enumerate}
-
-Table~\ref{tab:scopes} lists the read scopes as implemented. Besides deciding
-\emph{which} records a caller receives, FoodLink decides \emph{what} a record
-says to that caller. An unclaimed pickup in a courier's queue carries a
-coarse \code{pickupArea} (the donor's pin snapped to the 0.01$^\circ$ grid)
-instead of the exact coordinates, address text and donor name. Claiming the run
-is what discloses them (D-57).
-
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|L{3.1cm}|L{1.8cm}|L{2.2cm}|L{3.2cm}|L{2.4cm}|}
+\begin{tabular}{|L{3.4cm}|L{1.4cm}|L{2.2cm}|L{3.3cm}|L{2.4cm}|}
   \hline
   \textbf{Data} & \textbf{Admin} & \textbf{Donor} & \textbf{Organisation} & \textbf{Courier} \\
   \hline
-  Donations (list, by id, matches) & All & Own & Own organisation's, plus the open pool only if verified & Unclaimed \code{ACCEPTED} plus own runs \\
+  Donations readable & All & Own & Own, plus the open pool if verified & Unclaimed pickups and own runs \\
   \hline
-  Exact pickup pin, address, donor name & All & Own & All it can read & Own claimed runs only \\
+  Pickup pin, address, donor & All & Own & All it can read & Own claimed runs only \\
   \hline
   Frozen score, true distance & All & None & Own organisation & None \\
   \hline
-  Organisation directory (with phone) & All & None & Own row & None \\
+  Contact directories (phones) & All & None & Own row; own couriers & None \\
   \hline
-  Courier roster (with phone) & All & 403 & Couriers on own donations & 403 \\
-  \hline
-  Requirements & All & Active needs of verified organisations & Own (retired too, on request) & None \\
-  \hline
-  Requirement inputs to a ranking & All & Verified organisations & Own organisation & None \\
+  Standing requirements & All & Verified organisations' needs & Own & None \\
   \hline
 \end{tabular}
-\caption{Read and disclosure scopes by role, as implemented}
+\caption{Reader-specific read and disclosure scopes}
 \label{tab:scopes}
 \end{table}
 
-\subsubsection{Verification as a trust boundary}
-Organisations begin unverified, except when an administrator creates the
-account, which counts as vouching for it. An unverified organisation is not
-ranked, cannot see the open pool and cannot accept. Its own donations remain
-readable to it. Verification is read live on every request, so revoking it
-closes the pool at once. Because verification vouches for \emph{who} and
-\emph{where} an organisation is, a real change to its name, latitude or
-longitude through \code{PATCH /api/recipients/me} clears the flag in the same
-commit, and an administrator must verify it again (D-54). Resubmitting unchanged
-values, or editing type, address text, capacity or contact details, does not
-affect it.
-
-\subsubsection{Abuse limits and input bounds}
-Anonymous routes are limited per client address (30 sign-in attempts per 5
-minutes; 10 registrations per hour). Donation posting is limited per donor
-account and per address (Section~\ref{sec:module-lifecycle}). All limits are
-sliding windows held in the server process's memory (D-27, D-59). Request
-schemas bound every donation and requirement text field to its column size,
-bound free text to 2{,}000 characters, and bound photos to 256\,KiB of data URL.
-Account and organisation profile text fields are not yet bounded.
+Verification is the trust boundary: unverified organisations are not ranked,
+cannot see the open pool and cannot accept (D-37, D-53). It is read on every
+request, so revoking it takes effect at once, and a real change to an
+organisation's name, latitude or longitude clears it in the same commit (D-54).
+Couriers see only a coarse \code{pickupArea} until a claim binds the pickup to
+them (D-57).
 
 \subsection{Module 4: Secondary Features --- Standing Requirements}
 \label{sec:module-requirements}
 
-Standing requirements make demand visible before surplus appears. An
-organisation posts a need with a food type, quantity and unit, beneficiary
-count, an urgency label (the ranking recognises High, Medium and Low), a
-daily-recurring flag and notes
-(\code{POST /api/requirements}). The whole lifecycle is one flag,
-\code{is_active}, changed through \code{PATCH /api/requirements/{id}} (D-29).
-Setting it false retires a need, whether it was met or no longer applies. The
-row is kept, and setting the flag true reopens it. Ownership is part of the
-query, so another organisation's requirement id returns 404. Reads are scoped
-(D-44, D-46): donors see the active needs of verified organisations on the
-\emph{Needs Board}; an organisation sees its own, including retired ones when
-it asks with \code{includeInactive}; couriers see none. In ranking, an active
-requirement only breaks ties and adds a reason
-(Section~\ref{sec:module-matching}). Food type, beneficiary count, recurrence
-and notes are not ranking inputs.
+An organisation posts needs with a food type, quantity and unit, beneficiaries,
+urgency, a recurrence flag and notes. One flag, \code{is_active}, is their whole
+lifecycle (D-29): false retires a need but keeps the row, true reopens it.
+Ownership is enforced in the query, so another
+organisation's need returns 404, and while donors see active needs of verified
+organisations on the \emph{Needs Board}, couriers see none (D-44, D-46). In
+ranking, requirements only break ties and add a reason.
 
 \subsection{Module 5: Secondary Features --- Administration and Platform Metrics}
 \label{sec:module-admin}
 
-The administration router is protected by a single role dependency declared
-once for all of its routes. Through the web portal, an administrator can
-verify or revoke organisations (\emph{Partner Organizations Directory}), browse and filter
-every donation, export the filtered list as CSV, and trigger the expiry sweep
-(\emph{Platform Donation Ledger}). The administrator can also view the courier roster
-and the analytics dashboard. Account management (listing, creating,
-suspending, restoring and re-roling users) is implemented and tested in the API
-but has no screen yet. Because every entry in \code{TRANSITION_ROLES} includes
-the administrator, an administrator can also perform lifecycle transitions on
-a party's behalf, subject to the same legality rules.
-
-\code{GET /api/metrics} loads every donation with its events and computes the
-following figures in Python:
-\begin{itemize}
-  \item totals of donations, completed, active (non-terminal) and expired
-    donations, organisations and couriers; and the sum of the quantities of
-    completed donations (summed across units);
-  \item \textbf{median time-to-claim}: minutes from a donation's creation to
-    its first \code{ACCEPTED} event;
-  \item \textbf{median handover time}: minutes from the first \code{ACCEPTED}
-    event to the \code{DELIVERED} event;
-  \item \textbf{rescue rate}: completed donations whose \code{COMPLETED} event
-    is no later than the pickup deadline, as a percentage of donations that
-    completed or expired;
-  \item \textbf{expiry-loss rate}: expired donations as a percentage of those
-    that completed or expired.
-\end{itemize}
-Any signed-in role may call the endpoint; only the administrator screens
-display it. The donor, organisation and courier impact pages compute figures
-from the account's own donations instead (D-32).
+All administration routes sit behind one role dependency. Administrators verify
+or revoke organisations, filter and export donations as CSV, run the expiry
+sweep, and view the courier roster and analytics; account management is API-only.
+They also appear in every entry of \code{TRANSITION_ROLES}, so they can act on a
+party's behalf under the same rules. \code{GET /api/metrics} derives volume
+totals and, from the event ledger, median \textbf{time-to-claim} (creation to
+first \code{ACCEPTED}), median \textbf{handover time} (\code{ACCEPTED} to
+\code{DELIVERED}), the \textbf{rescue rate} (completions by the deadline over
+completed plus expired donations) and the \textbf{expiry-loss rate} (expired over
+that same total). Role impact pages use the account's own donations (D-32).
 
 \subsection{Module 6: Secondary Features --- Role Portals and User Workflows}
 \label{sec:module-portals}
 
-Table~\ref{tab:portals} maps each portal's screens to the workflows they
-support. Every action button calls the API described above and then refreshes
-the data.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{2.45cm}|L{4.1cm}|L{6.75cm}|}
-  \hline
-  \textbf{Portal} & \textbf{Routes} & \textbf{Workflow supported} \\
-  \hline
-  Public & \code{/}, \code{/login} & Product landing page; sign-in and registration with role selection \\
-  \hline
-  Donor & \code{/donor}, \code{/donor/create}, \code{/donor/donations}, \code{/donor/donations/:id}, \code{/donor/needs}, \code{/donor/impact}, \code{/donor/profile} & Dashboard; post a donation with photo; list own donations and follow each one's status timeline; browse the needs board; own impact; profile and password \\
-  \hline
-  Organisation & \code{/ngo}, \code{/ngo/available}, \code{/ngo/accepted}, \code{/ngo/requirements}, \code{/ngo/impact}, \code{/ngo/profile} & Dashboard; browse the open pool with the match breakdown and accept (shown only once verified); follow accepted donations and confirm receipt; manage standing needs; reliability and verification status; organisation profile (no map-pin field) \\
-  \hline
-  Courier & \code{/volunteer}, \code{/volunteer/tasks}, \code{/volunteer/history}, \code{/volunteer/impact}, \code{/volunteer/profile} & Dashboard; claim pickups from the unclaimed queue (coarse area), then record pickup and delivery; delivery history; availability and base location \\
-  \hline
-  Admin & \code{/admin}, \code{/admin/donations}, \code{/admin/orgs}, \code{/admin/volunteers}, \code{/admin/analytics} & Platform dashboard; all donations with filters, CSV export and expiry sweep; verify or revoke organisations; courier roster; ledger-derived analytics \\
-  \hline
-\end{tabular}
-\caption{Web portals, their routes and the workflows they support}
-\label{tab:portals}
-\end{table}
-
-On the create-donation screen, the pickup deadline is entered as a clock time.
-\code{lib/time.ts} converts it to an absolute instant, rolling a time already
-passed today forward to tomorrow. The pickup pin is filled from the browser's
-geolocation (\emph{Use my location}) or typed as latitude and longitude. The
-screen also resizes a chosen photograph in the browser before upload, because the server caps image data at 256\,KiB and a typical phone
-photograph is several megabytes. According to the project's task record, a
-4032$\times$3024 photograph was reduced from about 3.46 million data-URL characters
-to about 221 thousand in a browser measurement. That figure is quoted from the
-record, not re-measured for this report. The phone-layout screens under
-\code{/m/*} still contain demonstration residue. In particular, the camera-based
-create screen simulates reading a photograph with a timer and fixed text, and
-submits a fixed pickup address. It is \emph{not} a computer vision feature, and
-is listed as open work (Section~\ref{sec:limitations}).
+Donors post on \emph{Create Food Donation} (geolocation or typed coordinates, as
+there is no map picker), follow \emph{My Donations} and browse the \emph{Needs
+Board}. Verified organisations use \emph{Available Donations}, \emph{Accepted
+Deliveries} and \emph{Food Requirements \& Demand Signals}; couriers use
+\emph{Pickup Tasks}, and administrators the \emph{Partner Organizations
+Directory} and \emph{Platform Donation Ledger}.
 
 \subsection{Security and Privacy Considerations}
 \label{sec:security}
 
-Table~\ref{tab:security} consolidates the security and privacy controls
-described above against common web-application risk
-categories~\cite{owaspTop10}, together with the residual risk known at
-mid-term.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{2.9cm}|L{6.6cm}|L{3.8cm}|}
-  \hline
-  \textbf{Concern} & \textbf{Implemented control} & \textbf{Residual risk} \\
-  \hline
-  Broken access control & Server-side role, ownership (SQL scope), lifecycle and verification checks; 404 on unauthorised ids; frontend guards not trusted & Transition route checks the state table before scope, so its error wording can reveal a donation id's current status \\
-  \hline
-  Privilege escalation & \code{admin} refused at registration; privileged fields absent from self-service schemas; role re-read per request; admin lockout guards & None known \\
-  \hline
-  Credential attacks & bcrypt; uniform sign-in error; per-address rate limits & Distributed attacks; registration reveals whether an email exists (409) \\
-  \hline
-  Session handling & Signed, expiring JWT; suspension effective next request & No revocation or refresh; token readable by page scripts; no CSP headers \\
-  \hline
-  Secrets & Fail-closed signing key, minimum length, public key refused & Deployment secret management not yet designed \\
-  \hline
-  Exposure of donor location & Coarse pickup area until a courier claims; exact pin only to donor, bound or verified organisations and admins & Photo, description and notes are not scoped \\
-  \hline
-  Exposure of organisation location & Blurred ranking position for other readers; directory scoped; score and distance withheld & Radius gate remains a slow membership oracle (rate-limited, not closed) \\
-  \hline
-  Race conditions & Conditional status writes and claim & Expiry sweep unguarded; counter increments read-then-write \\
-  \hline
-  Resource abuse & Rate limits; bounded text and images & Per-process counters; profile text unbounded \\
-  \hline
-  Unhandled errors & Explicit, human-readable errors for known cases & No global exception handler: other server errors return an empty 500 \\
-  \hline
-\end{tabular}
-\caption{Security and privacy controls and residual risks}
-\label{tab:security}
-\end{table}
+The controls above address this domain's common web-application
+risks~\cite{owaspTop10} --- broken access control, privilege escalation,
+credential attacks, location exposure, tampered history and abusive posting ---
+but residual risks remain: no token revocation, refresh token, MFA or content
+security policy; registration reveals whether an email exists and transition
+errors reveal a donation's status; photos, descriptions and notes are bounded but
+not scoped; and the radius gate is a rate-limited membership oracle.
+Section~ef{sec:limitations} lists the remaining gaps.

@@ -4,119 +4,68 @@
 \section{Summary of Work}
 \label{sec:summary}
 
-This report has presented FoodLink at its mid-term stage. The project set out
-to shorten the time between surplus food being posted and a trustworthy
-organisation accepting it, and to see the food through collection and
-delivery with a record of every step (Section~\ref{sec:problem}).
-
-By mid-term, the team has built and verified the core system, meeting
-Objectives~1 to~5 and~7:
-\begin{itemize}
-  \item a FastAPI backend with 27 routes over a six-table schema managed by
-    Alembic, and a React frontend with four role portals;
-  \item the complete nine-state donation lifecycle. Transitions are declared
-    as data, checked for role, ownership and legality, and committed through
-    conditional writes that are safe under concurrent use. Every transition is
-    recorded in an append-only, server-stamped ledger;
-  \item an explainable matching engine: five published, weighted criteria
-    behind three eligibility gates, with per-criterion scores and
-    plain-language reasons, and requirement-aware tie-breaking that never
-    alters a score;
-  \item an access model of role, ownership, lifecycle and administrator
-    verification, with per-reader scopes that protect donors' pickup
-    locations and organisations' positions;
-  \item standing requirements and a donor needs board, ledger-derived platform
-    metrics, and administrator tools for verification and expiry;
-  \item 495 backend and 156 frontend automated tests, all passing, run in
-    continuous integration together with a migration drift check.
-\end{itemize}
-
-Objective~6 is met as instrumentation, awaiting real usage. Objective~8,
-deployment and a pilot, has not started.
+FoodLink set out to shorten the time between surplus food being posted and a
+trustworthy organisation accepting it, and to see the food through delivery
+with a record of every step. By mid-term, the team has built and verified the
+core system, meeting Objectives 1--5 and 7. The system comprises a FastAPI
+backend (27 routes, six tables) and a React frontend with four role portals.
+Donations follow a nine-state lifecycle with conditional writes and an
+append-only event ledger. An explainable weighted matcher ranks organisations,
+using requirements only to break ties. Role, ownership, lifecycle and
+verification controls are enforced, with disclosure tailored to each reader.
+Standing requirements, ledger-derived metrics and administrator tools
+complete the feature set, and 495 backend and 156 frontend tests pass in CI.
+Objective~6 exists as instrumentation awaiting real use, and deployment and a
+pilot (Objective~8) have not started. The limitations in
+Section~\ref{sec:limitations} remain open, notably the missing portal controls
+and the organisation map-pin gap.
 
 \section{Key Findings}
 \label{sec:findings}
 
-\begin{itemize}
-  \item \textbf{Finding 1:} \emph{A transparent heuristic is sufficient and
-    verifiable.} Every ranking can be recomputed by hand from published
-    formulas (Table~\ref{tab:example}), and explanations are generated from the
-    same numbers. Tying the explanations to the scoring code in this way
-    exposed and removed a real defect: two criteria were secretly the same
-    criterion counted twice.
-  \item \textbf{Finding 2:} \emph{In a multi-party workflow, most of the
-    difficulty lies in access and integrity rather than in features.} The
-    most serious problems found were not missing screens. They were
-    self-registered accounts able to read donors' addresses, verification that
-    survived a change of identity, and two organisations able to accept the
-    same donation simultaneously. Each was invisible in ordinary single-user
-    testing.
-  \item \textbf{Finding 3:} \emph{Race conditions are real even on SQLite.} A
-    lost update between two acceptances was reproduced on the project's
-    default database. Making the database evaluate the precondition as part of
-    the write, rather than locking or checking in application code, fixed it
-    in a way that is testable on the engine in use.
-  \item \textbf{Finding 4:} \emph{Privacy needs reader-specific answers.}
-    Hiding records was not enough. What a record \emph{says} must depend on
-    who reads it, as with the coarse pickup area shown until a claim and the
-    blurred organisation positions, because figures such as distances and
-    scores can be used to infer the locations they are derived from.
-  \item \textbf{Finding 5:} \emph{Evidence-based metrics depend on design
-    decisions made early.} Choosing an append-only event ledger at the start
-    means time-to-claim and rescue rate can be computed from server facts. Only
-    real usage is now needed to produce them.
-\end{itemize}
+\textbf{Finding 1:} \emph{a transparent heuristic is sufficient and
+verifiable.} Rankings can be recomputed by hand, and tying explanations to the
+scoring code exposed a real defect: two criteria that were effectively one.
+\textbf{Finding 2:} \emph{most of the difficulty lies in access and integrity,
+not features.} The most serious defects were unverified accounts reading donors'
+addresses, verification that survived a change of identity, and double
+acceptance, all invisible in single-user testing. \textbf{Finding 3:}
+\emph{race conditions are real even on SQLite.} Moving each precondition into
+the write itself fixed them testably. \textbf{Finding 4:} \emph{privacy needs
+reader-specific answers.} Distances and scores can reveal the locations they
+come from, so what a record says must depend on who reads it.
 
 \section{Future Work and Recommendations}
 \label{sec:future}
 
-The following items are planned or recommended. None is implemented today.
-They are listed in the order the team recommends, from course-scope work to
-longer-term development.
+None of the following is implemented. Recommended order:
 \begin{enumerate}
-  \item \textbf{Close the remaining audit items:} a global exception handler
-    returning a readable message; length bounds on profile fields; guarding the
-    expiry sweep's status write; fixing the organisation deep link; removing the
-    demonstration residue from the phone layouts; and frontend tests for the
-    data context, actions and donation form.
-  \item \textbf{Complete the portal:} a map-pin field on the organisation
-    profile (without which a portal-registered organisation cannot be ranked),
-    and controls for cancelling a donation, releasing a pickup and managing
-    accounts, all of which the API already supports.
-  \item \textbf{Deploy a pilot:} a deployment configuration, a real signing key
-    held as a secret, a scheduled expiry sweep, migration of start-up tasks out of
-    the application process, and validation on PostgreSQL if more than one process
-    is needed.
-  \item \textbf{Run the pilot and measure:} recruit campus donors, organisations
-    and couriers, and report the proposal's time-to-claim, rescue-rate and
-    handover metrics from the event ledger.
-  \item \textbf{Timeliness:} in-app, email or SMS notifications when a donation
-    is posted near an organisation or changes state.
-  \item \textbf{Security hardening:} token revocation, security headers,
-    dependency auditing in CI, and an administrator audit log.
-  \item \textbf{Usability and scale:} a map-based pin picker, object storage for
-    photographs, pagination, and aggregation of metrics and eligibility filtering
-    in the database.
-  \item \textbf{Matching refinements:} structured food categories on requirements
-    so that food type can be compared as well as quantity; road distance; and,
-    once outcome data exists, tuning of the weights. Any learned ranker would
-    replace \code{score_pair} behind the existing interface. It would need to
-    preserve explainability, and would be justified only by measured
-    improvement.
-  \item \textbf{Legal readiness:} a privacy notice and consent, data-access and
-    deletion requests, retention rules, and terms of use stating that recipients
-    inspect food at handover (Section~\ref{sec:feas-legal}).
+  \item close the remaining audit items: an exception handler, profile bounds,
+    a guarded expiry sweep, the deep-link fix, removal of the mobile residue,
+    and frontend tests;
+  \item complete the portal with a map-pin field for organisations and
+    controls for cancel, release and account management;
+  \item deploy with a secret key, a scheduled sweep and, if needed, PostgreSQL;
+    then run a campus pilot to measure time-to-claim, rescue rate and handover
+    time;
+  \item add notifications, token revocation, security headers and an
+    administrator audit log;
+  \item add a map-based pin picker, object storage for photos, pagination and
+    database-side aggregation;
+  \item extend matching with structured food categories and road distance.
+    Weight tuning should wait for outcome data, and any learned ranker would sit
+    behind \code{score_pair}, must remain explainable, and must show measured
+    improvement;
+  \item prepare legally: a privacy notice and consent, data-access and deletion
+    requests, retention rules, and terms of use.
 \end{enumerate}
 
 \section{Final Remarks}
 \label{sec:remarks}
 
-FoodLink began as a proposal for a coordination tool and is now a working,
-tested system whose rules can be read, whose rankings can be checked by hand,
-and whose history cannot be rewritten by its users. The most valuable lessons
-came from treating the system adversarially: asking what a newly registered
-stranger could read, what happens when two people act at the same instant, and
-whose record a cancellation should count against. The remaining work before
-the final evaluation is to take the system to real users and let the event
-ledger measure whether it achieves its purpose of getting surplus food to people
+FoodLink has moved from a proposal to a working, tested system whose rules can
+be read, whose rankings can be checked by hand, and whose history cannot be
+rewritten by its users. The most valuable lessons came from treating the system
+adversarially. What remains before the final evaluation is to put it in front of
+real users and let the event ledger measure whether surplus food reaches people
 before it expires.

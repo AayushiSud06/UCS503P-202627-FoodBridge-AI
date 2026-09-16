@@ -1,368 +1,165 @@
 \chapter{Feasibility Report}
 \label{ch:feasibility}
 
-A feasibility study asks whether a system can be built and used successfully
-under real technical, operational, economic, schedule and legal
-constraints~\cite{sommerville2016,pressman2015}. At proposal stage, feasibility
-can only be argued. At the mid-term point, much of FoodLink exists, so this
-chapter assesses feasibility against evidence from the implementation. It
-distinguishes throughout between three categories:
-\begin{itemize}
-  \item what is \textbf{already implemented} and verified;
-  \item what is \textbf{feasible but not implemented}, meaning the design
-    accommodates it and no technical obstacle is known;
-  \item what remains \textbf{future work} requiring further design or
-    decisions.
-\end{itemize}
+A feasibility study asks whether a system can be built and used under real
+technical, operational, economic, schedule and legal
+constraints~\cite{sommerville2016,pressman2015}. Much of FoodLink already
+exists, so this chapter draws on evidence from the implementation. For each
+dimension it separates what is \textbf{implemented}, what is \textbf{feasible
+but not implemented}, and what remains \textbf{future work}.
 
 \section{Technical Feasibility}
 \label{sec:feas-technical}
 
-\subsection{Technology Stack}
-Every component of the stack is mature, widely used and well documented
-(Table~\ref{tab:stack}): Python with FastAPI, SQLAlchemy, Alembic and
-Pydantic on the server; React, TypeScript and Vite in the browser; pytest and
-Vitest for testing~\cite{fastapiDocs,sqlalchemyDocs,alembicDocs,pydanticDocs,reactDocs,viteDocs,pytestDocs,vitestDocs}.
-The project needed no experimental technology, no proprietary component and
-no external service. The strongest evidence of technical feasibility is that
-the complete workflow from posting to completion runs today and passes
-651 automated tests (Section~\ref{sec:metrics}).
+The stack (Table~\ref{tab:stack}) consists of mature, well-documented
+open-source components, and the project needed no experimental technology and
+no external service. The strongest evidence of feasibility is that the complete
+workflow runs today and passes 651 automated tests.
 
-\subsection{Frontend}
-\emph{Implemented.} Four role portals are built with standard React patterns:
-context providers, a router and a single HTTP client. The browser performs
-only presentation work, plus one computation that could not live on the server,
-namely resizing a photograph that only the browser holds. Frontend
-feasibility risks are therefore low.
-\emph{Feasible but not implemented.} Routing phone visitors to the existing
-\code{/m/*} layouts automatically (a detection hook exists but is unused),
-generating the TypeScript API types from the server's OpenAPI document instead
-of maintaining them by hand, and adding controls for the API-only operations.
-\emph{Future work.} Code-splitting per portal and a caching data layer, if
-profiling shows the full-list reloads to be too slow.
+On the \textbf{frontend and backend}, four React portals and 27 stateless REST
+routes, whose rules are inspectable data, are implemented. Feasible but not yet
+built are portal controls for the API-only operations, routing phone visitors to
+\code{/m/*}, a global exception handler, profile bounds, and a scheduled caller
+for the expiry sweep, which is already an idempotent endpoint. The
+\textbf{database} consists of six tables under Alembic migrations on SQLite,
+which needs no database server. PostgreSQL is feasible because all access goes
+through SQLAlchemy and the concurrency guards are plain conditional updates.
+However, no driver is pinned, the tests have never run on PostgreSQL, and the
+guards rely on its default \textsc{read committed} isolation (D-28). SQLite
+permits one writer~\cite{sqliteWhenToUse}, which suits a single-process pilot
+but not several workers. For \textbf{authentication}, bcrypt, expiring signed
+tokens and a fail-closed key are implemented. Token revocation and security
+headers are feasible next steps, while email verification and MFA are future
+work.
 
-\subsection{Backend and APIs}
-\emph{Implemented.} 27 REST routes cover every proposal workflow. The API is
-stateless apart from rate-limit counters, documents itself through OpenAPI,
-and expresses its rules as inspectable data: transition, role and scope
-tables. Complexity was concentrated where it is justified, in authorization
-scopes, conditional writes and disclosure rules, rather than in
-infrastructure.
-\emph{Feasible but not implemented.} A global exception handler that returns a
-readable message and a correlation id; bounds on profile text fields; a
-scheduled caller for the expiry sweep. The sweep is already an idempotent
-endpoint, so a cron job holding an administrator token would suffice.
+\textbf{Deployment.} No deployment configuration exists, but a single-process
+SQLite deployment is feasible now under five constraints. Migrations run at
+start-up, which is safe with one process only (D-23). Rate-limit counters live
+in process memory (D-27). Behind a proxy, the forwarded client address must be
+trusted explicitly. The deployed origin must be added to the CORS allowlist and
+the signing key supplied as a secret. Finally, the expiry sweep needs an external
+scheduler.
 
-\subsection{Database}
-\emph{Implemented.} Six normalised tables under Alembic migration control.
-Timestamps are normalised to UTC. SQLite needs no database server, which kept
-development setup to installing packages and setting one environment variable.
-\emph{Feasible but not implemented.} Moving to PostgreSQL. All data access
-goes through SQLAlchemy, and the lifecycle's concurrency guards are plain
-conditional \code{UPDATE} statements that need no engine-specific feature.
-However, no PostgreSQL driver is pinned, the suite has never run against
-PostgreSQL, and the guards' behaviour there depends on PostgreSQL's default
-\textsc{read committed} isolation level (D-28). Enabling foreign-key
-enforcement in SQLite is a small, localised change.
-\emph{Constraint.} SQLite permits one writer at a time~\cite{sqliteWhenToUse}.
-It is suitable for a single-process pilot but not for several API worker
-processes.
+\textbf{Complexity.} The domain is small (six tables, nine states), but the
+implementation is not trivial: SQL read scopes, reader-specific disclosure,
+race-safe transitions and location privacy. The team delivered it through small,
+tested increments, and the remaining work is algorithmically simpler.
 
-\subsection{Authentication}
-\emph{Implemented.} Password hashing with bcrypt, signed expiring tokens, a
-fail-closed signing key, per-request re-reading of the account, and
-administrator-only creation of administrators.
-\emph{Feasible but not implemented.} Token revocation (for example a version
-number on the user row checked on each request), shorter-lived access tokens
-with refresh, and security headers.
-\emph{Future work.} Email verification, multi-factor authentication and an
-administrator audit log, which need product decisions and, for email, an
-external service.
-
-\subsection{Deployment Considerations}
-\emph{Not implemented:} there is no deployment configuration of any kind.
-Hosting FoodLink is technically straightforward, since it is one ASGI
-application and one static bundle. The implementation, however, fixes several
-decisions that a deployment must respect:
-\begin{enumerate}
-  \item migrations currently run inside the application's start-up, which is
-    safe only while exactly one process runs (D-23);
-  \item rate-limit counters live in process memory, so several processes would
-    multiply the effective limits unless a shared store is introduced (D-27);
-  \item behind a reverse proxy, the server must be configured to trust the
-    proxy's forwarded client address, or all users will share one rate-limit
-    budget;
-  \item \code{CORS_ORIGINS} must list the deployed frontend's origin, and a
-    real signing key must be supplied as a secret;
-  \item the expiry sweep needs an external scheduler.
-\end{enumerate}
-A single-process deployment with SQLite is feasible now. A multi-process
-deployment is feasible once items 1 and 2 are addressed and PostgreSQL is
-validated.
-
-\subsection{Implementation Complexity}
-The domain is small (six tables, nine states), but the implementation is not
-trivial. Much of the effort went into properties that tutorials rarely cover:
-per-role read scopes expressed as SQL, disclosure rules that change what a
-record says to different readers, race-safe transitions, and privacy
-protections against location inference. The project has shown that a
-four-person student team can deliver this complexity by working in small,
-tested increments with written decisions. The remaining work
-(Section~\ref{sec:feas-schedule}) is of lower algorithmic complexity than what
-has already been built.
-
-\textbf{Assessment:} technically feasible, and already demonstrated for the
-core system. The main open technical risk is an untested production database
-and deployment topology.
+\textbf{Assessment:} technically feasible, and already demonstrated for the core
+system. The main open risk is the untested production database and deployment
+topology.
 
 \section{Operational Feasibility}
 \label{sec:feas-operational}
 
-Operational feasibility asks whether the intended users can and will use the
-system as designed.
+\textbf{Donors} complete a single form with automatic photo resizing, but have
+no map picker, push updates or cancel button. \textbf{Organisations} first wait
+for verification, a deliberate delay that requires genuine administrator
+vetting. After that they accept with one action, confirm receipt on
+\emph{Accepted Deliveries} and maintain needs on \emph{Food Requirements \&
+Demand Signals}. The serious gap is that no screen sets an organisation's map
+coordinates, so a portal-registered organisation is never \emph{suggested} to
+donors until its pin is set through the API. \textbf{Couriers} judge runs from a
+coarse area, claim one, and record pickup and delivery with one button each.
+Availability is advisory, and only the organisation (via the API) or an
+administrator can release a claimed run. \textbf{Administrators} verify
+organisations, monitor donations, run the sweep and review analytics in the
+portal. Managing accounts through the API or command line is workable only for a
+small, technically supervised pilot.
 
-\paragraph{Donors.} A donor signs up, opens \emph{Create Food Donation}, fills in
-one form and submits it. The photo is optional and resized automatically. The
-deadline is entered as a clock time, and a time that has already passed today
-is taken to mean tomorrow. The pickup pin comes from the browser's location
-service or is typed as latitude and longitude; there is no map picker, which
-is a usability gap for non-technical donors. The donor can then follow the
-donation's timeline and browse the needs board to see what verified
-organisations want. The flow suits a kitchen worker posting during clean-up,
-as the proposal required. Two operational gaps remain. A donor must re-open
-the portal to see progress, since nothing is pushed. A donor who needs to
-withdraw a donation has no button for it yet.
+Every point of custody keeps a human decision (accept, claim, confirm), and
+nothing is assigned automatically~\cite{foodlinkProposal}. The main risk is
+timeliness without notifications.
 
-\paragraph{Recipient organisations.} An organisation registers and then waits
-for an administrator's verification. Until verified, it sees an explanation
-rather than an empty screen. Once verified, its \emph{Available Donations}
-screen lists collectable donations, each with its own score and plain-language
-reasons, and acceptance is a single action. It confirms receipt from
-\emph{Accepted Deliveries} and maintains standing needs on
-\emph{Food Requirements \& Demand Signals}. Verification adds a deliberate
-human delay before an
-organisation becomes useful. That is the cost of the trust model, and an
-administrator must actually carry out the vetting. A more serious operational
-gap is that no screen lets an organisation set its map coordinates. A newly
-registered organisation can browse and accept once verified, but it is
-never \emph{suggested} to donors until its pin is set through the API.
-Adding coordinate fields (or a location button like the donor's) to the
-organisation profile is a small, high-priority change.
-
-\paragraph{Volunteer couriers.} A courier sees unclaimed pickups with a coarse
-area, enough to judge whether a run is practical, and claims one. The exact
-address and donor appear only after the claim. The courier then records pickup
-and delivery with one button each, and a history page lists completed work.
-The availability toggle is advisory: it is recorded but does not currently
-gate claiming. If a courier cannot complete a claimed run, only the accepting
-organisation (through the API) or an administrator can release it at present.
-
-\paragraph{Administrators.} Administration involves verifying organisations,
-monitoring donations, running the expiry sweep and reviewing analytics. These
-tasks are supported by portal screens. Account suspension and administrator
-creation are available only through the API or the command-line tool, which is
-workable for a small pilot run by technical staff but not for a larger service.
-
-\paragraph{Practicality of the workflow.} The workflow keeps a human decision
-at every point of custody. An organisation must accept, a courier must claim,
-and the organisation must confirm receipt. The system never assigns food
-automatically, which matches how the proposal expected real handovers to
-work~\cite{foodlinkProposal}. The main operational risk is \emph{timeliness
-without notifications}. The platform removes the need to find a recipient, but
-it cannot yet tell that recipient that food is waiting.
-
-\textbf{Assessment:} operationally feasible for a supervised pilot on one
-campus. Notifications, portal controls for cancellation and release, and an
-account-management screen are needed before unsupervised use.
+\textbf{Assessment:} operationally feasible for a supervised campus pilot.
+Unsupervised use needs notifications, a map-pin field and the missing controls.
 
 \section{Economic Feasibility}
 \label{sec:feas-economic}
 
-This section identifies cost drivers without inventing monetary figures,
-since no hosting provider, pilot size or service contract has been chosen.
+No hosting provider or pilot scale has been chosen, so no monetary figures are
+given. Development cost is the four-member team's time within the course. All
+software dependencies are open source with no licence fees, and the only
+services used are a Git hosting platform with CI and an online LaTeX editor.
+There is no infrastructure cost today, since nothing is deployed and the backend
+calls no paid APIs. A pilot would need a small application server and, later, a
+managed database. Notifications, photo storage and routing would add usage-based
+charges, which have not been estimated. SQLite, straight-line distance and
+browser-side photo resizing were chosen partly because they keep costs down. On
+the benefit side, rescue rate and expiry-loss rate become measurable once the
+system is used; no benefit figures are claimed.
 
-\paragraph{Development resources.} Development effort is the time of the
-four-member student team within the course. No paid developers, contractors
-or consultants are involved.
-
-\paragraph{Software and tooling.} Every runtime dependency and development
-tool in the repository is open-source software, available without licence
-fees. The only services used are a Git hosting platform (for the repository,
-CI runs and the course documentation pages) and an online LaTeX editor for
-reports. The report's cost assumptions do not
-depend on any paid tier of either.
-
-\paragraph{Infrastructure.} There is currently no infrastructure cost, because
-nothing is deployed. The backend makes no calls to paid external APIs (no
-maps, SMS or email providers), so operating costs would be limited to
-hosting. A pilot would need, at minimum, one small application server and,
-later, a managed PostgreSQL database and static hosting for the frontend.
-Features on the roadmap would add costs. Email or SMS notifications carry
-per-message charges; object storage for photos and road-distance routing
-typically carry usage-based charges. Their magnitude depends on provider and
-volume and has not been estimated.
-
-\paragraph{Cost-reducing design choices already made.} SQLite by default
-avoids a database server during development and a small pilot. Straight-line
-distance avoids a routing API. Browser-side photo resizing reduces storage and
-bandwidth. No paid third-party service is integrated.
-
-\paragraph{Benefit side.} The proposal's intended benefit is surplus food
-reaching people instead of being discarded~\cite{foodlinkProposal}. The
-platform can now measure this through rescue rate and expiry-loss rate once it
-is used. No benefit figures are claimed here, because none have been measured.
-
-\textbf{Assessment:} economically feasible at course and pilot scale, with
-near-zero software cost. Hosting and messaging costs for a wider service
-remain to be estimated once a provider and scale are chosen.
+\textbf{Assessment:} economically feasible at course and pilot scale.
 
 \section{Schedule Feasibility}
 \label{sec:feas-schedule}
 
-\paragraph{Course timeline.} The course schedules a proposal in week~4, this
-prototype-stage report in week~7, and the final report and seminar in
-week~17~\cite{ucs503Project}.
+The course requires a proposal in week~4, this report in week~7 and a final
+report in week~17~\cite{ucs503Project}. The first commit is dated 29 July 2026,
+and 85 commits existed by 13 September 2026 (\texttt{e588b35}). The lifecycle,
+matching, requirements and authentication are complete for a pilot, and the web
+portals cover the core flows. Phone layouts and frontend test coverage are
+partial, and deployment and the pilot have not started. The remaining course
+work, in priority order, is:
+\begin{enumerate*}[label=(\arabic*)]
+  \item the P2 items (exception handler, profile bounds, deep link, frontend
+    tests and mobile residue);
+  \item portal controls for the API-only operations, plus a map-pin field;
+  \item a deployment with a scheduled sweep;
+  \item a short pilot.
+\end{enumerate*}
+Notifications, road distances, photo storage and weight tuning lie beyond the
+course.
 
-\paragraph{Progress so far.} The repository's first commit is dated 29 July
-2026. By commit \texttt{e588b35} (13 September 2026) it contained 85 commits.
-The backend and frontend were built, mock data was removed, and two audit
-cycles were run and their P1 findings fixed. Table~\ref{tab:schedule}
-summarises implementation maturity by area.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{4.0cm}|L{3.2cm}|L{6.1cm}|}
-  \hline
-  \textbf{Area} & \textbf{Maturity} & \textbf{Remaining} \\
-  \hline
-  Donation lifecycle & Complete, hardened & Guard the expiry sweep; admin expiry accounting \\
-  \hline
-  Matching and explainability & Complete & Tuning weights needs outcome data \\
-  \hline
-  Authentication and authorization & Complete for pilot & Revocation, security headers, profile bounds \\
-  \hline
-  Requirements and needs board & Complete & Structured food categories (optional) \\
-  \hline
-  Web portals & Complete for core flows & Cancel, release and account-management controls; deep-link fix \\
-  \hline
-  Phone layouts & Partial & Remove demonstration residue; entry routing \\
-  \hline
-  Testing and CI & Strong backend; partial frontend & Frontend tests for data context, actions and forms \\
-  \hline
-  Deployment & Not started & Configuration, PostgreSQL validation, scheduler, secrets \\
-  \hline
-  Pilot and measurement & Not started & Recruit users; collect ledger metrics \\
-  \hline
-\end{tabular}
-\caption{Implementation maturity and remaining work by area}
-\label{tab:schedule}
-\end{table}
-
-\paragraph{Remaining work before the final evaluation.} In priority order, as
-recorded in the project task list: the remaining P2 items (a global
-exception handler, profile field bounds, the deep-link bug, frontend test
-gaps and mobile residue); portal controls for the API-only operations; a
-deployment configuration with a scheduled expiry sweep; and, if deployment
-succeeds, a short pilot to produce real values for the proposal's metrics.
-Each item is small or medium in size compared with the work already
-completed.
-
-\paragraph{Realistic future development areas.} Beyond the course timeline:
-notifications, road distances, object storage for photos, weight tuning from
-outcome data, and broader organisation onboarding.
-
-\textbf{Assessment:} schedule-feasible. The core system was delivered by
-mid-term. The remaining course-scope work is bounded. The principal schedule
-risk is the deployment and pilot, which depend on arranging real participants
-as well as on engineering.
+\textbf{Assessment:} schedule-feasible. The core was delivered by mid-term, and
+the main risk is recruiting real participants for a pilot.
 
 \section{Legal, Security and Privacy Feasibility}
 \label{sec:feas-legal}
 
-FoodLink stores personal data about identifiable people: names, email
-addresses, phone numbers, organisation addresses, donors' pickup locations
-(which may be homes), photographs and activity history. Any real deployment in
-India would have to comply with the Digital Personal Data Protection Act,
-2023~\cite{dpdpAct2023}. This report does not offer a legal opinion. It
-records what the implementation already does that supports compliance, and
-what is missing.
+FoodLink stores names, emails, phone numbers, organisation addresses, donors'
+pickup locations, photos and activity history. Any deployment in India would
+have to comply with the Digital Personal Data Protection Act,
+2023~\cite{dpdpAct2023}; this report gives no legal opinion.
 
-\paragraph{Authentication.} \emph{Implemented:} hashed passwords, uniform
-sign-in errors, rate-limited credential endpoints, and immediate effect of
-suspension. \emph{Missing:} revocation of individual sessions, multi-factor
-authentication and email verification.
+Authentication, four-layer authorization, verification and location-disclosure
+controls are implemented (Section~\ref{sec:module-auth}). Session revocation and
+MFA are missing. Descriptions, photos and notes are not scoped, so an address
+typed into a description would be exposed. Before public use, FoodLink needs a
+privacy notice and consent at sign-up; ways to obtain, correct or delete
+personal data (accounts can currently only be deactivated); a retention policy;
+and protected hosting and backups. On food safety, the platform records storage
+type, preparation time and deadline but does not certify food, and inspection
+rests with the recipient~\cite{foodlinkProposal}. Terms of use stating this, and
+a review of food-safety obligations, are still needed.
 
-\paragraph{Authorization.} \emph{Implemented:} server-side enforcement of role,
-ownership, lifecycle and trust on every request, with scoping inside database
-queries and no reliance on client-side checks. Automated tests cover every
-role against every scoped read and transition.
-
-\paragraph{Protection of sensitive pickup information.} \emph{Implemented:} a
-donor's exact pin, address text and name are shown only to the donor,
-organisations able to act on the donation, administrators, and the one courier
-who has claimed the run. Other couriers see a roughly one-kilometre area.
-Organisation positions are blurred in rankings read by others, and
-organisation and courier phone numbers are scoped to readers with a working
-relationship. \emph{Missing:} the free-text description, photo and notes are
-not scoped, so a donor who types an address into the description would expose
-it.
-
-\paragraph{Verification and trust controls.} \emph{Implemented:} an
-organisation cannot be ranked, see the open pool or accept food until an
-administrator verifies it, and loses verification if it changes its name or
-location. \emph{Operational requirement:} the legal and reputational value of
-this control depends on administrators performing genuine vetting, which is a
-process outside the software.
-
-\paragraph{Data minimisation and user rights.} \emph{Implemented:} registration
-asks only for what each role needs; a courier's coordinates are write-only; and
-the event ledger records server facts, not free-form surveillance.
-\emph{Missing and required before public use:} a privacy notice and consent at
-sign-up; a way for users to obtain, correct or delete their data (accounts can
-currently only be deactivated); a defined retention period for donations,
-photos and events; and hosting and backup arrangements that protect stored
-data.
-
-\paragraph{Food safety and liability.} The platform records the storage type,
-optional preparation time and deadline so that a recipient can decide, and it
-does not certify food. The proposal places inspection with the recipient at
-handover~\cite{foodlinkProposal}. The current interface does not yet present
-terms of use stating this division of responsibility. That would be needed,
-together with review of any food-safety obligations applicable to food
-donation, before public operation.
-
-\textbf{Assessment:} the security and privacy architecture is already stronger
-than a typical prototype and suitable for a supervised pilot with informed
-participants. Public operation additionally requires the privacy, consent,
-data-rights, retention and terms-of-use measures listed above.
+\textbf{Assessment:} suitable for a supervised pilot with informed participants.
+Public operation requires the privacy, consent, data-rights and terms measures
+above.
 
 \section{Feasibility Summary}
 \label{sec:feas-summary}
 
-\begin{table}[htbp]
+Table~\ref{tab:feasibility} summarises the five dimensions.
+
+\begin{table}[!htbp]
 \centering
 \small
-\begin{tabular}{|L{2.05cm}|L{3.3cm}|L{3.2cm}|L{2.4cm}|L{1.95cm}|}
+\begin{tabular}{|L{2.15cm}|L{3.2cm}|L{3.2cm}|L{2.35cm}|L{2.05cm}|}
   \hline
-  \textbf{Dimension} & \textbf{Implemented} & \textbf{Feasible, not implemented} & \textbf{Future work} & \textbf{Verdict} \\
+  \textbf{Dimension} & \textbf{Implemented} & \textbf{Feasible, not built} & \textbf{Future work} & \textbf{Verdict} \\
   \hline
-  Technical & Full workflow, 27 routes, 6 tables, 651 passing tests, CI & PostgreSQL, scheduler, exception handler, token revocation & Multi-process deployment, routing, object storage & Feasible \\
+  Technical & Full workflow; 27 routes; 651 passing tests & PostgreSQL, scheduler, revocation & Multi-process deployment & Feasible \\
   \hline
-  Operational & Four portals covering every core step & Cancel, release and account screens; mobile entry routing & Notifications; broader onboarding & Feasible for pilot \\
+  Operational & Four portals covering every core step & Pin field; cancel, release and account screens & Notifications & Feasible for pilot \\
   \hline
   Economic & Open-source stack; no paid services & Single-server pilot hosting & Messaging and storage costs & Feasible \\
   \hline
-  Schedule & Core system by mid-term & P2 fixes, portal controls, deployment configuration & Pilot, metric collection & Feasible \\
+  Schedule & Core system by mid-term & P2 fixes; deployment configuration & Pilot and metrics & Feasible \\
   \hline
-  Legal, security, privacy & Scoped access, location protection, verification & Security headers, profile bounds & Privacy notice, consent, data rights, retention, terms & Conditional \\
+  Legal and privacy & Scoped access; location protection; verification & Security headers; profile bounds & Consent, data rights, retention, terms & Conditional \\
   \hline
 \end{tabular}
 \caption{Summary of feasibility by dimension}
 \label{tab:feasibility}
 \end{table}
-
-Overall, FoodLink is feasible. Its core has moved from proposal to working,
-tested software. What remains is predominantly deployment, operational
-completeness and legal readiness for real users, rather than open technical
-questions.

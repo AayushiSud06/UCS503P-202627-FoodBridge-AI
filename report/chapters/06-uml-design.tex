@@ -1,25 +1,20 @@
 \chapter{System Design: UML Diagrams}
 \label{ch:uml}
 
-This chapter presents FoodLink's design as Unified Modeling Language (UML)
-artefacts~\cite{omgUml251,booch2005uml}: a use case diagram with detailed use
-case scenarios, a class diagram and an activity diagram. Every element was
-derived from the repository at commit \texttt{e588b35}. Actors are values of
-\code{UserRole}; use cases are implemented routes and screens; classes are the
-ORM models and the matching module; and activity branches are decisions the
-server actually takes. Earlier copies of these diagrams in
-\code{docs/uml/} predate several decisions described in Chapter~\ref{ch:methodology}
-(D-50, D-52, D-53, D-55, D-57 and D-58). The versions below are corrected
-redraws, with their TikZ sources in the report's \code{diagrams/} directory.
+This chapter presents FoodLink's design in UML~\cite{omgUml251}: the use case
+diagram with scenarios, the class diagram and the activity diagram. Every
+element was derived from the repository at commit \texttt{e588b35}. Actors are
+the values of \code{UserRole}, use cases are implemented routes and screens,
+classes are the ORM models and the matching module, and activity branches are
+decisions the server takes. The earlier copies in \code{docs/uml/} predate
+decisions D-50 to D-58; the diagrams here are corrected redraws, with TikZ
+sources in the report's \code{diagrams/} directory.
 
 \section{Use Case Model}
 \label{sec:usecase}
 
 \subsection{Use Case Diagram}
 \label{sec:usecase-diagram}
-
-Figure~\ref{fig:usecase} shows the four role actors and the 26 use cases they
-drive.
 
 \begin{figure}[p]
   \centering
@@ -30,435 +25,174 @@ drive.
   \label{fig:usecase}
 \end{figure}
 
-\paragraph{Actors.} \emph{Donor}, \emph{Recipient Organisation (NGO)},
-\emph{Volunteer Courier} and \emph{Admin} correspond exactly to the four values
-of \code{UserRole}. They specialise an abstract \emph{Platform User}, which
-carries the use cases common to every signed-in role: signing in, managing
-one's own account and password, and tracking the status timeline of the
-donations one may read. \emph{Register Account} is attached to the abstract
-actor for layout reasons, but only the donor, organisation and courier roles
-may register. Administrators come from the command line or from another
-administrator (\emph{Manage User Accounts}).
-
-\paragraph{Relationships.} \emph{Post Donation}, \emph{View Ranked Matches},
-\emph{Browse Open Donations} and \emph{Accept Donation} each
-$\ll$include$\gg$ the internal use case \emph{Rank Recipient Organisations}. Ranking
-always runs at posting, for each open donation an organisation reads, whenever
-matches are requested, and once more at first acceptance to freeze the
-accepting organisation's score. \emph{Review Match Explanation}
-$\ll$extend$\gg$s \emph{Browse Open Donations} when the organisation selects a
-donation that is still open and for which it is eligible.
-
-\paragraph{Conditions not drawn as relationships.} Browsing the open pool and
-accepting require an administrator-verified organisation. Acceptance is
-refused once the deadline has passed. \emph{Cancel Donation} is available to the
-donor only before pickup. \emph{Override Lifecycle Transition} represents the
-administrator's presence in every entry of \code{TRANSITION_ROLES}: an
-administrator may accept on an organisation's behalf, record pickup, delivery or
-completion, cancel (including after pickup) and expire donations. The claim is
-the exception, since an administrator has no courier profile.
+Figure~\ref{fig:usecase} shows four actors and 26 use cases. The actors
+\emph{Donor}, \emph{Recipient Organisation (NGO)}, \emph{Volunteer Courier} and
+\emph{Admin} specialise an abstract \emph{Platform User}, which carries sign-in,
+account management and status tracking. \emph{Register Account} is open only to
+the donor, organisation and courier roles. \emph{Post Donation}, \emph{View
+Ranked Matches}, \emph{Browse Open Donations} and \emph{Accept Donation} each
+$\ll$include$\gg$ the internal \emph{Rank Recipient Organisations}, and
+\emph{Review Match Explanation} $\ll$extend$\gg$s \emph{Browse Open Donations}.
+Some conditions are not drawn: browsing and accepting require a verified
+organisation, overdue donations cannot be accepted, and donors cancel only
+before pickup. \emph{Override Lifecycle Transition} represents the
+administrator's place in every entry of \code{TRANSITION_ROLES} except the
+courier claim.
 
 \subsection{Use Case Scenarios}
 \label{sec:scenarios}
 
-The scenarios below describe the main use cases in a structured form. Each
-alternative flow names the HTTP status and, where useful, the message the
-server returns. Routes are relative to the API root; screens are the web
-portal's.
+The fifteen main use cases are specified below. Status codes are the server's
+responses, and routes are relative to \code{/api}.
 
 % ---------------------------------------------------------------------------
-% Numbered steps and bulleted alternatives as hanging paragraphs rather than
-% list environments: a list at the top of a table cell starts one line low.
-\newcounter{scenariostep}
-\newcommand{\steps}[1]{%
-  \setcounter{scenariostep}{0}%
-  \begingroup
-  \def\item{\par\stepcounter{scenariostep}\noindent\hangindent=1.45em%
-    \hangafter=1\makebox[1.45em][l]{\arabic{scenariostep}.}}%
-  #1\par
-  \endgroup}
-\newcommand{\alts}[1]{%
-  \begingroup
-  \def\item{\par\noindent\hangindent=1.1em\hangafter=1%
-    \makebox[1.1em][l]{$\bullet$}}%
-  #1\par
-  \endgroup}
-% A scenario is a captioned table kept in reading order (not a float) and
-% never split across pages, in the template's tabular style.
-\makeatletter
+% A scenario is a ruled block of labelled fields; it may continue onto the
+% next page. \flow numbers the main-flow steps inline.
+\newcommand{\flow}[1]{\begin{enumerate*}[label=(\arabic*)]#1\end{enumerate*}}
 \newenvironment{scenario}[2]{%
-  \par\smallskip\noindent
-  \begin{minipage}{\linewidth}%
-  \def\@captype{table}%
-  \def\scenarioname{#1: #2}%
-  \centering
-  \begingroup\small
-  \begin{tabular}{|L{2.85cm}|L{10.45cm}|}
-  \hline
-  \multicolumn{2}{|l|}{\textbf{#1 --- #2}} \\
-  \hline
+  \par\addvspace{8pt}\begingroup\small
+  \noindent\rule{\linewidth}{0.4pt}\par\nopagebreak
+  \noindent\textbf{#1 --- #2}\par\nopagebreak
 }{%
-  \end{tabular}%
-  \endgroup
-  \caption{Use case scenario \scenarioname}%
-  \end{minipage}\par\smallskip
+  \par\endgroup
 }
-\makeatother
+\newcommand{\ucfield}[2]{%
+  \par\noindent\hangindent=2.5cm\hangafter=1%
+  \makebox[2.5cm][l]{\textbf{#1}}#2\par}
 % ---------------------------------------------------------------------------
 
 \begin{scenario}{UC-01}{Register Account}
-  \textbf{Primary actor} & Prospective donor, recipient organisation or courier (not signed in) \\ \hline
-  \textbf{Goal} & Obtain an account in a self-service role and reach that role's portal. \\ \hline
-  \textbf{Preconditions} & The email address is not registered. Fewer than 10 registrations have come from the visitor's network in the past hour. \\ \hline
-  \textbf{Trigger} & The visitor chooses to create an account on the sign-in page. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The visitor selects a role tile (Donor, Recipient or Volunteer) and enters name, optional organisation name, email and password.
-    \item The client sends \code{POST /api/auth/register}.
-    \item The server validates the body: a valid email, a password of 8--128 characters, and a role among \code{SELF_SIGNUP_ROLES}.
-    \item The server lower-cases the email, confirms it is unused, stores a bcrypt hash and creates the user row.
-    \item For a courier, it creates a \code{Volunteer} profile. For an organisation, it creates a \code{Recipient} profile that is \emph{unverified}, named after the organisation (or the person), with capacity 100.
-    \item It commits and returns 201 with an access token and the account. The client stores the token and opens the role's portal.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Email already registered: 409, ``An account with that email already exists''.
-    \item Role \code{admin} sent: 422, ``Administrator accounts cannot be created through registration''.
-    \item Malformed email or short password: 422 with field errors.
-    \item Over the registration limit: 429 with \code{Retry-After}.
-  } \\ \hline
-  \textbf{Postconditions} & An active account exists. A new organisation cannot be ranked, see the open pool or accept until an administrator verifies it (UC-13). It also cannot be ranked until coordinates are set, which the API accepts at registration but the portal form does not collect. \\ \hline
-  \textbf{Business rules} & D-04: administrators are never self-registered. A duplicate email is reported distinctly, which reveals that an account exists (known limitation). \\ \hline
+  \ucfield{Actor, goal}{Prospective donor, organisation or courier. \emph{Goal:} an account in a self-service role.}
+  \ucfield{Pre., trigger}{Email unused; under 10 registrations per hour from the network. \emph{Trigger:} creating an account on the sign-in page.}
+  \ucfield{Main flow}{\flow{\item Picks a role; enters name, email and password. \item \code{POST /auth/register} validates the email, an 8--128-character password and a self-signup role. \item The server stores a bcrypt hash and creates a courier or \emph{unverified} organisation profile. \item It returns 201 with a token.}}
+  \ucfield{Alternatives}{Email exists: 409. \code{admin} role or invalid fields: 422. Over the limit: 429.}
+  \ucfield{Post., rules}{Active account. An organisation is not ranked, cannot see the pool and cannot accept until verified (UC-13) and given coordinates (API only). Administrators never self-register (D-04).}
 \end{scenario}
 
 \begin{scenario}{UC-02}{Sign In}
-  \textbf{Primary actor} & Any registered user (donor, organisation, courier, administrator) \\ \hline
-  \textbf{Goal} & Start an authenticated session in the correct portal. \\ \hline
-  \textbf{Preconditions} & The account exists. Fewer than 30 sign-in attempts from the network in the past five minutes. \\ \hline
-  \textbf{Trigger} & The user submits email and password on \code{/login}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The client sends \code{POST /api/auth/login} as an OAuth 2.0 password form (email in \code{username}).
-    \item The server finds the user by lower-cased email and verifies the bcrypt hash.
-    \item It confirms the account is active and returns a JWT (HS256, 720-minute expiry) with the account.
-    \item The client stores the token and navigates to the account's own portal, whatever tile was highlighted.
-    \item On every later request, the server verifies the token and re-reads the user row.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Unknown email or wrong password: 401, ``Incorrect email or password'' (the same message for both).
-    \item Suspended account: 403, ``This account has been deactivated. Contact a platform administrator.''
-    \item Over the sign-in limit: 429 with \code{Retry-After}.
-    \item Token expired, or account suspended mid-session: the next request returns 401, and the client signs the user out everywhere.
-  } \\ \hline
-  \textbf{Postconditions} & The user is signed in until the token expires or they sign out. Sign-out is client-side; the token is not revoked on the server. \\ \hline
-  \textbf{Business rules} & The token's role claim is never trusted; the stored role decides (D-03). \\ \hline
+  \ucfield{Actor, goal}{Any registered user. \emph{Goal:} an authenticated session in the right portal.}
+  \ucfield{Pre., trigger}{Account exists; under 30 attempts per 5 minutes from the network. \emph{Trigger:} submitting email and password.}
+  \ucfield{Main flow}{\flow{\item \code{POST /auth/login} (OAuth 2.0 password form). \item The server checks the bcrypt hash and that the account is active. \item It returns a 720-minute HS256 token, and the client opens the role's portal. \item Each later request re-reads the user.}}
+  \ucfield{Alternatives}{Wrong email or password: 401 (one message). Suspended: 403. Over the limit: 429. Expired token or suspension mid-session: 401 and client sign-out.}
+  \ucfield{Post., rules}{Signed in until expiry; sign-out is client-side. The token's role claim is never trusted (D-03).}
 \end{scenario}
 
 \begin{scenario}{UC-03}{Post Donation}
-  \textbf{Primary actor} & Donor (an administrator may also post) \\ \hline
-  \textbf{Goal} & Offer surplus food to nearby verified organisations before it expires. \\ \hline
-  \textbf{Preconditions} & Signed in as a donor. Under 10 posts in the past hour for the account and under 30 for the network. \\ \hline
-  \textbf{Trigger} & The donor submits the \emph{Create Food Donation} form. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The donor enters food details, pickup address and pin (\emph{Use my location} or typed coordinates), an optional photo and preparation time, and the deadline as a clock time.
-    \item The browser resizes the photo (at most 1280\,px, JPEG, within 256\,KiB) and converts the deadline to the next future instant.
-    \item \code{POST /api/donations}: the server checks role and rate limits, then field bounds, coordinates and image format.
-    \item It confirms the deadline is in the future, stores the donation as \code{AVAILABLE} and appends that event.
-    \item It ranks every organisation. Verified organisations with coordinates within 8\,km are scored; active requirements break ties.
-    \item If any is eligible, it freezes the top score in \code{match_score} and records \code{MATCHED} (``Top match: \emph{name}'').
-    \item It commits once and returns 201. The donation appears in \emph{My Donations} with its timeline.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item No eligible organisation: the donation stays \code{AVAILABLE} (still a success).
-    \item Deadline not in the future: 422, ``Pickup deadline is already in the past''.
-    \item Invalid or over-long fields, or \code{imageUrl} neither an image data URL nor an http(s) link: 422.
-    \item Undecodable or incompressible photo: refused in the browser with a message.
-    \item Account or network budget exhausted: 429, naming the limit. Organisation or courier role: 403.
-  } \\ \hline
-  \textbf{Postconditions} & The donation is open to every verified organisation until its deadline, and every transition from here on is recorded. \\ \hline
-  \textbf{Business rules} & Nothing is assigned at posting. The frozen score and distances are not shown to the donor (D-47). \\ \hline
+  \ucfield{Actor, goal}{Donor (or administrator). \emph{Goal:} offer surplus food to nearby verified organisations before it expires.}
+  \ucfield{Pre., trigger}{Signed in; under 10 posts per hour for the account and 30 for the network. \emph{Trigger:} submitting \emph{Create Food Donation}.}
+  \ucfield{Main flow}{\flow{\item Enters food details, address, pin, optional photo (resized in the browser) and deadline. \item \code{POST /donations} checks role, limits, field bounds and a future deadline. \item The donation is stored as \code{AVAILABLE} with an event, and organisations are ranked. \item If any is eligible, the top score is frozen and \code{MATCHED} recorded; 201 is returned.}}
+  \ucfield{Alternatives}{None eligible: stays \code{AVAILABLE}. Past deadline or invalid input: 422. Over budget: 429. Organisation or courier: 403.}
+  \ucfield{Post., rules}{Open to verified organisations until the deadline; nothing is assigned. Frozen score and distances are hidden from donors (D-47).}
 \end{scenario}
 
 \begin{scenario}{UC-04}{View Ranked Matches and Match Explanation}
-  \textbf{Primary actor} & Recipient organisation. Secondary: donor and administrator (ranked list through the API) \\ \hline
-  \textbf{Goal} & Understand how well a donation suits an organisation, and why. \\ \hline
-  \textbf{Preconditions} & The organisation is verified, and the donation is open (\code{AVAILABLE} or \code{MATCHED}) with its deadline not passed. For the ranked list, the caller can read the donation. \\ \hline
-  \textbf{Trigger} & The organisation selects a donation on \emph{Available Donations}; or a client calls \code{GET /api/donations/{id}/matches}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The client loads \code{GET /api/donations}. The server includes, for each open donation, \code{viewerMatch}: the organisation's own live result from \code{score_pair}, using its true coordinates and its own active requirements.
-    \item The organisation selects a donation. The match panel shows the overall score, the five criterion scores, the straight-line distance and the reason lines.
-    \item \emph{Variant (ranked list):} \code{/matches} returns up to \code{limit} (at most 25) eligible organisations in ranking order. Each has a score, sub-scores and reasons.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Organisation unverified: the pool is not returned, and the screen explains that verification is pending.
-    \item Organisation ineligible (no coordinates or beyond 8\,km): \code{viewerMatch} is null, and no breakdown is available.
-    \item Deadline passes: the donation leaves the pool on the next load.
-    \item Caller is not the organisation described (donor, courier, other organisation): its position is blurred to a 0.01$^\circ$ grid, \code{distanceKm} is null, and distance reasons omit the figure.
-    \item Donation not readable by the caller: 404.
-  } \\ \hline
-  \textbf{Postconditions} & Read-only; nothing is stored. Scores move with the clock because deadline comfort decays. \\ \hline
-  \textbf{Business rules} & Requirements affect ordering and reasons only, and only for readers entitled to them (D-52). The frozen score and the live score are different quantities (D-30). \\ \hline
+  \ucfield{Actor, goal}{Recipient organisation; donor and administrator read the ranked list. \emph{Goal:} see how well a donation suits an organisation, and why.}
+  \ucfield{Pre., trigger}{Organisation verified; donation open and not overdue. \emph{Trigger:} selecting a donation on \emph{Available Donations}, or \code{GET /donations/{id}/matches}.}
+  \ucfield{Main flow}{\flow{\item \code{GET /donations} includes \code{viewerMatch}, the organisation's live \code{score_pair} result from its true position and own active needs. \item The panel shows the score, five sub-scores, distance and reasons. \item Variant: \code{/matches} lists up to 25 eligible organisations in order.}}
+  \ucfield{Alternatives}{Unverified: pool not returned, with an explanation. Ineligible: no breakdown. Other readers: blurred positions, null \code{distanceKm}. Unreadable donation: 404.}
+  \ucfield{Post., rules}{Read-only. Requirements affect only order and reasons (D-52); frozen and live scores differ (D-30).}
 \end{scenario}
 
 \begin{scenario}{UC-05}{Accept Donation}
-  \textbf{Primary actor} & Recipient organisation (an administrator may accept on its behalf) \\ \hline
-  \textbf{Goal} & Take responsibility for an offered donation. \\ \hline
-  \textbf{Preconditions} & The organisation is verified. The donation is \code{AVAILABLE} or \code{MATCHED} and its deadline has not passed. \\ \hline
-  \textbf{Trigger} & The organisation presses \emph{Accept Donation} on \emph{Available Donations}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The client sends \code{POST /api/donations/{id}/status} with \code{status: ACCEPTED} and its own \code{recipientId}.
-    \item The server checks that the move is legal and that the role is organisation or administrator.
-    \item It refuses an overdue donation, then resolves the caller's own organisation and confirms it is verified.
-    \item It binds \code{recipient_id}, adds one to \code{accepted_donations}, and freezes \code{match_score} with this organisation's score.
-    \item The conditional status write succeeds. An \code{ACCEPTED} event is appended, and the transaction commits.
-    \item The donation moves to \emph{Accepted Deliveries} and appears in every courier's unclaimed queue.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Deadline passed: 409, ``This donation's pickup deadline has passed, so it can no longer be accepted''.
-    \item Organisation unverified: 403, ``This organisation is awaiting verification and cannot accept donations yet''.
-    \item Another organisation accepted first: 409, ``Cannot move a donation from ACCEPTED to ACCEPTED''; none of this request's side effects persist.
-    \item \code{recipientId} names a different organisation: 403.
-    \item Account has no organisation profile: 422.
-    \item Administrator variant: names the organisation, which must also be verified.
-  } \\ \hline
-  \textbf{Postconditions} & Exactly one organisation is bound, with exactly one counted acceptance. \\ \hline
-  \textbf{Business rules} & D-06 (verification enforced at acceptance as well as ranking), D-50 (deadline), D-55 (conditional write). \\ \hline
+  \ucfield{Actor, goal}{Recipient organisation (or an administrator for it). \emph{Goal:} take responsibility for an offered donation.}
+  \ucfield{Pre., trigger}{Organisation verified; donation \code{AVAILABLE} or \code{MATCHED} and not overdue. \emph{Trigger:} \emph{Accept Donation}.}
+  \ucfield{Main flow}{\flow{\item \code{POST /donations/{id}/status} with \code{ACCEPTED}. \item The server checks transition, role, deadline, own organisation and verification. \item It binds the organisation, counts one acceptance and freezes its score. \item The conditional write and event commit; the donation joins \emph{Accepted Deliveries} and the courier queue.}}
+  \ucfield{Alternatives}{Overdue: 409. Unverified: 403. Another organisation accepted first: 409, changes rolled back. Another organisation's id: 403. No profile: 422.}
+  \ucfield{Post., rules}{Exactly one bound organisation and one counted acceptance (D-06, D-50, D-55).}
 \end{scenario}
 
 \begin{scenario}{UC-06}{Claim Pickup}
-  \textbf{Primary actor} & Volunteer courier \\ \hline
-  \textbf{Goal} & Take on the collection and delivery of an accepted donation. \\ \hline
-  \textbf{Preconditions} & The caller has a courier profile. The donation is \code{ACCEPTED} and unclaimed. \\ \hline
-  \textbf{Trigger} & The courier presses \emph{Accept Pickup} on a task card on the \emph{Pickup Tasks} page. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The courier browses unclaimed pickups. Each shows food, quantity, deadline, the receiving organisation and a coarse \code{pickupArea} (for example ``Approx.\ 30.36N, 76.37E''), with no exact pin, address or donor name.
-    \item The client sends \code{POST /api/donations/{id}/status} with \code{status: VOLUNTEER_ASSIGNED}.
-    \item The server checks legality and role, and finds the caller's courier profile.
-    \item A conditional \code{UPDATE} sets \code{volunteer_id} only if the donation is still \code{ACCEPTED} and unclaimed. It succeeds.
-    \item The conditional status write succeeds, a \code{VOLUNTEER_ASSIGNED} event is appended, and the transaction commits.
-    \item The response and task card now show the exact pickup pin, address and donor.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Another courier won the claim: 409, ``Another courier has already claimed this pickup''.
-    \item Donation no longer \code{ACCEPTED} (cancelled, or already claimed by this courier's own earlier request): 409, ``Cannot move a donation from \ldots''.
-    \item No courier profile: 422, ``No courier profile for this account''.
-  } \\ \hline
-  \textbf{Postconditions} & Exactly one courier is bound; other couriers no longer see the pickup. \\ \hline
-  \textbf{Business rules} & D-28 (atomic claim), D-57 (disclosure on claim). The availability toggle does not gate claiming. Couriers are not verified. \\ \hline
+  \ucfield{Actor, goal}{Volunteer courier. \emph{Goal:} take on collection and delivery.}
+  \ucfield{Pre., trigger}{Courier profile exists; donation \code{ACCEPTED} and unclaimed. \emph{Trigger:} \emph{Accept Pickup} on \emph{Pickup Tasks}.}
+  \ucfield{Main flow}{\flow{\item The queue shows food, deadline, organisation and only a coarse \code{pickupArea}. \item The courier requests \code{VOLUNTEER_ASSIGNED}. \item A conditional \code{UPDATE} binds the courier only if still \code{ACCEPTED} and unclaimed. \item The event commits; exact pin, address and donor become visible.}}
+  \ucfield{Alternatives}{Another courier won: 409, ``Another courier has already claimed this pickup''. No longer \code{ACCEPTED}: 409. No courier profile: 422.}
+  \ucfield{Post., rules}{Exactly one courier (D-28, D-57). Availability does not gate claiming; couriers are not verified.}
 \end{scenario}
 
 \begin{scenario}{UC-07}{Record Pickup and Delivery}
-  \textbf{Primary actor} & Volunteer courier (the assigned one) \\ \hline
-  \textbf{Goal} & Record that the food was collected, then delivered. \\ \hline
-  \textbf{Preconditions} & The donation is \code{VOLUNTEER_ASSIGNED} to the caller (for pickup) or \code{PICKED_UP} by the caller (for delivery). \\ \hline
-  \textbf{Trigger} & The courier presses \emph{Mark Picked Up}, and later \emph{Mark Delivered}, on the task card. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The client sends the status update \code{PICKED_UP}.
-    \item The server checks legality and role, then re-reads the donation through the courier's read scope, which contains only the courier's own runs.
-    \item The conditional write and \code{PICKED_UP} event are committed.
-    \item After handing over the food, the courier sends \code{DELIVERED}, processed the same way.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item A different courier's run: 404 (indistinguishable from a missing donation).
-    \item Out of order (for example \code{DELIVERED} before \code{PICKED_UP}): 409.
-    \item After pickup, the donor can no longer cancel (409), and the organisation can no longer release; only an administrator can cancel.
-  } \\ \hline
-  \textbf{Postconditions} & The donation awaits confirmation by the organisation. The courier's history lists it from \code{DELIVERED} (D-51). \\ \hline
-  \textbf{Business rules} & Ownership re-checked through the read scope (D-34). Delivery counts are credited only on completion (UC-08). \\ \hline
+  \ucfield{Actor, goal}{The assigned courier. \emph{Goal:} record collection, then delivery.}
+  \ucfield{Pre., trigger}{Donation \code{VOLUNTEER_ASSIGNED} to, or \code{PICKED_UP} by, the caller. \emph{Trigger:} \emph{Mark Picked Up}, then \emph{Mark Delivered}.}
+  \ucfield{Main flow}{\flow{\item Sends \code{PICKED_UP}. \item The server checks transition and role and re-reads the donation through the courier's scope. \item The conditional write and event commit. \item \code{DELIVERED} follows the same way after handover.}}
+  \ucfield{Alternatives}{Another courier's run: 404. Out of order: 409. After pickup the donor cannot cancel nor the organisation release (409).}
+  \ucfield{Post., rules}{Awaits confirmation; in the courier's history from \code{DELIVERED} (D-51).}
 \end{scenario}
 
 \begin{scenario}{UC-08}{Confirm Receipt}
-  \textbf{Primary actor} & Recipient organisation (the accepting one) \\ \hline
-  \textbf{Goal} & Close the donation as successfully received. \\ \hline
-  \textbf{Preconditions} & The donation is \code{DELIVERED} and bound to the caller's organisation. \\ \hline
-  \textbf{Trigger} & The organisation presses \emph{Confirm receipt} on \emph{Accepted Deliveries}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The client sends the status update \code{COMPLETED}.
-    \item The server checks legality, role and ownership through the organisation's read scope.
-    \item It adds one to the organisation's \code{completed_donations} and the courier's \code{completed_deliveries}.
-    \item The conditional write and \code{COMPLETED} event are committed.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Another organisation's donation: 404.
-    \item Not yet delivered: 409.
-    \item Donor or courier attempts it: 403.
-  } \\ \hline
-  \textbf{Postconditions} & Terminal state. The organisation's reliability score reflects the completion in future rankings; the donation counts towards the rescue rate if completed by its deadline. \\ \hline
-  \textbf{Business rules} & Only the organisation that received the food can confirm it. \\ \hline
+  \ucfield{Actor, goal}{The accepting organisation. \emph{Goal:} close the donation as received.}
+  \ucfield{Pre., trigger}{Donation \code{DELIVERED} and bound to the caller. \emph{Trigger:} \emph{Confirm receipt} on \emph{Accepted Deliveries}.}
+  \ucfield{Main flow}{\flow{\item Sends \code{COMPLETED}. \item The server checks transition, role and ownership. \item It increments the organisation's completions and the courier's deliveries. \item The conditional write and event commit.}}
+  \ucfield{Alternatives}{Another organisation's donation: 404. Not yet delivered: 409. Donor or courier: 403.}
+  \ucfield{Post., rules}{Terminal. Reliability updates for future rankings; counts towards the rescue rate if completed by the deadline.}
 \end{scenario}
 
 \begin{scenario}{UC-09}{Cancel Donation (API only)}
-  \textbf{Primary actor} & Donor. Secondary: administrator \\ \hline
-  \textbf{Goal} & Withdraw a donation that will not be handed over. \\ \hline
-  \textbf{Preconditions} & The donor owns the donation, and it is \code{AVAILABLE}, \code{MATCHED}, \code{ACCEPTED} or \code{VOLUNTEER_ASSIGNED}. An administrator may also cancel from \code{PICKED_UP}. \\ \hline
-  \textbf{Trigger} & A call to \code{POST /api/donations/{id}/status} with \code{status: CANCELLED} and an optional note. There is no portal button yet. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The server checks legality, role (donor or administrator) and ownership.
-    \item For a donor, it confirms the donation has not been picked up.
-    \item The conditional status write and \code{CANCELLED} event are applied.
-    \item If an organisation was bound, one counted acceptance is withdrawn, never below zero, in the same transaction.
-    \item The transaction commits.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Donor cancels after pickup: 409.
-    \item \code{DELIVERED} or \code{COMPLETED}: 409 for everyone.
-    \item Another donor's donation: 404.
-    \item A courier's pickup commits first: the cancellation is refused with 409, and nothing is withdrawn.
-  } \\ \hline
-  \textbf{Postconditions} & Terminal state. The organisation's reliability is unaffected. \\ \hline
-  \textbf{Business rules} & D-58: a cancellation is never the organisation's failure. No cancellation reason is recorded. \\ \hline
+  \ucfield{Actor, goal}{Donor; secondary: administrator. \emph{Goal:} withdraw a donation that will not be handed over.}
+  \ucfield{Pre., trigger}{Donor owns it and it is not yet \code{PICKED_UP} (an administrator may also cancel from \code{PICKED_UP}). \emph{Trigger:} status \code{CANCELLED} via the API; no portal button.}
+  \ucfield{Main flow}{\flow{\item The server checks transition, role, ownership and the donor's window. \item The conditional write and \code{CANCELLED} event are applied. \item In the same transaction, a bound organisation's counted acceptance is withdrawn (never below zero).}}
+  \ucfield{Alternatives}{Donor after pickup, or \code{DELIVERED}/\code{COMPLETED}: 409. Another donor: 404. A courier's pickup commits first: 409, nothing withdrawn.}
+  \ucfield{Post., rules}{Terminal. Reliability is unaffected (D-58); no reason is recorded.}
 \end{scenario}
 
 \begin{scenario}{UC-10}{Release Pickup (API only)}
-  \textbf{Primary actor} & Recipient organisation (the accepting one). Secondary: administrator \\ \hline
-  \textbf{Goal} & Return a claimed pickup to the courier queue, for example when the courier cannot go. \\ \hline
-  \textbf{Preconditions} & The donation is \code{VOLUNTEER_ASSIGNED} and bound to the caller's organisation, which is still verified. \\ \hline
-  \textbf{Trigger} & A call to \code{POST /api/donations/{id}/status} with \code{status: ACCEPTED}. There is no portal button yet. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The server checks legality and role, then ownership, because acceptance from outside the open pool is a release.
-    \item It resolves the organisation, confirms verification, and recognises it is already bound.
-    \item It clears the courier, and does not change the acceptance counter or the frozen score.
-    \item The conditional write and \code{ACCEPTED} event are committed.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Not the bound organisation: 404.
-    \item Already picked up: 409.
-    \item Organisation's verification revoked: 403.
-  } \\ \hline
-  \textbf{Postconditions} & The pickup is unclaimed again; couriers see only its coarse area. \\ \hline
-  \textbf{Business rules} & D-41: a release is not an acceptance. Known issue: an administrator release naming a \emph{different} organisation re-binds the donation and counts a second acceptance. \\ \hline
+  \ucfield{Actor, goal}{The accepting organisation; secondary: administrator. \emph{Goal:} return a claimed pickup to the courier queue.}
+  \ucfield{Pre., trigger}{Donation \code{VOLUNTEER_ASSIGNED} and bound to the caller's still-verified organisation. \emph{Trigger:} status \code{ACCEPTED} via the API; no portal button.}
+  \ucfield{Main flow}{\flow{\item The server checks transition, role and ownership, treating this acceptance as a release. \item It confirms verification and the binding. \item It clears the courier without a new acceptance or re-frozen score. \item The conditional write and event commit.}}
+  \ucfield{Alternatives}{Not the bound organisation: 404. Already picked up: 409. Verification revoked: 403.}
+  \ucfield{Post., rules}{Unclaimed again, shown to couriers as a coarse area (D-41). Known issue: an administrator release naming another organisation counts a second acceptance.}
 \end{scenario}
 
 \begin{scenario}{UC-11}{Manage Standing Requirements and Browse Needs Board}
-  \textbf{Primary actor} & Recipient organisation. Secondary: donor (reads the needs board) \\ \hline
-  \textbf{Goal} & Publish what the organisation needs so that donors see demand before supply exists. \\ \hline
-  \textbf{Preconditions} & Signed in as an organisation with a profile. Verification is not needed to post, but only verified organisations' needs reach donors. \\ \hline
-  \textbf{Trigger} & The organisation uses \emph{Food Requirements \& Demand Signals}; a donor opens \emph{Needs Board}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The organisation posts a need (\code{POST /api/requirements}): food type, quantity and unit, beneficiaries, urgency, recurrence, notes.
-    \item It edits a need, or marks it fulfilled or no longer needed, which sets \code{isActive: false} (\code{PATCH /api/requirements/{id}}).
-    \item It views retired needs (\code{includeInactive=true}) and reopens one by setting \code{isActive: true}.
-    \item A donor's needs board lists the active needs of verified organisations (\code{GET /api/requirements}).
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Another organisation's requirement id: 404.
-    \item Non-positive quantity, negative beneficiaries or over-long text: 422, and nothing is written.
-    \item An explicit \code{null} for a field: the field is left unchanged.
-    \item Administrator without an organisation profile: 422.
-    \item Courier: an empty list.
-  } \\ \hline
-  \textbf{Postconditions} & The row is always kept (no deletion). An active need can break ranking ties and add a reason on the next read; frozen scores never change. \\ \hline
-  \textbf{Business rules} & D-29 (one-flag lifecycle), D-44 and D-46 (scopes), D-52 (ranking effect). \\ \hline
+  \ucfield{Actor, goal}{Recipient organisation; secondary: donor. \emph{Goal:} publish needs before supply exists.}
+  \ucfield{Pre., trigger}{Organisation profile exists (posting needs no verification). \emph{Trigger:} \emph{Food Requirements \& Demand Signals}; a donor opens \emph{Needs Board}.}
+  \ucfield{Main flow}{\flow{\item \code{POST /requirements} with food type, quantity, unit, beneficiaries, urgency, recurrence and notes. \item \code{PATCH /requirements/{id}} edits or retires a need (\code{isActive: false}). \item Retired needs are listed with \code{includeInactive} and can be reopened. \item Donors see active needs of verified organisations.}}
+  \ucfield{Alternatives}{Another organisation's id: 404. Invalid values: 422, nothing written. Explicit \code{null}: unchanged. Courier: empty list.}
+  \ucfield{Post., rules}{Rows are never deleted. Active needs may break ties and add a reason, never change scores (D-29, D-44, D-52).}
 \end{scenario}
 
 \begin{scenario}{UC-12}{Edit Organisation Profile (verification-sensitive)}
-  \textbf{Primary actor} & Recipient organisation \\ \hline
-  \textbf{Goal} & Keep the organisation's details correct. \\ \hline
-  \textbf{Preconditions} & Signed in as an organisation with a profile. \\ \hline
-  \textbf{Trigger} & The organisation saves the \emph{NGO / Recipient Profile} page. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The organisation edits name, type, address, capacity, contact person or phone and saves (\code{PATCH /api/recipients/me}).
-    \item The server computes the real changes. Omitted fields are ignored; \code{null} clears only nullable fields.
-    \item If the organisation is verified and its name, latitude or longitude actually changes, the server clears \code{is_verified} in the same commit.
-    \item It applies the changes and commits, and the profile shows the resulting verification state.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Capacity not positive or coordinates out of range: 422.
-    \item Name resubmitted unchanged, or only type, address text, capacity or contact changed: verification is kept.
-    \item Coordinates can be set or cleared only through the API; clearing a pin also voids verification.
-  } \\ \hline
-  \textbf{Postconditions} & An organisation whose verification was voided is immediately excluded from ranking, the open pool and acceptance until re-verified (UC-13). \\ \hline
-  \textbf{Business rules} & D-54: verification vouches for identity and location, so changing either voids it. An organisation cannot set \code{is_verified} itself (D-16). \\ \hline
+  \ucfield{Actor, goal}{Recipient organisation. \emph{Goal:} keep the organisation's details correct.}
+  \ucfield{Pre., trigger}{Organisation profile exists. \emph{Trigger:} saving \emph{NGO / Recipient Profile}.}
+  \ucfield{Main flow}{\flow{\item \code{PATCH /recipients/me} with name, type, address, capacity, contact or phone. \item The server keeps real changes only; \code{null} clears only nullable fields. \item If a verified organisation's name, latitude or longitude changes, \code{is_verified} is cleared in the same commit. \item The page shows the result.}}
+  \ucfield{Alternatives}{Non-positive capacity or out-of-range coordinates: 422. Unchanged name or other fields only: verification kept. Coordinates are API-only; clearing the pin voids verification.}
+  \ucfield{Post., rules}{A voided organisation is excluded from ranking, pool and acceptance until re-verified (D-54); no self-verification (D-16).}
 \end{scenario}
 
 \begin{scenario}{UC-13}{Verify or Revoke Organisation}
-  \textbf{Primary actor} & Administrator \\ \hline
-  \textbf{Goal} & Vouch for a genuine organisation, or withdraw that vouching. \\ \hline
-  \textbf{Preconditions} & Signed in as an administrator; the organisation exists. \\ \hline
-  \textbf{Trigger} & The administrator uses the verify control on \emph{Partner Organizations Directory}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The page lists all organisations with verification state, reliability and a count awaiting verification.
-    \item After checking the organisation outside the system, the administrator verifies it (\code{POST /api/admin/recipients/{id}/verify}).
-    \item The server sets \code{is_verified} and commits, and the list refreshes with a confirmation.
-    \item To revoke, the administrator withdraws verification (\code{DELETE} on the same route).
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Non-administrator: 403.
-    \item Unknown organisation: 404.
-  } \\ \hline
-  \textbf{Postconditions} & A verified organisation (with coordinates) is ranked, sees the open pool and can accept on its next request. A revoked one loses them on its next request; donations it already accepted are unaffected. \\ \hline
-  \textbf{Business rules} & Verification is a human judgement with no automated checks (D-37). Organisations created by an administrator start verified. \\ \hline
+  \ucfield{Actor, goal}{Administrator. \emph{Goal:} vouch for a genuine organisation, or withdraw that vouching.}
+  \ucfield{Pre., trigger}{Signed in as administrator; organisation exists. \emph{Trigger:} the verify control on \emph{Partner Organizations Directory}.}
+  \ucfield{Main flow}{\flow{\item The page lists organisations with verification state, reliability and the number awaiting verification. \item After checking outside the system, the administrator sends \code{POST /admin/recipients/{id}/verify}. \item The server sets \code{is_verified}; the list refreshes. \item \code{DELETE} on the same route revokes.}}
+  \ucfield{Alternatives}{Non-administrator: 403. Unknown organisation: 404.}
+  \ucfield{Post., rules}{Verified with coordinates: ranked, sees the pool, can accept; revoked: loses these, accepted donations unaffected. Verification is a human judgement (D-37); administrator-created organisations start verified.}
 \end{scenario}
 
 \begin{scenario}{UC-14}{Run Expiry Sweep}
-  \textbf{Primary actor} & Administrator \\ \hline
-  \textbf{Goal} & Record donations nobody accepted in time as losses. \\ \hline
-  \textbf{Preconditions} & Signed in as an administrator. \\ \hline
-  \textbf{Trigger} & The administrator runs the sweep from \emph{Platform Donation Ledger}. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item The client sends \code{POST /api/admin/maintenance/expire}.
-    \item The server selects \code{AVAILABLE} and \code{MATCHED} donations whose deadline is before now.
-    \item For each, it appends an \code{EXPIRED} event with no actor and the note ``Deadline passed with no recipient'', and sets the status.
-    \item It commits and returns the number expired, which the page reports.
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Nothing overdue: the count is 0.
-    \item Non-administrator: 403.
-  } \\ \hline
-  \textbf{Postconditions} & Overdue donations are terminal and count towards the expiry-loss rate. \\ \hline
-  \textbf{Business rules} & Not scheduled. Overdue \code{ACCEPTED} donations are not touched. Its status write is not conditional (known issue). \\ \hline
+  \ucfield{Actor, goal}{Administrator. \emph{Goal:} record unaccepted, overdue donations as losses.}
+  \ucfield{Pre., trigger}{Signed in as administrator. \emph{Trigger:} running the sweep from \emph{Platform Donation Ledger}.}
+  \ucfield{Main flow}{\flow{\item \code{POST /admin/maintenance/expire}. \item The server selects \code{AVAILABLE} and \code{MATCHED} donations past their deadline. \item It appends actor-less \code{EXPIRED} events (``Deadline passed with no recipient'') and sets the status. \item It returns the count.}}
+  \ucfield{Alternatives}{Nothing overdue: count 0. Non-administrator: 403.}
+  \ucfield{Post., rules}{Terminal; counted in the expiry-loss rate. Known issues: not scheduled, overdue \code{ACCEPTED} donations untouched, write not conditional.}
 \end{scenario}
 
 \begin{scenario}{UC-15}{Manage User Accounts (API only)}
-  \textbf{Primary actor} & Administrator \\ \hline
-  \textbf{Goal} & Create accounts of any role, and suspend, restore, rename or re-role accounts. \\ \hline
-  \textbf{Preconditions} & Signed in as an administrator. \\ \hline
-  \textbf{Trigger} & Calls to \code{/api/admin/users}. There is no portal screen yet. \\ \hline
-  \textbf{Main success flow} & \steps{
-    \item List accounts, optionally by role (\code{GET}).
-    \item Create an account of any role, including administrator (\code{POST}). Profile rows are created as at registration, and a created organisation starts verified.
-    \item Update \code{isActive}, \code{role}, \code{name}, \code{organization} or \code{phone} (\code{PATCH /api/admin/users/{id}}).
-  } \\ \hline
-  \textbf{Alternative and exception flows} & \alts{
-    \item Duplicate email: 409.
-    \item Suspending or demoting one's own administrator account: 409.
-    \item Suspending or demoting the last active administrator: 409.
-    \item Unknown user: 404.
-  } \\ \hline
-  \textbf{Postconditions} & Changes take effect on the affected user's next request: a suspended user receives 401, and 403 at sign-in. \\ \hline
-  \textbf{Business rules} & The first administrator comes only from \texttt{python -m foodlink.cli create-admin} (D-04). \\ \hline
+  \ucfield{Actor, goal}{Administrator. \emph{Goal:} create accounts of any role; suspend, restore, rename or re-role them.}
+  \ucfield{Pre., trigger}{Signed in as administrator. \emph{Trigger:} calls to \code{/admin/users}; no screen.}
+  \ucfield{Main flow}{\flow{\item \code{GET} lists accounts, optionally by role. \item \code{POST} creates any role, including administrator, with its profile (organisations start verified). \item \code{PATCH /admin/users/{id}} updates \code{isActive}, \code{role}, \code{name}, \code{organization} or \code{phone}.}}
+  \ucfield{Alternatives}{Duplicate email: 409. Suspending or demoting oneself or the last active administrator: 409. Unknown user: 404.}
+  \ucfield{Post., rules}{Effective on the next request (a suspended user receives 401, and 403 at sign-in). The first administrator comes only from \texttt{python -m foodlink.cli create-admin} (D-04).}
 \end{scenario}
 
-Table~\ref{tab:minor-uc} summarises the remaining use cases in
-Figure~\ref{fig:usecase}, which are simple enough not to need a full scenario.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|L{3.3cm}|L{2.4cm}|L{7.6cm}|}
-  \hline
-  \textbf{Use case} & \textbf{Actor} & \textbf{Behaviour} \\
-  \hline
-  Manage Own Account & Any signed-in role & Edit name, organisation and phone (\code{PATCH /api/auth/me}); change password, proving the current one (\code{POST /api/auth/password}). \\
-  \hline
-  Track Donation Status & Any signed-in role & Read the donations one's scope allows, each with its event timeline (\code{GET /api/donations}). \\
-  \hline
-  Browse Unclaimed Pickups & Courier & The courier queue within UC-06, showing a coarse pickup area only. \\
-  \hline
-  Set Courier Availability & Courier & Toggle on or off duty and set a base location (\code{PATCH /api/volunteers/me}). Availability is advisory. \\
-  \hline
-  View Platform Metrics & Administrator & Analytics screens read \code{GET /api/metrics} (the API allows any signed-in role). \\
-  \hline
-  Override Lifecycle Transition & Administrator & Perform any transition in Table~\ref{tab:transitions} on a party's behalf, under the same legality rules; the claim is excluded. \\
-  \hline
-\end{tabular}
-\caption{Summary of the remaining use cases}
-\label{tab:minor-uc}
-\end{table}
+\medskip
+\noindent The remaining use cases in Figure~\ref{fig:usecase} are simple.
+\emph{Manage Own Account} uses \code{PATCH /auth/me} and
+\code{POST /auth/password}; \emph{Track Donation Status} lists donations in
+one's scope with their timelines; \emph{Browse Unclaimed Pickups} is the
+coarse-area queue of UC-06; \emph{Set Courier Availability} uses
+\code{PATCH /volunteers/me} and is advisory; \emph{View Platform Metrics} calls
+\code{GET /metrics}; and \emph{Override Lifecycle Transition} performs any
+transition in Table~\ref{tab:transitions} except the claim, on a party's behalf.
 
 \section{Class Diagram}
 \label{sec:class}
-
-Figure~\ref{fig:class} shows the domain model. It contains the six persistent
-entities and two enumerations from \code{models.py}, and the \code{matching}
-module with the two data classes it produces.
 
 \begin{figure}[p]
   \centering
@@ -467,53 +201,22 @@ module with the two data classes it produces.
   \label{fig:class}
 \end{figure}
 
-\paragraph{Entities and attributes.} Each class lists its mapped columns with
-their types. Multiplicity \code{[0..1]} marks a nullable column,
-\code{{PK}} and \code{{FK}} mark keys, and a leading slash marks a
-derived, computed property: \code{User.initials}, the profile ids, and
-\code{Recipient.reliability_score}. \code{Donation.timestamp_of(status)}
-returns when a donation first entered a state by scanning its events.
-
-\paragraph{Associations and multiplicities.} Multiplicities follow the foreign
-keys exactly. A \code{User} may act for at most one \code{Recipient}, and a
-recipient may exist without a user, because \code{recipients.user_id} is
-nullable (seeded organisations). A \code{User} may act as at most one
-\code{Volunteer}, and every volunteer has exactly one user, because the key is
-unique and mandatory. A user posts any number of donations. A \code{Donation}
-is accepted by \emph{zero or one} recipient and carried by \emph{zero or one}
-volunteer, since both keys stay null until acceptance and claim. A
-\code{StatusEvent} optionally names the user who acted; the expiry sweep acts
-with no user.
-
-\paragraph{Composition.} \code{Donation}--\code{StatusEvent} and
-\code{Recipient}--\code{Requirement} are compositions (filled diamonds). The
-parts belong to exactly one whole, and the ORM relationships are declared with
-cascading deletion. Events are append-only in practice: the application never
-updates or deletes them.
-
-\paragraph{The matching module.} \code{matching} is shown as a
-$\ll$utility$\gg$ because it is a Python module of functions, not an
-instantiable class. It uses \code{Donation}, \code{Recipient} and
-\code{Requirement} rows passed in by the routers, and creates transient
-\code{MatchResult} and \code{RequirementFit} objects that are never persisted.
-Only the integer \code{overall_score} survives, copied into
-\code{Donation.match_score} at posting and at first acceptance.
-
-\paragraph{What is deliberately absent.} There is no inheritance in the domain.
-Roles are an enumerated attribute on one \code{users} table, and
-\code{Recipient} and \code{Volunteer} are profiles associated with an account,
-not subclasses. Pydantic schemas, routers and framework classes are
-implementation infrastructure and are omitted to keep the diagram readable. The
-dependency of \code{User.role} on \code{UserRole} is shown by its attribute
-type alone, because an edge would have to cross the diagram.
+Figure~\ref{fig:class} shows the six persistent entities and two enumerations
+of \code{models.py}, and the \code{matching} module with its two data classes.
+Multiplicities follow the foreign keys: a user acts for at most one
+\code{Recipient} (seeded recipients have none) and at most one \code{Volunteer},
+whose user key is unique and mandatory; a \code{Donation} has zero or one
+recipient and courier until acceptance and claim; and a \code{StatusEvent}
+optionally names its actor. \code{Donation}--\code{StatusEvent} and
+\code{Recipient}--\code{Requirement} are compositions with cascading deletes,
+and derived properties carry a slash (for example
+\code{Recipient.reliability_score}). The matching module is a
+$\ll$utility$\gg$ whose \code{MatchResult} objects are transient; only
+\code{overall_score} is copied into \code{Donation.match_score}. Roles are an
+enumerated attribute and profiles are associations, so there is no inheritance.
 
 \section{Activity Diagram}
 \label{sec:activity}
-
-Figure~\ref{fig:activity} models the core surplus-food redistribution
-workflow. It runs from posting, through matching, acceptance, courier claim,
-pickup and delivery, to confirmation, together with the alternative paths the
-server implements.
 
 \begin{figure}[p]
   \centering
@@ -526,36 +229,16 @@ server implements.
   \label{fig:activity}
 \end{figure}
 
-\paragraph{Partitions.} The five swimlanes are the four roles and the FoodLink
-server. Every action that changes stored state is placed in the server lane,
-because only the server records transitions. The human lanes contain the
-decisions and physical actions that trigger them.
-
-\paragraph{Main flow.} The donor submits a donation. After validation, the
-server stores it, ranks eligible organisations and, if any exist, records
-\code{MATCHED}; otherwise the donation stays \code{AVAILABLE}. Both branches
-merge into the open pool. A verified organisation accepts. The server's
-decision node checks, in effect, verification, the deadline and whether the
-conditional write still finds the donation open. On success it binds the
-organisation and records \code{ACCEPTED}. A merge node in the courier lane leads
-to the unclaimed queue, where a courier claims the pickup. A second decision
-reflects the conditional claim. The courier then collects and delivers the
-food, each step recorded by the server, and the organisation confirms receipt,
-which updates the completion counters and records \code{COMPLETED}.
-
-\paragraph{Alternative paths.} Flow-final nodes (circles with a cross) mark
-requests the server refuses, which leave the donation unchanged. If no
-organisation accepts before the deadline, the administrator's expiry sweep ends
-the flow in \code{EXPIRED}. The \emph{release} loop returns a claimed pickup
-to the courier queue; it is available through the API only. The dashed
-\emph{interruptible region} spans the states in which the donor may still
-cancel, from \code{AVAILABLE} to \code{VOLUNTEER_ASSIGNED}. The zig-zag
-interrupting edge from \emph{Cancel request} leaves the region and ends in
-\code{CANCELLED}, withdrawing any counted acceptance.
-
-\paragraph{Simplifications.} To keep the diagram readable, three
-administrator-only paths described in Table~\ref{tab:transitions} are not
-drawn: cancellation after pickup, \code{ACCEPTED} $\to$ \code{EXPIRED} through
-the status route, and administrators performing other parties' transitions.
-The diagram shows one courier and one organisation. Concurrent competitors
-appear only through the refusal edges they cause.
+Figure~\ref{fig:activity} models the workflow across five swimlanes: the four
+roles and the server, the only lane that records state. The main path runs
+through validation, storage and ranking (\code{MATCHED} only when an
+organisation is eligible), acceptance gated by verification, the deadline and a
+conditional write, then a conditional courier claim, pickup, delivery and
+confirmation. Refused requests end at flow-final nodes and leave the donation
+unchanged. Donations nobody accepts in time end in \code{EXPIRED} through the
+sweep, and an API-only release loop returns a claimed pickup to the queue. The
+dashed interruptible region spans the states in which a donor may still cancel;
+its interrupting edge ends in \code{CANCELLED} and withdraws any counted
+acceptance. Administrator cancellation after pickup, administrator
+\code{ACCEPTED}\,$\to$\,\code{EXPIRED}, and administrators acting for other
+parties are omitted for readability.
